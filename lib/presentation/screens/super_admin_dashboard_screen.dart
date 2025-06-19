@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -28,6 +29,7 @@ import '../../data/models/supervisor.dart';
 import '../widgets/saudi_plate.dart';
 import '../widgets/common/standard_refresh_button.dart';
 import '../widgets/common/esc_dismissible_dialog.dart';
+
 import '../widgets/common/ui_components/chips_and_badges.dart';
 import '../widgets/common/ui_components/stat_cards.dart';
 import '../widgets/common/ui_components/ranking_utils.dart';
@@ -35,6 +37,7 @@ import '../widgets/common/ui_components/format_utils.dart';
 import '../../core/services/navigation/supervisor_navigation_service.dart';
 import '../../core/services/navigation/dashboard_state_service.dart';
 import '../../core/services/dialog_service.dart';
+import 'package:go_router/go_router.dart';
 
 class SuperAdminDashboardScreen extends StatelessWidget {
   const SuperAdminDashboardScreen({super.key});
@@ -118,6 +121,7 @@ class _SuperAdminDashboardViewState extends State<_SuperAdminDashboardView> {
             ),
           ),
         ),
+
       ),
     );
   }
@@ -424,7 +428,6 @@ class _SuperAdminDashboardViewState extends State<_SuperAdminDashboardView> {
             onNavigateToSupervisorLateCompleted: (supervisorId, username) =>
                 SupervisorNavigationService.navigateToSupervisorLateCompleted(context, supervisorId, username),
           ),
-          const SizedBox(height: 24),
         ],
       ),
     );

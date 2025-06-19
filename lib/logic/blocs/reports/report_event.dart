@@ -21,7 +21,7 @@ class FetchReports extends ReportEvent {
     this.status,
     this.priority,
     this.forceRefresh = false,
-    this.limit = 100,
+    this.limit,
   });
 
   @override

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/report_form_data.dart';
 import 'report_repository.dart';
+import '../../core/services/notification_service.dart';
 
 class MultiReportRepository {
   final SupabaseClient client;
@@ -49,8 +50,9 @@ class MultiReportRepository {
       }).toList();
 
       print('MultiReportRepository: Final payload to Supabase: $payload');
-      await client.from(tableName).insert(payload);
+      final insertedReports = await client.from(tableName).insert(payload).select();
       print('MultiReportRepository: Reports inserted successfully');
+      print('MultiReportRepository: Inserted reports with IDs: $insertedReports');
 
       // Invalidate report repository cache if available
       reportRepository?.invalidateCache();
@@ -64,7 +66,7 @@ class MultiReportRepository {
         // Use Future.delayed to ensure the UI has time to update before attempting notifications
         Future.delayed(const Duration(milliseconds: 300), () {
           _triggerNotificationsNonBlocking(
-              payload, reports.first.type?.toLowerCase() == 'maintenance');
+              insertedReports, reports.first.type?.toLowerCase() == 'maintenance');
         });
       } catch (notificationError) {
         // Just log the error, don't let it affect the main flow
@@ -92,118 +94,32 @@ class MultiReportRepository {
     }
   }
 
-  /// Triggers notifications in a non-blocking way to prevent UI freezes
+  /// Triggers notifications using the centralized notification service
   void _triggerNotificationsNonBlocking(
       List<Map<String, dynamic>> reports, bool isMaintenance) {
     Future.microtask(() async {
       try {
-        print('MultiReportRepository: Starting background notifications');
+        print('MultiReportRepository: Starting notifications via NotificationService');
 
-        for (final report in reports) {
-          try {
-            final reportId = report['id'];
-            final supervisorId = report['supervisor_id'];
+        // Use the centralized notification service
+        final results = await NotificationService.instance.sendBulkReportNotifications(
+          reports: reports,
+          isMaintenance: isMaintenance,
+        );
 
-            // Debug: Print available fields
-            print(
-                'MultiReportRepository: Available fields in report: ${report.keys.toList()}');
+        // Log results
+        final successCount = results.where((r) => r.isSuccess).length;
+        print('MultiReportRepository: Notifications complete: $successCount/${results.length} successful');
 
-            // Extract fields based on report type
-            final String schoolName;
-            final String priority;
-            final bool isEmergency;
-
-            if (isMaintenance) {
-              // For maintenance reports
-              schoolName = report['school_name'] ?? 'مدرسة غير معروفة';
-              // Maintenance reports don't have priority, use a default
-              priority = 'عادي';
-              isEmergency = false;
-            } else {
-              // For regular reports
-              schoolName = report['school_name'] ?? 'مدرسة غير معروفة';
-              priority = report['priority'] ?? 'عادي';
-              isEmergency = priority.toLowerCase() == 'high' ||
-                  priority.toLowerCase() == 'emergency';
-            }
-
-            print('MultiReportRepository: Resolved school name: $schoolName');
-            print(
-                'MultiReportRepository: Report type: ${isMaintenance ? "maintenance" : "regular"}');
-
-            // Create different notification payloads based on report type
-            final Map<String, dynamic> notificationData;
-
-            if (isMaintenance) {
-              // For maintenance reports - completely different payload structure
-              // This avoids the Edge Function trying to access fields that don't exist
-              notificationData = {
-                'user_id': supervisorId,
-                'title': 'صيانة دورية 🔧',
-                'body': 'لديك صيانة دورية في $schoolName',
-                'priority':
-                    'routine', // Always provide priority to prevent database errors
-                'school_name': schoolName,
-                'data': {
-                  'type': 'maintenance',
-                  'report_id': reportId,
-                  'school_name': schoolName,
-                  'description': report['description'] ?? '',
-                  'priority': 'routine', // Always provide priority
-                  'is_emergency': false,
-                  'is_maintenance': true,
-                }
-              };
-            } else {
-              // For regular reports
-              notificationData = {
-                'user_id': supervisorId,
-                'title': isEmergency ? 'بلاغ طارئ 🚨' : 'بلاغ روتيني 📋',
-                'body': 'لديك بلاغ جديد في $schoolName',
-                'priority': priority, // This should always be present now
-                'school_name': schoolName,
-                'data': {
-                  'type': 'new_report',
-                  'report_id': reportId,
-                  'school_name': schoolName,
-                  'priority': priority,
-                  'is_emergency': isEmergency,
-                  'description': report['description'] ?? '',
-                }
-              };
-            }
-
-            // Add debug information to help diagnose issues
-            print(
-                'MultiReportRepository: Notification type: ${isMaintenance ? "maintenance" : "regular"}');
-            print(
-                'MultiReportRepository: Notification data: $notificationData');
-
-            await client.functions
-                .invoke(
-              'send_notification',
-              body: notificationData,
-            )
-                .timeout(
-              const Duration(seconds: 5),
-              onTimeout: () {
-                print(
-                    'MultiReportRepository: Notification request timed out for report $reportId');
-                throw TimeoutException('Notification request timed out');
-              },
-            );
-
-            print(
-                'MultiReportRepository: Notification sent successfully for report $reportId');
-
-            await Future.delayed(const Duration(milliseconds: 200));
-          } catch (e) {
-            print('MultiReportRepository: Error processing notification: $e');
+        // Log any failures for debugging
+        for (int i = 0; i < results.length; i++) {
+          final result = results[i];
+          if (!result.isSuccess && !result.isDuplicate) {
+            print('MultiReportRepository: Notification ${i + 1} failed: ${result.message}');
           }
         }
       } catch (e) {
-        print(
-            'MultiReportRepository: Error in background notification process: $e');
+        print('MultiReportRepository: Error in notification process: $e');
       }
     });
   }

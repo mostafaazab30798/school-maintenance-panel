@@ -39,6 +39,12 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     _lastFetchTime = null;
   }
 
+  /// Clear all dashboard caches (including CacheService cache)
+  void clearAllCaches() {
+    clearCache();
+    _cacheService.invalidate(CacheKeys.regularDashboardStats);
+  }
+
   /// Handles explicit refresh requests by clearing cache and reloading
   Future<void> _onRefreshDashboard(
       RefreshDashboard event, Emitter<DashboardState> emit) async {

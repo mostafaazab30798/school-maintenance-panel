@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../logic/cubits/theme_cubit.dart';
 import '../../../logic/blocs/super_admin/super_admin_bloc.dart';
 import '../../../logic/blocs/super_admin/super_admin_event.dart';
+import '../common/weekly_report_dialog.dart';
+import '../common/user_info_widget.dart';
 
 class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onCreateAdmin;
@@ -40,14 +42,40 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
           ),
         ),
       ),
-      title: Text(
-        'لوحة تحكم المدير العام',
-        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
-              fontSize: 20,
-            ),
+      title: Row(
+        children: [
+          Text(
+            'لوحة تحكم المدير العام',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 20,
+                ),
+          ),
+          const SizedBox(width: 16),
+          const UserInfoWidget(),
+        ],
       ),
       actions: [
+        // Weekly Report button
+        Container(
+          margin: const EdgeInsets.only(right: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: const Color(0xFF10B981).withOpacity(0.1),
+            border: Border.all(
+              color: const Color(0xFF10B981).withOpacity(0.2),
+              width: 1,
+            ),
+          ),
+          child: IconButton(
+            icon: const Icon(
+              Icons.assessment_outlined,
+              color: Color(0xFF10B981),
+            ),
+            tooltip: 'تقرير أسبوعي',
+            onPressed: () => _showWeeklyReportDialog(context),
+          ),
+        ),
         // Theme toggle button
         BlocBuilder<ThemeCubit, ThemeMode>(
           builder: (context, themeMode) {
@@ -437,4 +465,13 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
       ),
     );
   }
+
+  void _showWeeklyReportDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => WeeklyReportDialog(),
+    );
+  }
+
+
 }

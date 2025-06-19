@@ -34,6 +34,7 @@ import '../../presentation/screens/admins_list_screen.dart';
 import '../../presentation/screens/admin_progress_screen.dart';
 import '../../presentation/screens/supervisors_list_screen.dart';
 import '../../presentation/screens/admins_list_screen.dart';
+
 import '../../core/services/admin_service.dart';
 import '../../core/services/admin_management_service.dart';
 // Commented out for now
@@ -60,6 +61,7 @@ final GoRouter appRouter = GoRouter(
       name: 'super-admin',
       builder: (context, state) => const SuperAdminDashboardScreen(),
     ),
+
     GoRoute(
       path: '/super-admin-progress',
       name: 'super-admin-progress',

@@ -19,6 +19,7 @@ import '../../data/repositories/maintenance_repository.dart';
 import '../widgets/dashboard/dashboard_grid.dart';
 import '../widgets/dashboard/supervisor_card.dart';
 import '../widgets/common/esc_dismissible_dialog.dart';
+import '../widgets/common/user_info_widget.dart';
 import '../../core/services/navigation/dashboard_state_service.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -75,7 +76,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             appBar: AppBar(
               toolbarHeight: 70,
               title: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
                     padding: const EdgeInsets.all(8),
@@ -103,6 +103,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       letterSpacing: -0.5,
                     ),
                   ),
+                  const SizedBox(width: 16),
+                  const UserInfoWidget(isCompact: true),
                 ],
               ),
               centerTitle: true,

@@ -29,10 +29,16 @@ class _AllReportsScreenState extends State<AllReportsScreen>
     with TickerProviderStateMixin {
   List<Map<String, dynamic>> reports = [];
   List<Map<String, dynamic>> filteredReports = [];
+  List<Map<String, dynamic>> paginatedReports = [];
   bool isLoading = true;
   String? error;
   String selectedFilter = 'all';
   bool _isLoadingFromCache = false;
+
+  // Pagination variables
+  int currentPage = 1;
+  int reportsPerPage = 50;
+  int totalPages = 1;
 
   final CacheService _cacheService = CacheService();
   final AdminService _adminService = AdminService(Supabase.instance.client);
@@ -102,10 +108,18 @@ class _AllReportsScreenState extends State<AllReportsScreen>
         forceRefresh = true;
       }
 
+      // Use different cache keys for different contexts
+      String cacheKey;
+      if (widget.supervisorId != null && widget.supervisorId!.isNotEmpty) {
+        cacheKey = '${CacheKeys.allReports}_supervisor_${widget.supervisorId}';
+      } else {
+        cacheKey = CacheKeys.allReports;
+      }
+
       // Check cache first if not forcing refresh
       if (!forceRefresh) {
         final cachedReports = _cacheService
-            .getCached<List<Map<String, dynamic>>>(CacheKeys.allReports);
+            .getCached<List<Map<String, dynamic>>>(cacheKey);
         if (cachedReports != null) {
           setState(() {
             reports = cachedReports;
@@ -116,7 +130,7 @@ class _AllReportsScreenState extends State<AllReportsScreen>
           _animationController.forward();
 
           // If cache is near expiry, refresh in background
-          if (_cacheService.isNearExpiry(CacheKeys.allReports)) {
+          if (_cacheService.isNearExpiry(cacheKey)) {
             _refreshReportsInBackground();
           }
           return;
@@ -145,8 +159,14 @@ class _AllReportsScreenState extends State<AllReportsScreen>
           query = query.eq('supervisor_id', widget.supervisorId!);
         }
 
-        final response = await query.order('created_at', ascending: false);
+        final response = await query.order('created_at', ascending: false).limit(100000);
         reportsData = List<Map<String, dynamic>>.from(response);
+        
+        // Debug: Log the actual number of reports fetched
+        print('🔍 DEBUG: Fetched ${reportsData.length} reports for super admin');
+        if (reportsData.length >= 1000) {
+          print('⚠️ WARNING: Fetched exactly 1000+ reports. Check if Supabase max_rows limit is increased.');
+        }
       } else {
         // Regular admin - filter by their assigned supervisors
         final adminSupervisorIds =
@@ -158,13 +178,20 @@ class _AllReportsScreenState extends State<AllReportsScreen>
               .from('reports')
               .select('*, supervisors(username)')
               .inFilter('supervisor_id', adminSupervisorIds)
-              .order('created_at', ascending: false);
+              .order('created_at', ascending: false)
+              .limit(100000);
           reportsData = List<Map<String, dynamic>>.from(response);
+          
+          // Debug: Log the actual number of reports fetched
+          print('🔍 DEBUG: Fetched ${reportsData.length} reports for regular admin');
+          if (reportsData.length >= 1000) {
+            print('⚠️ WARNING: Fetched exactly 1000+ reports. Check if Supabase max_rows limit is increased.');
+          }
         }
       }
 
-      // Cache the fresh data
-      _cacheService.setCached(CacheKeys.allReports, reportsData);
+      // Cache the fresh data with the appropriate key
+      _cacheService.setCached(cacheKey, reportsData);
 
       setState(() {
         reports = reportsData;
@@ -183,6 +210,14 @@ class _AllReportsScreenState extends State<AllReportsScreen>
 
   Future<void> _refreshReportsInBackground() async {
     try {
+      // Use different cache keys for different contexts
+      String cacheKey;
+      if (widget.supervisorId != null && widget.supervisorId!.isNotEmpty) {
+        cacheKey = '${CacheKeys.allReports}_supervisor_${widget.supervisorId}';
+      } else {
+        cacheKey = CacheKeys.allReports;
+      }
+
       // Check if user is super admin
       final isSuperAdmin = await _adminService.isCurrentUserSuperAdmin();
       List<Map<String, dynamic>> reportsData;
@@ -199,7 +234,7 @@ class _AllReportsScreenState extends State<AllReportsScreen>
           query = query.eq('supervisor_id', widget.supervisorId!);
         }
 
-        final response = await query.order('created_at', ascending: false);
+        final response = await query.order('created_at', ascending: false).limit(100000);
         reportsData = List<Map<String, dynamic>>.from(response);
       } else {
         // Regular admin - filter by their assigned supervisors
@@ -212,13 +247,14 @@ class _AllReportsScreenState extends State<AllReportsScreen>
               .from('reports')
               .select('*, supervisors(username)')
               .inFilter('supervisor_id', adminSupervisorIds)
-              .order('created_at', ascending: false);
+              .order('created_at', ascending: false)
+              .limit(100000);
           reportsData = List<Map<String, dynamic>>.from(response);
         }
       }
 
-      // Update cache
-      _cacheService.setCached(CacheKeys.allReports, reportsData);
+      // Update cache with the appropriate key
+      _cacheService.setCached(cacheKey, reportsData);
 
       // Update UI if the data has changed
       if (mounted && !_isDataEqual(reports, reportsData)) {
@@ -264,6 +300,44 @@ class _AllReportsScreenState extends State<AllReportsScreen>
     }
 
     filteredReports = result;
+    _updatePagination();
+  }
+
+  void _updatePagination() {
+    totalPages = (filteredReports.length / reportsPerPage).ceil();
+    if (totalPages == 0) totalPages = 1;
+    
+    // Ensure current page is valid
+    if (currentPage > totalPages) {
+      currentPage = totalPages;
+    }
+    
+    // Calculate start and end indices for current page
+    final startIndex = (currentPage - 1) * reportsPerPage;
+    final endIndex = (startIndex + reportsPerPage).clamp(0, filteredReports.length);
+    
+    paginatedReports = filteredReports.sublist(startIndex, endIndex);
+  }
+
+  void _goToPage(int page) {
+    if (page >= 1 && page <= totalPages) {
+      setState(() {
+        currentPage = page;
+        _updatePagination();
+      });
+    }
+  }
+
+  void _nextPage() {
+    if (currentPage < totalPages) {
+      _goToPage(currentPage + 1);
+    }
+  }
+
+  void _previousPage() {
+    if (currentPage > 1) {
+      _goToPage(currentPage - 1);
+    }
   }
 
   Future<void> _downloadReportsExcel() async {
@@ -448,7 +522,9 @@ class _AllReportsScreenState extends State<AllReportsScreen>
               pinned: true,
               expandedHeight: 120,
               title: Text(
-                'جميع البلاغات',
+                widget.supervisorName != null 
+                    ? 'بلاغات ${widget.supervisorName} (${reports.length})'
+                    : 'جميع البلاغات (${reports.length})',
                 style: theme.textTheme.headlineMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                   color: colorScheme.onSurface,
@@ -492,8 +568,14 @@ class _AllReportsScreenState extends State<AllReportsScreen>
               SliverToBoxAdapter(child: _buildModernErrorView())
             else if (filteredReports.isEmpty)
               SliverToBoxAdapter(child: _buildModernEmptyView())
-            else
+            else ...[
+              // Reports info
+              SliverToBoxAdapter(child: _buildReportsInfo()),
+              // Reports list
               _buildModernReportsList(),
+              // Pagination controls
+              if (totalPages > 1) SliverToBoxAdapter(child: _buildPaginationControls()),
+            ],
           ],
         ),
       ),
@@ -744,9 +826,9 @@ class _AllReportsScreenState extends State<AllReportsScreen>
               // Start of a new row
               final rowStartIndex = index;
               final rowEndIndex = (rowStartIndex + crossAxisCount - 1)
-                  .clamp(0, filteredReports.length - 1);
+                  .clamp(0, paginatedReports.length - 1);
               final reportsInRow =
-                  filteredReports.sublist(rowStartIndex, rowEndIndex + 1);
+                  paginatedReports.sublist(rowStartIndex, rowEndIndex + 1);
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 16),
@@ -792,9 +874,9 @@ class _AllReportsScreenState extends State<AllReportsScreen>
               return const SizedBox.shrink();
             }
           },
-          childCount: ((filteredReports.length / _getCrossAxisCount()).ceil() *
+          childCount: ((paginatedReports.length / _getCrossAxisCount()).ceil() *
                   _getCrossAxisCount())
-              .clamp(0, filteredReports.length),
+              .clamp(0, paginatedReports.length),
         ),
       ),
     );
@@ -1040,6 +1122,213 @@ class _AllReportsScreenState extends State<AllReportsScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildReportsInfo() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.outline.withOpacity(0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.info_outline,
+            color: colorScheme.primary,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'عرض ${paginatedReports.length} من أصل ${filteredReports.length} بلاغ',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          if (totalPages > 1) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: colorScheme.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'صفحة $currentPage من $totalPages',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaginationControls() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.outline.withOpacity(0.2),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: colorScheme.shadow.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Previous button
+          IconButton(
+            onPressed: currentPage > 1 ? _previousPage : null,
+            icon: const Icon(Icons.chevron_right),
+            style: IconButton.styleFrom(
+              backgroundColor: currentPage > 1 
+                  ? colorScheme.primary.withOpacity(0.1)
+                  : colorScheme.surfaceVariant.withOpacity(0.3),
+              foregroundColor: currentPage > 1 
+                  ? colorScheme.primary
+                  : colorScheme.onSurfaceVariant.withOpacity(0.5),
+            ),
+          ),
+          
+          const SizedBox(width: 8),
+          
+          // Page numbers
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: _buildPageButtons(),
+              ),
+            ),
+          ),
+          
+          const SizedBox(width: 8),
+          
+          // Next button
+          IconButton(
+            onPressed: currentPage < totalPages ? _nextPage : null,
+            icon: const Icon(Icons.chevron_left),
+            style: IconButton.styleFrom(
+              backgroundColor: currentPage < totalPages 
+                  ? colorScheme.primary.withOpacity(0.1)
+                  : colorScheme.surfaceVariant.withOpacity(0.3),
+              foregroundColor: currentPage < totalPages 
+                  ? colorScheme.primary
+                  : colorScheme.onSurfaceVariant.withOpacity(0.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildPageButtons() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    List<Widget> buttons = [];
+
+    int startPage = (currentPage - 2).clamp(1, totalPages);
+    int endPage = (currentPage + 2).clamp(1, totalPages);
+
+    // Ensure we show at least 5 pages if possible
+    if (endPage - startPage < 4) {
+      if (startPage == 1) {
+        endPage = (startPage + 4).clamp(1, totalPages);
+      } else if (endPage == totalPages) {
+        startPage = (endPage - 4).clamp(1, totalPages);
+      }
+    }
+
+    // First page
+    if (startPage > 1) {
+      buttons.add(_buildPageButton(1, theme, colorScheme));
+      if (startPage > 2) {
+        buttons.add(Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text('...', style: theme.textTheme.bodyMedium),
+        ));
+      }
+    }
+
+    // Page range
+    for (int i = startPage; i <= endPage; i++) {
+      buttons.add(_buildPageButton(i, theme, colorScheme));
+    }
+
+    // Last page
+    if (endPage < totalPages) {
+      if (endPage < totalPages - 1) {
+        buttons.add(Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text('...', style: theme.textTheme.bodyMedium),
+        ));
+      }
+      buttons.add(_buildPageButton(totalPages, theme, colorScheme));
+    }
+
+    return buttons;
+  }
+
+  Widget _buildPageButton(int page, ThemeData theme, ColorScheme colorScheme) {
+    final isSelected = page == currentPage;
+    
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 2),
+      child: Material(
+        color: isSelected 
+            ? colorScheme.primary
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        child: InkWell(
+          onTap: () => _goToPage(page),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isSelected 
+                    ? colorScheme.primary
+                    : colorScheme.outline.withOpacity(0.3),
+              ),
+            ),
+            child: Text(
+              page.toString(),
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: isSelected 
+                    ? colorScheme.onPrimary
+                    : colorScheme.onSurface,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

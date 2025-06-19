@@ -9,13 +9,13 @@ class SupervisorNavigationService {
 
   /// Navigate to all reports with optional preloading
   static void navigateToAllReports(BuildContext context, {bool preload = true}) {
-    if (preload) _preloadReportsData();
+    if (preload) _preloadAllReportsData();
     context.go('/all-reports');
   }
 
   /// Navigate to completed reports with preloading
   static void navigateToCompletedReports(BuildContext context) {
-    _preloadReportsData();
+    _preloadAllReportsData();
     context.go('/all-reports?filter=completed');
   }
 
@@ -106,6 +106,24 @@ class SupervisorNavigationService {
     }
   }
 
+  /// Preload all reports data specifically for "all reports" navigation
+  static Future<void> _preloadAllReportsData() async {
+    // Force refresh to ensure we get all reports, not supervisor-specific cached data
+    try {
+      final response = await Supabase.instance.client
+          .from('reports')
+          .select('*, supervisors(username)')
+          .order('created_at', ascending: false);
+
+      final reportsData = List<Map<String, dynamic>>.from(response);
+      _cacheService.setCached(CacheKeys.allReports, reportsData);
+
+      debugPrint('NavigationService: Preloaded ${reportsData.length} all reports');
+    } catch (e) {
+      debugPrint('NavigationService: Failed to preload all reports: $e');
+    }
+  }
+
   /// Preload maintenance data for faster navigation
   static Future<void> _preloadMaintenanceData() async {
     // Only preload if cache is empty or expired
@@ -168,6 +186,11 @@ class SupervisorNavigationService {
   static void clearCache() {
     _cacheService.invalidate(CacheKeys.allReports);
     _cacheService.invalidate(CacheKeys.allMaintenance);
+    
+    // Clear supervisor-specific cache keys
+    _cacheService.invalidatePattern('${CacheKeys.allReports}_supervisor_');
+    _cacheService.invalidatePattern('${CacheKeys.allMaintenance}_supervisor_');
+    
     debugPrint('NavigationService: Cache cleared');
   }
 } 

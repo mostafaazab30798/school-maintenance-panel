@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/report.dart';
 import '../../core/repositories/base_repository.dart';
+import '../../core/services/cache_invalidation_service.dart';
 import 'package:flutter/foundation.dart';
 
 class ReportRepository extends BaseRepository<Report> {
@@ -25,6 +26,8 @@ class ReportRepository extends BaseRepository<Report> {
   /// This method clears the BaseRepository cache for all report-related operations
   void invalidateCache() {
     clearCache('fetchReports');
+    // Also invalidate cross-component caches
+    CacheInvalidationService.invalidateReportCaches();
   }
 
   Future<List<Report>> fetchReports({
@@ -34,7 +37,7 @@ class ReportRepository extends BaseRepository<Report> {
     String? status,
     String? priority,
     bool forceRefresh = false,
-    int? limit = 100,
+    int? limit,
   }) async {
     // 🔧 IMMEDIATE FIX: Clear cache on type mismatch to prevent 6+ second failures
     try {

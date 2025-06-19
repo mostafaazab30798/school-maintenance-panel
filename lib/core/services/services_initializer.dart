@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'cache_service.dart';
 import 'data_sync_service.dart';
+import 'notification_service.dart';
 
 class ServicesInitializer {
   static bool _isInitialized = false;
@@ -16,6 +17,9 @@ class ServicesInitializer {
       // Initialize data sync service for realtime updates
       final dataSyncService = DataSyncService();
       dataSyncService.initialize();
+
+      // Initialize notification service
+      NotificationService.instance.initialize();
 
       _isInitialized = true;
 
@@ -39,6 +43,9 @@ class ServicesInitializer {
 
       final dataSyncService = DataSyncService();
       dataSyncService.dispose();
+
+      // Dispose notification service
+      NotificationService.instance.dispose();
 
       _isInitialized = false;
 

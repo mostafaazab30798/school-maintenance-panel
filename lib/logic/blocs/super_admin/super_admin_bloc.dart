@@ -1,6 +1,8 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter/foundation.dart';
 import '../../../core/services/admin_management_service.dart';
 import '../../../core/services/cache_service.dart';
+import '../../../core/services/cache_invalidation_service.dart';
 import '../../../data/repositories/supervisor_repository.dart';
 import '../../../data/repositories/report_repository.dart';
 import '../../../data/repositories/maintenance_repository.dart';
@@ -190,6 +192,10 @@ class SuperAdminBloc extends Bloc<SuperAdminEvent, SuperAdminState> {
         adminId: event.adminId,
         supervisorIds: event.supervisorIds,
       );
+
+      // 🚀 Critical Fix: Clear all supervisor-related caches
+      // This ensures that when the assigned admin logs in, they'll see the newly assigned supervisors
+      CacheInvalidationService.invalidateSupervisorCaches();
 
       // Instead of reloading everything, just update the specific admin's data
       if (state is SuperAdminLoaded) {
