@@ -43,3 +43,14 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Security - Firebase and credential files
+serviceAccount.json
+firebase-adminsdk-*.json
+*firebase*.json
+*.env
+.env*
+*_key.env
+temp_creds.*
+*credentials*
+google-services.json
