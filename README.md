@@ -17,7 +17,7 @@
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/school-maintenance-admin-panel.git
+git clone https://github.com/mostafaazab30798/school-maintenance-admin-panel.git
 cd school-maintenance-admin-panel
 ```
 
