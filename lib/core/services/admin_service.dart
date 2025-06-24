@@ -146,7 +146,7 @@ class AdminService {
       final response = await _client
           .from('admins')
           .select('role')
-          .eq('user_id', user.id)
+          .eq('auth_user_id', user.id)
           .single();
 
       final role = response['role'] as String?;
