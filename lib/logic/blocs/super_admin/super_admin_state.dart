@@ -28,6 +28,8 @@ class SuperAdminLoaded extends SuperAdminState {
   final Map<String, int> adminMaintenanceDistribution;
   final Map<String, Map<String, dynamic>> reportTypesCompletionRates;
   final Map<String, Map<String, dynamic>> reportSourcesCompletionRates;
+  final Map<String, int> reportPriorityStats;
+  final Map<String, Map<String, dynamic>> reportPriorityCompletionRates;
 
   SuperAdminLoaded({
     required this.admins,
@@ -41,6 +43,8 @@ class SuperAdminLoaded extends SuperAdminState {
     required this.adminMaintenanceDistribution,
     required this.reportTypesCompletionRates,
     required this.reportSourcesCompletionRates,
+    required this.reportPriorityStats,
+    required this.reportPriorityCompletionRates,
   });
 }
 

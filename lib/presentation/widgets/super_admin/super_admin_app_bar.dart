@@ -8,13 +8,16 @@ import '../../../logic/blocs/super_admin/super_admin_bloc.dart';
 import '../../../logic/blocs/super_admin/super_admin_event.dart';
 import '../common/weekly_report_dialog.dart';
 import '../common/user_info_widget.dart';
+import '../common/shared_back_button.dart';
 
 class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onCreateAdmin;
+  final bool showBackButton;
 
   const SuperAdminAppBar({
     super.key,
     this.onCreateAdmin,
+    this.showBackButton = false,
   });
 
   @override
@@ -23,6 +26,15 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
+      automaticallyImplyLeading: false,
+      leading: showBackButton
+          ? SharedBackButton(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white
+                  : const Color(0xFF1E293B),
+              forceShow: true,
+            )
+          : null,
       backgroundColor: Colors.transparent,
       elevation: 0,
       flexibleSpace: Container(
@@ -226,7 +238,7 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
         focusNode: FocusNode()..requestFocus(),
         autofocus: true,
         onKey: (RawKeyEvent event) {
-          if (event is RawKeyDownEvent && 
+          if (event is RawKeyDownEvent &&
               event.logicalKey == LogicalKeyboardKey.escape) {
             Navigator.of(ctx).pop();
           }
@@ -238,230 +250,233 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
           elevation: 0,
           backgroundColor: Colors.transparent,
           child: Container(
-          width: 320,
-          padding: const EdgeInsets.all(28),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: Theme.of(context).brightness == Brightness.dark
-                  ? [
-                      const Color(0xFF1E293B).withOpacity(0.95),
-                      const Color(0xFF0F172A).withOpacity(0.95),
-                    ]
-                  : [
-                      Colors.white.withOpacity(0.95),
-                      const Color(0xFFF8FAFC).withOpacity(0.95),
-                    ],
-            ),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white.withOpacity(0.1)
-                  : Colors.black.withOpacity(0.05),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.15),
-                blurRadius: 40,
-                offset: const Offset(0, 20),
-                spreadRadius: 0,
+            width: 320,
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: Theme.of(context).brightness == Brightness.dark
+                    ? [
+                        const Color(0xFF1E293B).withOpacity(0.95),
+                        const Color(0xFF0F172A).withOpacity(0.95),
+                      ]
+                    : [
+                        Colors.white.withOpacity(0.95),
+                        const Color(0xFFF8FAFC).withOpacity(0.95),
+                      ],
               ),
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 80,
-                offset: const Offset(0, 40),
-                spreadRadius: 0,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white.withOpacity(0.1)
+                    : Colors.black.withOpacity(0.05),
+                width: 1,
               ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Modern logout icon with enhanced styling
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      const Color(0xFFEF4444).withOpacity(0.15),
-                      const Color(0xFFDC2626).withOpacity(0.1),
-                    ],
-                  ),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: const Color(0xFFEF4444).withOpacity(0.2),
-                    width: 2,
-                  ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 40,
+                  offset: const Offset(0, 20),
+                  spreadRadius: 0,
                 ),
-                child: Container(
-                  margin: const EdgeInsets.all(2),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 80,
+                  offset: const Offset(0, 40),
+                  spreadRadius: 0,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Modern logout icon with enhanced styling
+                Container(
+                  width: 64,
+                  height: 64,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                       colors: [
-                        const Color(0xFFEF4444).withOpacity(0.1),
-                        const Color(0xFFDC2626).withOpacity(0.05),
+                        const Color(0xFFEF4444).withOpacity(0.15),
+                        const Color(0xFFDC2626).withOpacity(0.1),
                       ],
                     ),
                     shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.logout_rounded,
-                    color: Color(0xFFEF4444),
-                    size: 32,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Modern title with better typography
-              Text(
-                'تسجيل الخروج',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white
-                      : const Color(0xFF0F172A),
-                  letterSpacing: -0.5,
-                  height: 1.2,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-
-                             // Description text
-               Text(
-                 'هل أنت متأكد من تسجيل الخروج من حسابك؟\nسيتم إعادة توجيهك إلى صفحة تسجيل الدخول',
-                 style: TextStyle(
-                   fontSize: 14,
-                   fontWeight: FontWeight.w400,
-                   color: Theme.of(context).brightness == Brightness.dark
-                       ? const Color(0xFF94A3B8)
-                       : const Color(0xFF64748B),
-                   height: 1.5,
-                   letterSpacing: 0.1,
-                 ),
-                 textAlign: TextAlign.center,
-               ),
-              const SizedBox(height: 32),
-
-              // Modern action buttons with enhanced styling
-              Row(
-                children: [
-                  // Cancel button with modern subtle styling
-                  Expanded(
-                    child: Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? const Color(0xFF334155).withOpacity(0.5)
-                            : const Color(0xFFF1F5F9),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? const Color(0xFF475569)
-                              : const Color(0xFFE2E8F0),
-                          width: 1,
-                        ),
-                      ),
-                      child: TextButton(
-                        onPressed: () => Navigator.of(ctx).pop(),
-                        style: TextButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          padding: EdgeInsets.zero,
-                          overlayColor: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.white.withOpacity(0.05)
-                              : Colors.black.withOpacity(0.03),
-                        ),
-                        child: Text(
-                          'إلغاء',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? const Color(0xFFCBD5E1)
-                                : const Color(0xFF475569),
-                            letterSpacing: 0.1,
-                          ),
-                        ),
-                      ),
+                    border: Border.all(
+                      color: const Color(0xFFEF4444).withOpacity(0.2),
+                      width: 2,
                     ),
                   ),
-                  const SizedBox(width: 16),
-
-                  // Logout button with gradient and modern styling
-                  Expanded(
-                    child: Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [
-                            Color(0xFFEF4444),
-                            Color(0xFFDC2626),
-                          ],
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFFEF4444).withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
+                  child: Container(
+                    margin: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          const Color(0xFFEF4444).withOpacity(0.1),
+                          const Color(0xFFDC2626).withOpacity(0.05),
                         ],
                       ),
-                      child: TextButton(
-                        onPressed: () async {
-                          await Supabase.instance.client.auth.signOut();
-                          Navigator.of(ctx).pop();
-                          context.go('/auth');
-                        },
-                        style: TextButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.logout_rounded,
+                      color: Color(0xFFEF4444),
+                      size: 32,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Modern title with better typography
+                Text(
+                  'تسجيل الخروج',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : const Color(0xFF0F172A),
+                    letterSpacing: -0.5,
+                    height: 1.2,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+
+                // Description text
+                Text(
+                  'هل أنت متأكد من تسجيل الخروج من حسابك؟\nسيتم إعادة توجيهك إلى صفحة تسجيل الدخول',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w400,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
+                    height: 1.5,
+                    letterSpacing: 0.1,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+
+                // Modern action buttons with enhanced styling
+                Row(
+                  children: [
+                    // Cancel button with modern subtle styling
+                    Expanded(
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? const Color(0xFF334155).withOpacity(0.5)
+                              : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                    ? const Color(0xFF475569)
+                                    : const Color(0xFFE2E8F0),
+                            width: 1,
                           ),
-                          padding: EdgeInsets.zero,
-                          overlayColor: Colors.white.withOpacity(0.1),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.logout_rounded,
-                              color: Colors.white,
-                              size: 18,
+                        child: TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          style: TextButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'تسجيل الخروج',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                                letterSpacing: 0.1,
-                              ),
+                            padding: EdgeInsets.zero,
+                            overlayColor:
+                                Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.white.withOpacity(0.05)
+                                    : Colors.black.withOpacity(0.03),
+                          ),
+                          child: Text(
+                            'إلغاء',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).brightness ==
+                                      Brightness.dark
+                                  ? const Color(0xFFCBD5E1)
+                                  : const Color(0xFF475569),
+                              letterSpacing: 0.1,
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                    const SizedBox(width: 16),
+
+                    // Logout button with gradient and modern styling
+                    Expanded(
+                      child: Container(
+                        height: 48,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Color(0xFFEF4444),
+                              Color(0xFFDC2626),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFEF4444).withOpacity(0.3),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: TextButton(
+                          onPressed: () async {
+                            await Supabase.instance.client.auth.signOut();
+                            Navigator.of(ctx).pop();
+                            context.go('/auth');
+                          },
+                          style: TextButton.styleFrom(
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            padding: EdgeInsets.zero,
+                            overlayColor: Colors.white.withOpacity(0.1),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.logout_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'تسجيل الخروج',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                  letterSpacing: 0.1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -472,6 +487,4 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
       builder: (context) => WeeklyReportDialog(),
     );
   }
-
-
 }

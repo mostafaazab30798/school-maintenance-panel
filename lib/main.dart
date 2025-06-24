@@ -8,6 +8,8 @@ import 'logic/blocs/reports/report_bloc.dart';
 import 'logic/blocs/reports/report_event.dart';
 import 'logic/blocs/dashboard/dashboard_bloc.dart';
 import 'logic/blocs/dashboard/dashboard_event.dart';
+import 'logic/blocs/supervisors/supervisor_bloc.dart';
+import 'logic/blocs/supervisors/supervisor_event.dart';
 import 'logic/cubits/theme_cubit.dart';
 import 'core/constants/app_themes.dart';
 import 'core/routes/app_router.dart';
@@ -58,6 +60,10 @@ class MyApp extends StatelessWidget {
               maintenanceRepository: maintenanceRepo,
               adminService: adminService,
             )..add(LoadDashboardData()),
+          ),
+          BlocProvider<SupervisorBloc>(
+            create: (_) => SupervisorBloc(supervisorRepo, adminService)
+              ..add(const SupervisorsStarted()),
           ),
         ],
         child: BlocBuilder<ThemeCubit, ThemeMode>(

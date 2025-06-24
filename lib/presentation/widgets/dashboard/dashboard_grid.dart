@@ -517,7 +517,7 @@ class _DashboardGridState extends State<DashboardGrid>
 
     return CompletionProgressCard(
       percentage: progressValue,
-      onTap: () => context.go('/progress'),
+      onTap: () => context.push('/progress'),
     );
   }
 
@@ -597,37 +597,37 @@ class _DashboardGridState extends State<DashboardGrid>
   Widget _buildFixedRowsLayout(List<Widget> cards, int columns) {
     final rows = <Widget>[];
     const cardHeight = 180.0; // Same height as super admin dashboard
-    
+
     for (int i = 0; i < cards.length; i += columns) {
       final rowCards = <Widget>[];
-      
+
       for (int j = 0; j < columns && (i + j) < cards.length; j++) {
         rowCards.add(Expanded(child: cards[i + j]));
-        
+
         // Add spacing between cards (except for the last one)
         if (j < columns - 1 && (i + j + 1) < cards.length) {
           rowCards.add(const SizedBox(width: 16));
         }
       }
-      
+
       // Fill remaining slots with empty expanded widgets for consistent spacing
       while (rowCards.length < (columns * 2 - 1)) {
         rowCards.add(const Expanded(child: SizedBox()));
       }
-      
+
       rows.add(
         SizedBox(
           height: cardHeight,
           child: Row(children: rowCards),
         ),
       );
-      
+
       // Add vertical spacing between rows (except for the last one)
       if (i + columns < cards.length) {
         rows.add(const SizedBox(height: 16));
       }
     }
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: rows,

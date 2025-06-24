@@ -89,6 +89,7 @@ class _SuperAdminProgressScreenState extends State<SuperAdminProgressScreen>
 
   PreferredSizeWidget _buildModernAppBar(BuildContext context, bool isDark) {
     return AppBar(
+      automaticallyImplyLeading: true,
       elevation: 0,
       backgroundColor: Colors.transparent,
       flexibleSpace: Container(
@@ -341,15 +342,9 @@ class _SuperAdminProgressScreenState extends State<SuperAdminProgressScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-             
-
-              
-
               // Charts Section
               ChartsSectionWidget(state: state),
               const SizedBox(height: 24),
-
-              
             ],
           ),
         ),

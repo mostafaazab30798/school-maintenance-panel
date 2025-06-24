@@ -72,7 +72,8 @@ class StatisticsSection extends StatelessWidget {
     };
   }
 
-  Widget _buildStatisticsCards(BuildContext context, Map<String, dynamic> stats) {
+  Widget _buildStatisticsCards(
+      BuildContext context, Map<String, dynamic> stats) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isSmallScreen = constraints.maxWidth < 800;
@@ -101,7 +102,7 @@ class StatisticsSection extends StatelessWidget {
           ),
           CompletionProgressCard(
             percentage: stats['systemCompletionRate'] / 100,
-            onTap: () => context.go('/super-admin-progress'),
+            onTap: () => context.push('/super-admin-progress'),
           ),
         ];
 
@@ -159,4 +160,4 @@ class StatisticsSection extends StatelessWidget {
       ),
     );
   }
-} 
+}

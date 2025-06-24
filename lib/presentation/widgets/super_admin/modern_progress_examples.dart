@@ -10,6 +10,7 @@ class ModernProgressExamples extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: true,
         title: const Text('مؤشرات التقدم الحديثة'),
       ),
       body: SingleChildScrollView(
@@ -21,15 +22,15 @@ class ModernProgressExamples extends StatelessWidget {
             Text(
               'أنواع مؤشرات التقدم المختلفة',
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
+                    fontWeight: FontWeight.w800,
+                  ),
             ),
             const SizedBox(height: 30),
 
             // Circular Progress Examples
             _buildSectionTitle(context, 'المؤشرات الدائرية'),
             const SizedBox(height: 20),
-            
+
             Wrap(
               spacing: 20,
               runSpacing: 20,
@@ -42,7 +43,6 @@ class ModernProgressExamples extends StatelessWidget {
                   style: ProgressStyle.circular,
                   onTap: () => _showDetails(context, 'الأداء العام'),
                 ),
-                
                 ModernProgressChip(
                   percentage: 0.65,
                   label: 'جودة البلاغات',
@@ -51,7 +51,6 @@ class ModernProgressExamples extends StatelessWidget {
                   style: ProgressStyle.circular,
                   size: const Size(300, 130),
                 ),
-                
                 ModernProgressChip(
                   percentage: 0.40,
                   label: 'سرعة الاستجابة',
@@ -61,13 +60,13 @@ class ModernProgressExamples extends StatelessWidget {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 40),
 
             // Linear Progress Examples
             _buildSectionTitle(context, 'المؤشرات الخطية'),
             const SizedBox(height: 20),
-            
+
             Column(
               children: [
                 ModernProgressChip(
@@ -79,9 +78,7 @@ class ModernProgressExamples extends StatelessWidget {
                   size: const Size(double.infinity, 160),
                   onTap: () => _showDetails(context, 'إكمال المهام'),
                 ),
-                
                 const SizedBox(height: 20),
-                
                 ModernProgressChip(
                   percentage: 0.58,
                   label: 'رضا العملاء',
@@ -92,13 +89,13 @@ class ModernProgressExamples extends StatelessWidget {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 40),
 
             // Ring Progress Examples
             _buildSectionTitle(context, 'المؤشرات الحلقية'),
             const SizedBox(height: 20),
-            
+
             Wrap(
               spacing: 20,
               runSpacing: 20,
@@ -110,7 +107,6 @@ class ModernProgressExamples extends StatelessWidget {
                   icon: Icons.group_rounded,
                   style: ProgressStyle.ring,
                 ),
-                
                 ModernProgressChip(
                   percentage: 0.33,
                   label: 'الامتثال للمعايير',
@@ -121,13 +117,13 @@ class ModernProgressExamples extends StatelessWidget {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 40),
 
             // Gradient Progress Examples
             _buildSectionTitle(context, 'المؤشرات المتدرجة'),
             const SizedBox(height: 20),
-            
+
             Column(
               children: [
                 ModernProgressChip(
@@ -138,9 +134,7 @@ class ModernProgressExamples extends StatelessWidget {
                   style: ProgressStyle.gradient,
                   size: const Size(double.infinity, 120),
                 ),
-                
                 const SizedBox(height: 20),
-                
                 ModernProgressChip(
                   percentage: 0.45,
                   label: 'الابتكار والتطوير',
@@ -151,13 +145,13 @@ class ModernProgressExamples extends StatelessWidget {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 40),
 
             // Skeleton Progress Examples
             _buildSectionTitle(context, 'المؤشرات الهيكلية'),
             const SizedBox(height: 20),
-            
+
             Wrap(
               spacing: 20,
               runSpacing: 20,
@@ -169,7 +163,6 @@ class ModernProgressExamples extends StatelessWidget {
                   icon: Icons.analytics_rounded,
                   style: ProgressStyle.skeleton,
                 ),
-                
                 ModernProgressChip(
                   percentage: 0.95,
                   label: 'نسخ احتياطي',
@@ -180,15 +173,15 @@ class ModernProgressExamples extends StatelessWidget {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 40),
 
             // Performance Comparison Section
             _buildSectionTitle(context, 'مقارنة الأداء'),
             const SizedBox(height: 20),
-            
+
             _buildPerformanceComparison(),
-            
+
             const SizedBox(height: 40),
 
             // Tips Section
@@ -214,9 +207,9 @@ class ModernProgressExamples extends StatelessWidget {
       child: Text(
         title,
         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-          fontWeight: FontWeight.w700,
-          color: Theme.of(context).primaryColor,
-        ),
+              fontWeight: FontWeight.w700,
+              color: Theme.of(context).primaryColor,
+            ),
       ),
     );
   }
@@ -399,7 +392,8 @@ class ModernProgressExamples extends StatelessWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('تفاصيل $title'),
-        content: const Text('هنا يمكن عرض المزيد من التفاصيل والإحصائيات المتقدمة.'),
+        content:
+            const Text('هنا يمكن عرض المزيد من التفاصيل والإحصائيات المتقدمة.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -431,13 +425,13 @@ class _ProgressShowcaseState extends State<ProgressShowcase>
       duration: const Duration(seconds: 3),
       vsync: this,
     );
-    
+
     _controller.addListener(() {
       setState(() {
         _currentProgress = _controller.value;
       });
     });
-    
+
     _startAnimation();
   }
 
@@ -465,8 +459,8 @@ class _ProgressShowcaseState extends State<ProgressShowcase>
         Text(
           'عرض تقدمي متحرك',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+                fontWeight: FontWeight.w700,
+              ),
         ),
         const SizedBox(height: 20),
         ModernProgressChip(
@@ -498,4 +492,4 @@ class _ProgressShowcaseState extends State<ProgressShowcase>
       ],
     );
   }
-} 
+}

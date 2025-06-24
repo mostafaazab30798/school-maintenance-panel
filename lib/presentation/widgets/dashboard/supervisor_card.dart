@@ -621,7 +621,7 @@ class _SupervisorCardState extends State<SupervisorCard>
                 'إضافة بلاغ',
                 Icons.add_circle_outline_rounded,
                 const Color(0xFF3B82F6),
-                () => context.go('/add-reports/${widget.supervisorId}'),
+                () => context.push('/add-reports/${widget.supervisorId}'),
                 isDark,
                 isPrimary: true,
               ),
@@ -630,7 +630,7 @@ class _SupervisorCardState extends State<SupervisorCard>
                 'صيانة دورية',
                 Icons.build_circle_outlined,
                 const Color(0xFF059669),
-                () => context.go('/add-maintenance/${widget.supervisorId}'),
+                () => context.push('/add-maintenance/${widget.supervisorId}'),
                 isDark,
                 isPrimary: false,
               ),
@@ -645,7 +645,7 @@ class _SupervisorCardState extends State<SupervisorCard>
                   'إضافة بلاغ',
                   Icons.add_circle_outline_rounded,
                   const Color(0xFF3B82F6),
-                  () => context.go('/add-reports/${widget.supervisorId}'),
+                  () => context.push('/add-reports/${widget.supervisorId}'),
                   isDark,
                   isPrimary: true,
                 ),
@@ -656,7 +656,7 @@ class _SupervisorCardState extends State<SupervisorCard>
                   'صيانة دورية',
                   Icons.build_circle_outlined,
                   const Color(0xFF059669),
-                  () => context.go('/add-maintenance/${widget.supervisorId}'),
+                  () => context.push('/add-maintenance/${widget.supervisorId}'),
                   isDark,
                   isPrimary: false,
                 ),
@@ -745,8 +745,8 @@ class _SupervisorCardState extends State<SupervisorCard>
 
   Color _getProgressColor(double percent) {
     if (percent >= 0.81) return const Color(0xFF10B981); // Green - Excellent
-    if (percent >= 0.61) return const Color(0xFF3B82F6);  // Blue - Good  
-    if (percent >= 0.51) return const Color(0xFFF59E0B);  // Orange - Average
+    if (percent >= 0.61) return const Color(0xFF3B82F6); // Blue - Good
+    if (percent >= 0.51) return const Color(0xFFF59E0B); // Orange - Average
     return const Color(0xFFEF4444); // Red - Bad
   }
 }

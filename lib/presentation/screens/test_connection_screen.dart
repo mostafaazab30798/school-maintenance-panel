@@ -61,6 +61,7 @@ class _TestConnectionScreenState extends State<TestConnectionScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: true,
         title: const Text('Test Supabase Connection'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,

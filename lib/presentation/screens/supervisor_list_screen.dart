@@ -60,6 +60,7 @@ class _SupervisorListView extends StatelessWidget {
 
   Widget _buildAppBar(BuildContext context, bool isDark) {
     return SliverAppBar(
+      automaticallyImplyLeading: true,
       expandedHeight: 120,
       collapsedHeight: 60,
       floating: true,

@@ -119,6 +119,7 @@ class AddMultipleReportsScreen extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return AppBar(
+      automaticallyImplyLeading: true,
       title: Text(
         'إضافة بلاغات متعددة',
         style: AppFonts.appBarTitle(isDark: isDark),

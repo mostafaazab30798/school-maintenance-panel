@@ -47,7 +47,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     // Create DashboardBloc and AuthBloc instances (like super admin pattern)
     final supabase = Supabase.instance.client;
-    
+
     return MultiBlocProvider(
       providers: [
         BlocProvider(
@@ -74,6 +74,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           textDirection: TextDirection.rtl,
           child: Scaffold(
             appBar: AppBar(
+              automaticallyImplyLeading: false,
               toolbarHeight: 70,
               title: Row(
                 children: [
@@ -770,24 +771,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           state.completedMaintenanceReports,
                       pendingMaintenanceReports:
                           state.pendingMaintenanceReports,
-                      onTapTotalReports: () => context.go('/reports'),
-                      onTapEmergencyReports: () => context.go(
+                      onTapTotalReports: () => context.push('/reports'),
+                      onTapEmergencyReports: () => context.push(
                           '/reports?title=البلاغات الطارئة&priority=Emergency'),
-                      onTapCompletedReports: () => context.go(
+                      onTapCompletedReports: () => context.push(
                           '/reports?title=البلاغات المكتملة&status=completed'),
                       onTapOverdueReports: () => context
-                          .go('/reports?title=البلاغات المتأخرة&status=late'),
-                      onTapLateCompletedReports: () => context.go(
+                          .push('/reports?title=البلاغات المتأخرة&status=late'),
+                      onTapLateCompletedReports: () => context.push(
                           '/reports?title=البلاغات المتأخرة المنجزة&status=late_completed'),
-                      onTapTotalSupervisors: () => context.go('/supervisors'),
-                      onTapRoutineReports: () => context.go(
+                      onTapTotalSupervisors: () => context.push('/supervisors'),
+                      onTapRoutineReports: () => context.push(
                           '/reports?title=البلاغات الروتينية&priority=Routine'),
                       // Maintenance callbacks
                       onTapTotalMaintenanceReports: () =>
-                          context.go('/maintenance-reports'),
-                      onTapCompletedMaintenanceReports: () => context.go(
+                          context.push('/maintenance-reports'),
+                      onTapCompletedMaintenanceReports: () => context.push(
                           '/maintenance-reports?title=بلاغات الصيانة المكتملة&status=completed'),
-                      onTapPendingMaintenanceReports: () => context.go(
+                      onTapPendingMaintenanceReports: () => context.push(
                           '/maintenance-reports?title=بلاغات الصيانة الجارية&status=pending'),
                     );
                   }

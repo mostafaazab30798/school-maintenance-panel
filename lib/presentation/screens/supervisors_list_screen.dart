@@ -6,6 +6,7 @@ import '../../core/services/admin_management_service.dart';
 import '../../data/repositories/supervisor_repository.dart';
 import '../../data/repositories/report_repository.dart';
 import '../../data/repositories/maintenance_repository.dart';
+import '../widgets/common/shared_app_bar.dart';
 import '../../logic/blocs/super_admin/super_admin_bloc.dart';
 import '../../logic/blocs/super_admin/super_admin_state.dart';
 import '../../logic/blocs/super_admin/super_admin_event.dart';
@@ -41,69 +42,51 @@ class _SupervisorsListView extends StatelessWidget {
         backgroundColor: Theme.of(context).brightness == Brightness.dark
             ? const Color(0xFF0F172A)
             : const Color(0xFFF8FAFC),
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          title: const Text(
-            'قائمة المشرفين',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 20,
-            ),
-          ),
-          backgroundColor: Theme.of(context).brightness == Brightness.dark
-              ? const Color(0xFF1E293B)
-              : Colors.white,
-          foregroundColor: Theme.of(context).brightness == Brightness.dark
-              ? Colors.white
-              : const Color(0xFF1E293B),
-          elevation: 0,
-          
+        appBar: SharedAppBar(
+          title: 'قائمة المشرفين',
           actions: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Container(
-                margin: const EdgeInsets.only(right: 16),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: const Color(0xFF10B981).withOpacity(0.3),
-                  ),
+            Container(
+              margin: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF10B981).withOpacity(0.3),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.people_rounded,
-                      color: const Color(0xFF10B981),
-                      size: 16,
-                    ),
-                    const SizedBox(width: 6),
-                    BlocBuilder<SuperAdminBloc, SuperAdminState>(
-                      builder: (context, state) {
-                        if (state is SuperAdminLoaded) {
-                          return Text(
-                            '${state.allSupervisors.length} مشرف',
-                            style: const TextStyle(
-                              color: Color(0xFF10B981),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
-                            ),
-                          );
-                        }
-                        return const Text(
-                          '0 مشرف',
-                          style: TextStyle(
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.people_rounded,
+                    color: Color(0xFF10B981),
+                    size: 16,
+                  ),
+                  const SizedBox(width: 6),
+                  BlocBuilder<SuperAdminBloc, SuperAdminState>(
+                    builder: (context, state) {
+                      if (state is SuperAdminLoaded) {
+                        return Text(
+                          '${state.allSupervisors.length} مشرف',
+                          style: const TextStyle(
                             color: Color(0xFF10B981),
                             fontWeight: FontWeight.w600,
                             fontSize: 12,
                           ),
                         );
-                      },
-                    ),
-                  ],
-                ),
+                      }
+                      return const Text(
+                        '0 مشرف',
+                        style: TextStyle(
+                          color: Color(0xFF10B981),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
           ],
@@ -116,7 +99,8 @@ class _SupervisorsListView extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF10B981)),
+                      valueColor:
+                          AlwaysStoppedAnimation<Color>(Color(0xFF10B981)),
                     ),
                     SizedBox(height: 16),
                     Text(
@@ -215,4 +199,4 @@ class _SupervisorsListView extends StatelessWidget {
       ),
     );
   }
-} 
+}

@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../data/models/supervisor.dart';
+import '../../../../logic/blocs/super_admin/super_admin_bloc.dart';
+import '../../../../logic/blocs/super_admin/super_admin_event.dart';
+import '../../../../core/services/bloc_manager.dart';
 import '../../saudi_plate.dart';
 import '../../common/esc_dismissible_dialog.dart';
+import 'technician_management_dialog.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 class SupervisorDetailDialog extends StatelessWidget {
   final Map<String, dynamic> supervisor;
@@ -22,8 +27,8 @@ class SupervisorDetailDialog extends StatelessWidget {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Dialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             child: Container(
               width: 400,
               height: 300,
@@ -43,8 +48,8 @@ class SupervisorDetailDialog extends StatelessWidget {
 
         if (snapshot.hasError || !snapshot.hasData) {
           return Dialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             child: Container(
               width: 400,
               height: 300,
@@ -290,7 +295,8 @@ class SupervisorDetailDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildPersonalInfoSection(BuildContext context, Supervisor supervisor) {
+  Widget _buildPersonalInfoSection(
+      BuildContext context, Supervisor supervisor) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -363,7 +369,8 @@ class SupervisorDetailDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildSaudiLicensePlateSection(BuildContext context, Supervisor supervisor) {
+  Widget _buildSaudiLicensePlateSection(
+      BuildContext context, Supervisor supervisor) {
     final hasPlateData = supervisor.plateNumbers.isNotEmpty ||
         supervisor.plateEnglishLetters.isNotEmpty ||
         supervisor.plateArabicLetters.isNotEmpty;
@@ -462,8 +469,8 @@ class SupervisorDetailDialog extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusSection(
-      BuildContext context, Supervisor supervisor, Map<String, dynamic> supervisorStats) {
+  Widget _buildStatusSection(BuildContext context, Supervisor supervisor,
+      Map<String, dynamic> supervisorStats) {
     final isAssigned = supervisor.adminId != null;
     final adminName = supervisorStats['admin_name'] as String?;
 
@@ -618,19 +625,125 @@ class SupervisorDetailDialog extends StatelessWidget {
           ),
         ),
       ),
-      child: SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const Icon(Icons.close_outlined, size: 16),
-          label: const Text('إغلاق', style: TextStyle(fontSize: 12)),
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            side: const BorderSide(color: Color(0xFFE2E8F0)),
+      child: Column(
+        children: [
+          // Technician Management Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _openTechnicianManagement(context),
+              icon: const Icon(Icons.build_circle, size: 16),
+              label: Text('إدارة الفنيين (${_getTechnicianCount()})',
+                  style: const TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+              ),
+            ),
           ),
-        ),
+          const SizedBox(height: 8),
+          // Close Button
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).pop(),
+              icon: const Icon(Icons.close_outlined, size: 16),
+              label: const Text('إغلاق', style: TextStyle(fontSize: 12)),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                side: const BorderSide(color: Color(0xFFE2E8F0)),
+              ),
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  void _openTechnicianManagement(BuildContext context) async {
+    final supervisorId = supervisor['id'] as String? ?? '';
+
+    if (supervisorId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('خطأ: لا يمكن العثور على معرف المشرف'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final response = await Supabase.instance.client
+          .from('supervisors')
+          .select('*')
+          .eq('id', supervisorId)
+          .single();
+
+      final supervisorData = Supervisor.fromMap(response);
+
+      if (context.mounted) {
+        context.showEscDismissibleDialog(
+          barrierDismissible: false,
+          builder: (dialogContext) => BlocProvider.value(
+            value: context.read<SuperAdminBloc>(),
+            child: TechnicianManagementDialog(
+              supervisor: supervisorData,
+              onSaveDetailed: (supervisorId, techniciansDetailed) {
+                // Handle technician update like team management dialog using detailed format
+                context
+                    .read<SuperAdminBloc>()
+                    .add(SupervisorTechniciansUpdatedEvent(
+                      supervisorId: supervisorId,
+                      techniciansDetailed:
+                          techniciansDetailed.map((t) => t.toMap()).toList(),
+                    ));
+              },
+              onTechniciansUpdated: () {
+                // Close this detail dialog and force a refresh
+                Navigator.of(context).pop();
+                try {
+                  final superAdminBloc = BlocManager().getSuperAdminBloc();
+                  superAdminBloc.add(LoadSuperAdminData(forceRefresh: true));
+                  print('Triggered SuperAdminBloc refresh from detail dialog');
+                } catch (e) {
+                  print(
+                      'Failed to refresh SuperAdminBloc from detail dialog: $e');
+                }
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ في تحميل بيانات المشرف: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  int _getTechnicianCount() {
+    final techniciansDetailed = supervisor['technicians_detailed'];
+    if (techniciansDetailed is List) {
+      try {
+        // Parse the JSONB list to count valid technician objects
+        return techniciansDetailed
+            .where((item) =>
+                item is Map<String, dynamic> &&
+                (item['name']?.toString().trim().isNotEmpty ?? false))
+            .length;
+      } catch (e) {
+        print('Error parsing technicians_detailed: $e');
+        return 0;
+      }
+    }
+    return 0;
   }
 
   Widget _buildEnhancedDetailItem(BuildContext context, String label,

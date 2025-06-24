@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../logic/blocs/reports/report_bloc.dart';
+import '../../logic/blocs/reports/report_event.dart';
+import '../../logic/blocs/reports/report_state.dart';
+import '../../data/repositories/report_repository.dart';
+import '../../core/services/admin_service.dart';
+import '../widgets/dashboard/expandable_report_card.dart';
+import '../widgets/common/standard_refresh_button.dart';
+import '../widgets/common/shared_app_bar.dart';
 import 'package:excel/excel.dart' as excel_lib;
 import 'package:file_saver/file_saver.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:intl/date_symbol_data_local.dart';
 import 'dart:typed_data';
 import '../../core/services/cache_service.dart';
-import '../../core/services/admin_service.dart';
-import '../widgets/common/standard_refresh_button.dart';
 
 class AllReportsScreen extends StatefulWidget {
   final String? initialFilter;
@@ -118,8 +125,8 @@ class _AllReportsScreenState extends State<AllReportsScreen>
 
       // Check cache first if not forcing refresh
       if (!forceRefresh) {
-        final cachedReports = _cacheService
-            .getCached<List<Map<String, dynamic>>>(cacheKey);
+        final cachedReports =
+            _cacheService.getCached<List<Map<String, dynamic>>>(cacheKey);
         if (cachedReports != null) {
           setState(() {
             reports = cachedReports;
@@ -159,13 +166,16 @@ class _AllReportsScreenState extends State<AllReportsScreen>
           query = query.eq('supervisor_id', widget.supervisorId!);
         }
 
-        final response = await query.order('created_at', ascending: false).limit(100000);
+        final response =
+            await query.order('created_at', ascending: false).limit(100000);
         reportsData = List<Map<String, dynamic>>.from(response);
-        
+
         // Debug: Log the actual number of reports fetched
-        print('🔍 DEBUG: Fetched ${reportsData.length} reports for super admin');
+        print(
+            '🔍 DEBUG: Fetched ${reportsData.length} reports for super admin');
         if (reportsData.length >= 1000) {
-          print('⚠️ WARNING: Fetched exactly 1000+ reports. Check if Supabase max_rows limit is increased.');
+          print(
+              '⚠️ WARNING: Fetched exactly 1000+ reports. Check if Supabase max_rows limit is increased.');
         }
       } else {
         // Regular admin - filter by their assigned supervisors
@@ -181,11 +191,13 @@ class _AllReportsScreenState extends State<AllReportsScreen>
               .order('created_at', ascending: false)
               .limit(100000);
           reportsData = List<Map<String, dynamic>>.from(response);
-          
+
           // Debug: Log the actual number of reports fetched
-          print('🔍 DEBUG: Fetched ${reportsData.length} reports for regular admin');
+          print(
+              '🔍 DEBUG: Fetched ${reportsData.length} reports for regular admin');
           if (reportsData.length >= 1000) {
-            print('⚠️ WARNING: Fetched exactly 1000+ reports. Check if Supabase max_rows limit is increased.');
+            print(
+                '⚠️ WARNING: Fetched exactly 1000+ reports. Check if Supabase max_rows limit is increased.');
           }
         }
       }
@@ -234,7 +246,8 @@ class _AllReportsScreenState extends State<AllReportsScreen>
           query = query.eq('supervisor_id', widget.supervisorId!);
         }
 
-        final response = await query.order('created_at', ascending: false).limit(100000);
+        final response =
+            await query.order('created_at', ascending: false).limit(100000);
         reportsData = List<Map<String, dynamic>>.from(response);
       } else {
         // Regular admin - filter by their assigned supervisors
@@ -306,16 +319,17 @@ class _AllReportsScreenState extends State<AllReportsScreen>
   void _updatePagination() {
     totalPages = (filteredReports.length / reportsPerPage).ceil();
     if (totalPages == 0) totalPages = 1;
-    
+
     // Ensure current page is valid
     if (currentPage > totalPages) {
       currentPage = totalPages;
     }
-    
+
     // Calculate start and end indices for current page
     final startIndex = (currentPage - 1) * reportsPerPage;
-    final endIndex = (startIndex + reportsPerPage).clamp(0, filteredReports.length);
-    
+    final endIndex =
+        (startIndex + reportsPerPage).clamp(0, filteredReports.length);
+
     paginatedReports = filteredReports.sublist(startIndex, endIndex);
   }
 
@@ -510,74 +524,41 @@ class _AllReportsScreenState extends State<AllReportsScreen>
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: colorScheme.surface,
+        appBar: SharedAppBar(
+          title: widget.supervisorName != null
+              ? 'بلاغات ${widget.supervisorName} (${reports.length})'
+              : 'جميع البلاغات (${reports.length})',
+          actions: [
+            StandardRefreshButton(
+              onPressed: () => _loadReports(forceRefresh: true),
+            ),
+          ],
+        ),
         floatingActionButton: _buildFloatingActionButton(),
-        body: CustomScrollView(
-          slivers: [
-            // Modern App Bar
-            SliverAppBar.large(
-              automaticallyImplyLeading: false,
-              backgroundColor: colorScheme.surface,
-              surfaceTintColor: Colors.transparent,
-              elevation: 0,
-              pinned: true,
-              expandedHeight: 120,
-              title: Text(
-                widget.supervisorName != null 
-                    ? 'بلاغات ${widget.supervisorName} (${reports.length})'
-                    : 'جميع البلاغات (${reports.length})',
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface,
-                ),
-              ),
-              actions: [
-              
-                Padding(
-                  padding: const EdgeInsets.only(left: 10),
-                  child: StandardRefreshButton(
-                    onPressed: () => _loadReports(forceRefresh: true),
-                  ),
-                ),
-              ],
-              flexibleSpace: FlexibleSpaceBar(
-                background: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        colorScheme.surface,
-                        colorScheme.surface.withOpacity(0.8),
+        body: isLoading
+            ? _buildModernLoadingView()
+            : error != null
+                ? _buildModernErrorView()
+                : SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        // Filter Section
+                        if (!isLoading && error == null)
+                          _buildModernFilterSection(),
+
+                        // Reports info
+                        if (filteredReports.isNotEmpty) _buildReportsInfo(),
+
+                        // Reports list or empty view
+                        filteredReports.isEmpty
+                            ? _buildModernEmptyView()
+                            : _buildModernReportsList(),
+
+                        // Pagination controls
+                        if (totalPages > 1) _buildPaginationControls(),
                       ],
                     ),
                   ),
-                ),
-              ),
-            ),
-
-            // Filter Section
-            if (!isLoading && error == null)
-              SliverToBoxAdapter(
-                child: _buildModernFilterSection(),
-              ),
-
-            // Content
-            if (isLoading)
-              SliverToBoxAdapter(child: _buildModernLoadingView())
-            else if (error != null)
-              SliverToBoxAdapter(child: _buildModernErrorView())
-            else if (filteredReports.isEmpty)
-              SliverToBoxAdapter(child: _buildModernEmptyView())
-            else ...[
-              // Reports info
-              SliverToBoxAdapter(child: _buildReportsInfo()),
-              // Reports list
-              _buildModernReportsList(),
-              // Pagination controls
-              if (totalPages > 1) SliverToBoxAdapter(child: _buildPaginationControls()),
-            ],
-          ],
-        ),
       ),
     );
   }
@@ -814,70 +795,62 @@ class _AllReportsScreenState extends State<AllReportsScreen>
   }
 
   Widget _buildModernReportsList() {
-    return SliverPadding(
-      padding: const EdgeInsets.all(16),
-      sliver: SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final crossAxisCount = _getCrossAxisCount();
+    final crossAxisCount = _getCrossAxisCount();
+    final rows = <Widget>[];
 
-            // Build rows with elastic heights
-            if (index % crossAxisCount == 0) {
-              // Start of a new row
-              final rowStartIndex = index;
-              final rowEndIndex = (rowStartIndex + crossAxisCount - 1)
-                  .clamp(0, paginatedReports.length - 1);
-              final reportsInRow =
-                  paginatedReports.sublist(rowStartIndex, rowEndIndex + 1);
+    for (int i = 0; i < paginatedReports.length; i += crossAxisCount) {
+      final rowStartIndex = i;
+      final rowEndIndex =
+          (i + crossAxisCount - 1).clamp(0, paginatedReports.length - 1);
+      final reportsInRow =
+          paginatedReports.sublist(rowStartIndex, rowEndIndex + 1);
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: reportsInRow.asMap().entries.map((entry) {
-                      final reportIndex = rowStartIndex + entry.key;
-                      final report = entry.value;
-                      final isLastInRow = entry.key == reportsInRow.length - 1;
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: reportsInRow.asMap().entries.map((entry) {
+                final reportIndex = rowStartIndex + entry.key;
+                final report = entry.value;
+                final isLastInRow = entry.key == reportsInRow.length - 1;
 
-                      return Expanded(
-                        child: Container(
-                          margin: EdgeInsets.only(
-                            left: isLastInRow ? 0 : 12,
+                return Expanded(
+                  child: Container(
+                    margin: EdgeInsets.only(
+                      left: isLastInRow ? 0 : 12,
+                    ),
+                    child: FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.1),
+                          end: Offset.zero,
+                        ).animate(CurvedAnimation(
+                          parent: _animationController,
+                          curve: Interval(
+                            (reportIndex * 0.1).clamp(0.0, 1.0),
+                            ((reportIndex + 1) * 0.1).clamp(0.0, 1.0),
+                            curve: Curves.easeOutCubic,
                           ),
-                          child: FadeTransition(
-                            opacity: _fadeAnimation,
-                            child: SlideTransition(
-                              position: Tween<Offset>(
-                                begin: const Offset(0, 0.1),
-                                end: Offset.zero,
-                              ).animate(CurvedAnimation(
-                                parent: _animationController,
-                                curve: Interval(
-                                  (reportIndex * 0.1).clamp(0.0, 1.0),
-                                  ((reportIndex + 1) * 0.1).clamp(0.0, 1.0),
-                                  curve: Curves.easeOutCubic,
-                                ),
-                              )),
-                              child:
-                                  _buildModernReportCard(report, reportIndex),
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                        )),
+                        child: _buildModernReportCard(report, reportIndex),
+                      ),
+                    ),
                   ),
-                ),
-              );
-            } else {
-              // Skip indices that are not row starts
-              return const SizedBox.shrink();
-            }
-          },
-          childCount: ((paginatedReports.length / _getCrossAxisCount()).ceil() *
-                  _getCrossAxisCount())
-              .clamp(0, paginatedReports.length),
+                );
+              }).toList(),
+            ),
+          ),
         ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: rows,
       ),
     );
   }
@@ -1206,17 +1179,17 @@ class _AllReportsScreenState extends State<AllReportsScreen>
             onPressed: currentPage > 1 ? _previousPage : null,
             icon: const Icon(Icons.chevron_right),
             style: IconButton.styleFrom(
-              backgroundColor: currentPage > 1 
+              backgroundColor: currentPage > 1
                   ? colorScheme.primary.withOpacity(0.1)
                   : colorScheme.surfaceVariant.withOpacity(0.3),
-              foregroundColor: currentPage > 1 
+              foregroundColor: currentPage > 1
                   ? colorScheme.primary
                   : colorScheme.onSurfaceVariant.withOpacity(0.5),
             ),
           ),
-          
+
           const SizedBox(width: 8),
-          
+
           // Page numbers
           Expanded(
             child: SingleChildScrollView(
@@ -1227,18 +1200,18 @@ class _AllReportsScreenState extends State<AllReportsScreen>
               ),
             ),
           ),
-          
+
           const SizedBox(width: 8),
-          
+
           // Next button
           IconButton(
             onPressed: currentPage < totalPages ? _nextPage : null,
             icon: const Icon(Icons.chevron_left),
             style: IconButton.styleFrom(
-              backgroundColor: currentPage < totalPages 
+              backgroundColor: currentPage < totalPages
                   ? colorScheme.primary.withOpacity(0.1)
                   : colorScheme.surfaceVariant.withOpacity(0.3),
-              foregroundColor: currentPage < totalPages 
+              foregroundColor: currentPage < totalPages
                   ? colorScheme.primary
                   : colorScheme.onSurfaceVariant.withOpacity(0.5),
             ),
@@ -1297,13 +1270,11 @@ class _AllReportsScreenState extends State<AllReportsScreen>
 
   Widget _buildPageButton(int page, ThemeData theme, ColorScheme colorScheme) {
     final isSelected = page == currentPage;
-    
+
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 2),
       child: Material(
-        color: isSelected 
-            ? colorScheme.primary
-            : Colors.transparent,
+        color: isSelected ? colorScheme.primary : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
         child: InkWell(
           onTap: () => _goToPage(page),
@@ -1313,7 +1284,7 @@ class _AllReportsScreenState extends State<AllReportsScreen>
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: isSelected 
+                color: isSelected
                     ? colorScheme.primary
                     : colorScheme.outline.withOpacity(0.3),
               ),
@@ -1321,9 +1292,8 @@ class _AllReportsScreenState extends State<AllReportsScreen>
             child: Text(
               page.toString(),
               style: theme.textTheme.labelLarge?.copyWith(
-                color: isSelected 
-                    ? colorScheme.onPrimary
-                    : colorScheme.onSurface,
+                color:
+                    isSelected ? colorScheme.onPrimary : colorScheme.onSurface,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
               ),
             ),

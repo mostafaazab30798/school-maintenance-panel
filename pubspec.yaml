@@ -25,6 +25,7 @@ dependencies:
   google_fonts: ^6.2.1
   fl_chart: ^1.0.0
   skeletonizer: ^1.4.3
+  icons_launcher: ^3.0.0
 
 
 dev_dependencies:
@@ -39,3 +40,16 @@ flutter:
 
   assets:
     - assets/images/
+
+icons_launcher:
+  image_path: 'assets/icon.png'
+  platforms:
+    android:
+      enable: true
+      image_path: 'assets/icon.png'
+      
+    
+    web:
+      enable: true
+      image_path: 'assets/icon.png'
+      

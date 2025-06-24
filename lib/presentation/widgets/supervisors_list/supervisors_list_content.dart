@@ -2,7 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../super_admin/modern_supervisor_card.dart';
 import '../../../data/models/admin.dart';
-import 'admin_group_stats_widget.dart';
+import '../super_admin/dialogs/supervisor_detail_dialog.dart';
+import '../super_admin/dialogs/technician_management_dialog.dart';
+import '../../../data/models/supervisor.dart';
+import '../../../logic/blocs/super_admin/super_admin_bloc.dart';
+import '../../../logic/blocs/super_admin/super_admin_event.dart';
+import '../../../core/services/bloc_manager.dart';
+import '../common/esc_dismissible_dialog.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 class SupervisorsListContent extends StatefulWidget {
   final List<Map<String, dynamic>> supervisorsWithStats;
@@ -22,19 +29,22 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
   String _searchQuery = '';
   String _sortBy = 'name'; // name, completion_rate, reports, maintenance, admin
   bool _sortAscending = true;
-  String _filterBy = 'all'; // all, assigned, unassigned, high_performance, low_performance
+  String _filterBy =
+      'all'; // all, assigned, unassigned, high_performance, low_performance
   String _selectedAdminId = 'all'; // all, specific admin id, unassigned
   bool _isGridView = true; // true for grid, false for list
   int _currentPage = 0;
   final int _itemsPerPage = 12;
 
   List<Map<String, dynamic>> get _filteredAndSortedSupervisors {
-    var supervisors = List<Map<String, dynamic>>.from(widget.supervisorsWithStats);
+    var supervisors =
+        List<Map<String, dynamic>>.from(widget.supervisorsWithStats);
 
     // Apply search filter
     if (_searchQuery.isNotEmpty) {
       supervisors = supervisors.where((supervisor) {
-        final username = (supervisor['username'] as String? ?? '').toLowerCase();
+        final username =
+            (supervisor['username'] as String? ?? '').toLowerCase();
         final email = (supervisor['email'] as String? ?? '').toLowerCase();
         final query = _searchQuery.toLowerCase();
         return username.contains(query) || email.contains(query);
@@ -46,7 +56,9 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
       if (_selectedAdminId == 'unassigned') {
         supervisors = supervisors.where((s) => s['admin_id'] == null).toList();
       } else {
-        supervisors = supervisors.where((s) => s['admin_id'] == _selectedAdminId).toList();
+        supervisors = supervisors
+            .where((s) => s['admin_id'] == _selectedAdminId)
+            .toList();
       }
     }
 
@@ -77,7 +89,7 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
     // Apply sorting
     supervisors.sort((a, b) {
       dynamic aValue, bValue;
-      
+
       switch (_sortBy) {
         case 'name':
           aValue = (a['username'] as String? ?? '').toLowerCase();
@@ -121,7 +133,7 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
     final filtered = _filteredAndSortedSupervisors;
     final startIndex = _currentPage * _itemsPerPage;
     final endIndex = (startIndex + _itemsPerPage).clamp(0, filtered.length);
-    
+
     if (startIndex >= filtered.length) return [];
     return filtered.sublist(startIndex, endIndex);
   }
@@ -138,7 +150,7 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
     for (final supervisor in filtered) {
       final adminId = supervisor['admin_id'] as String?;
       final key = adminId ?? 'unassigned';
-      
+
       if (!grouped.containsKey(key)) {
         grouped[key] = [];
       }
@@ -153,9 +165,9 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
     final admin = widget.admins.firstWhere(
       (a) => a.id == adminId,
       orElse: () => Admin(
-        id: '', 
-        name: 'غير معروف', 
-        email: '', 
+        id: '',
+        name: 'غير معروف',
+        email: '',
         role: '',
         createdAt: DateTime.now(),
       ),
@@ -167,18 +179,41 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
   Widget build(BuildContext context) {
     final filteredCount = _filteredAndSortedSupervisors.length;
 
-    return Column(
-      children: [
-        // Controls Section
-        _buildControlsSection(context, filteredCount),
-        
-        // Content
-        Expanded(
-          child: widget.supervisorsWithStats.isEmpty
-              ? _buildEmptyState()
-              : _isGridView
-                  ? _buildGridView()
-                  : _buildGroupedView(),
+    if (widget.supervisorsWithStats.isEmpty) {
+      return CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: _buildControlsSection(context, filteredCount),
+          ),
+          SliverToBoxAdapter(
+            child: _buildEmptyState(),
+          ),
+        ],
+      );
+    }
+
+    return CustomScrollView(
+      slivers: [
+        // Controls Section as a sliver
+        SliverToBoxAdapter(
+          child: _buildControlsSection(context, filteredCount),
+        ),
+
+        // Content based on view type
+        if (_isGridView) _buildSliverGridView() else _buildSliverListView(),
+
+        // Pagination Controls
+        if (_totalPages > 1)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: _buildPaginationControls(),
+            ),
+          ),
+
+        // Bottom padding
+        const SliverToBoxAdapter(
+          child: SizedBox(height: 24),
         ),
       ],
     );
@@ -186,7 +221,7 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
 
   Widget _buildControlsSection(BuildContext context, int filteredCount) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),
@@ -231,21 +266,27 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFF10B981), width: 2),
+                      borderSide:
+                          const BorderSide(color: Color(0xFF10B981), width: 2),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
                     filled: true,
-                    fillColor: isDark ? const Color(0xFF334155) : const Color(0xFFF8FAFC),
+                    fillColor: isDark
+                        ? const Color(0xFF334155)
+                        : const Color(0xFFF8FAFC),
                   ),
                   style: const TextStyle(fontSize: 14),
                 ),
               ),
               const SizedBox(width: 16),
-              
+
               // View Toggle
               Container(
                 decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9),
+                  color: isDark
+                      ? const Color(0xFF334155)
+                      : const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: Colors.grey[300]!),
                 ),
@@ -264,16 +305,18 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                   ],
                 ),
               ),
-              
+
               const SizedBox(width: 16),
-              
+
               // Results count
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: const Color(0xFF10B981).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFF10B981).withOpacity(0.3)),
+                  border: Border.all(
+                      color: const Color(0xFF10B981).withOpacity(0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -297,9 +340,9 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
               ),
             ],
           ),
-          
+
           const SizedBox(height: 16),
-          
+
           // Filter Controls
           Row(
             children: [
@@ -317,9 +360,9 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                   },
                 ),
               ),
-              
+
               const SizedBox(width: 16),
-              
+
               // Performance Filter
               Expanded(
                 child: _buildDropdown(
@@ -340,9 +383,9 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                   },
                 ),
               ),
-              
+
               const SizedBox(width: 16),
-              
+
               // Sort Dropdown
               Expanded(
                 child: _buildDropdown(
@@ -362,9 +405,9 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                   },
                 ),
               ),
-              
+
               const SizedBox(width: 12),
-              
+
               // Sort Direction Toggle
               Material(
                 color: Colors.transparent,
@@ -383,7 +426,9 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                       color: isDark ? const Color(0xFF334155) : Colors.white,
                     ),
                     child: Icon(
-                      _sortAscending ? Icons.arrow_upward : Icons.arrow_downward,
+                      _sortAscending
+                          ? Icons.arrow_upward
+                          : Icons.arrow_downward,
                       size: 20,
                       color: const Color(0xFF10B981),
                     ),
@@ -424,14 +469,17 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
   }
 
   Map<String, String> _buildAdminFilterOptions() {
-    final Map<String, String> options = {'all': 'الكل', 'unassigned': 'غير مُعيّنين'};
-    
+    final Map<String, String> options = {
+      'all': 'الكل',
+      'unassigned': 'غير مُعيّنين'
+    };
+
     for (final admin in widget.admins) {
       if (admin.role == 'admin') {
         options[admin.id] = admin.name;
       }
     }
-    
+
     return options;
   }
 
@@ -442,7 +490,7 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
     Function(String?) onChanged,
   ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -471,9 +519,11 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFF10B981), width: 2),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             filled: true,
-            fillColor: isDark ? const Color(0xFF334155) : const Color(0xFFF8FAFC),
+            fillColor:
+                isDark ? const Color(0xFF334155) : const Color(0xFFF8FAFC),
           ),
           items: items.entries.map((entry) {
             return DropdownMenuItem<String>(
@@ -534,94 +584,87 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
     );
   }
 
-  Widget _buildGridView() {
+  Widget _buildSliverGridView() {
     final paginatedSupervisors = _paginatedSupervisors;
-    
+
     if (paginatedSupervisors.isEmpty) {
-      return _buildNoResultsState();
+      return SliverToBoxAdapter(
+        child: _buildNoResultsState(),
+      );
     }
 
-    return Column(
-      children: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final crossAxisCount = constraints.maxWidth > 1400
-                    ? 4
-                    : constraints.maxWidth > 1000
-                        ? 3
-                        : constraints.maxWidth > 600
-                            ? 2
-                            : 1;
+    return SliverPadding(
+      padding: const EdgeInsets.only(left: 16, right: 16),
+      sliver: SliverLayoutBuilder(
+        builder: (context, constraints) {
+          final crossAxisCount = constraints.crossAxisExtent > 1400
+              ? 4
+              : constraints.crossAxisExtent > 1000
+                  ? 3
+                  : constraints.crossAxisExtent > 600
+                      ? 2
+                      : 1;
 
-                return GridView.builder(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 1.1,
-                  ),
-                  itemCount: paginatedSupervisors.length,
-                  itemBuilder: (context, index) {
-                    final supervisor = paginatedSupervisors[index];
-                    return ModernSupervisorCard(
-                      supervisor: supervisor,
-                      onInfoTap: () => _showSupervisorDetails(context, supervisor),
-                      onReportsTap: (supervisorId, username) =>
-                          _navigateToSupervisorReports(context, supervisorId, username),
-                      onMaintenanceTap: (supervisorId, username) =>
-                          _navigateToSupervisorMaintenance(context, supervisorId, username),
-                      onCompletedTap: (supervisorId, username) =>
-                          _navigateToSupervisorCompleted(context, supervisorId, username),
-                      onLateReportsTap: (supervisorId, username) =>
-                          _navigateToSupervisorLateReports(context, supervisorId, username),
-                      onLateCompletedTap: (supervisorId, username) =>
-                          _navigateToSupervisorLateCompleted(context, supervisorId, username),
-                    );
-                  },
+          return SliverGrid(
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: 0.9,
+            ),
+            delegate: SliverChildBuilderDelegate(
+              (context, index) {
+                final supervisor = paginatedSupervisors[index];
+                return ModernSupervisorCard(
+                  supervisor: supervisor,
+                  onInfoTap: () => _showSupervisorDetails(context, supervisor),
+                  onReportsTap: (supervisorId, username) =>
+                      _navigateToSupervisorReports(
+                          context, supervisorId, username),
+                  onMaintenanceTap: (supervisorId, username) =>
+                      _navigateToSupervisorMaintenance(
+                          context, supervisorId, username),
+                  onCompletedTap: (supervisorId, username) =>
+                      _navigateToSupervisorCompleted(
+                          context, supervisorId, username),
+                  onLateReportsTap: (supervisorId, username) =>
+                      _navigateToSupervisorLateReports(
+                          context, supervisorId, username),
+                  onLateCompletedTap: (supervisorId, username) =>
+                      _navigateToSupervisorLateCompleted(
+                          context, supervisorId, username),
                 );
               },
+              childCount: paginatedSupervisors.length,
             ),
-          ),
-        ),
-        
-        // Pagination Controls
-        if (_totalPages > 1) _buildPaginationControls(),
-      ],
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildGroupedView() {
+  Widget _buildSliverListView() {
     final paginatedSupervisors = _paginatedSupervisors;
-    
+
     if (paginatedSupervisors.isEmpty) {
-      return _buildNoResultsState();
+      return SliverToBoxAdapter(
+        child: _buildNoResultsState(),
+      );
     }
 
-    return Column(
-      children: [
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: ListView.builder(
-              itemCount: paginatedSupervisors.length,
-              itemBuilder: (context, index) {
-                final supervisor = paginatedSupervisors[index];
-                return _buildSupervisorListItem(supervisor);
-              },
-            ),
-          ),
+    return SliverPadding(
+      padding: const EdgeInsets.only(left: 16, right: 16),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (context, index) {
+            final supervisor = paginatedSupervisors[index];
+            return _buildSupervisorListItem(supervisor);
+          },
+          childCount: paginatedSupervisors.length,
         ),
-        
-        // Pagination Controls
-        if (_totalPages > 1) _buildPaginationControls(),
-      ],
+      ),
     );
   }
-
- 
 
   Widget _buildNoResultsState() {
     return Center(
@@ -666,7 +709,7 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
 
   Widget _buildPaginationControls() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(16),
@@ -688,7 +731,6 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
               fontWeight: FontWeight.w500,
             ),
           ),
-          
           Row(
             children: [
               _buildPaginationButton(
@@ -697,13 +739,9 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                     ? () => setState(() => _currentPage--)
                     : null,
               ),
-              
               const SizedBox(width: 8),
-              
               ..._buildPageNumbers(),
-              
               const SizedBox(width: 8),
-              
               _buildPaginationButton(
                 icon: Icons.chevron_left,
                 onPressed: _currentPage < _totalPages - 1
@@ -719,7 +757,8 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
 
   List<Widget> _buildPageNumbers() {
     final List<Widget> pageButtons = [];
-    final int startPage = (_currentPage - 2).clamp(0, _totalPages - 5).clamp(0, _totalPages);
+    final int startPage =
+        (_currentPage - 2).clamp(0, _totalPages - 5).clamp(0, _totalPages);
     final int endPage = (startPage + 4).clamp(0, _totalPages - 1);
 
     for (int i = startPage; i <= endPage; i++) {
@@ -745,7 +784,7 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
     VoidCallback? onPressed,
   }) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -764,7 +803,9 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
             border: Border.all(
               color: isSelected
                   ? const Color(0xFF10B981)
-                  : (isDark ? const Color(0xFF475569) : const Color(0xFFE2E8F0)),
+                  : (isDark
+                      ? const Color(0xFF475569)
+                      : const Color(0xFFE2E8F0)),
             ),
           ),
           child: Center(
@@ -776,7 +817,9 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                         ? Colors.grey[400]
                         : isSelected
                             ? Colors.white
-                            : (isDark ? Colors.white70 : const Color(0xFF64748B)),
+                            : (isDark
+                                ? Colors.white70
+                                : const Color(0xFF64748B)),
                   )
                 : Text(
                     text!,
@@ -787,7 +830,9 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                           ? Colors.grey[400]
                           : isSelected
                               ? Colors.white
-                              : (isDark ? Colors.white70 : const Color(0xFF64748B)),
+                              : (isDark
+                                  ? Colors.white70
+                                  : const Color(0xFF64748B)),
                     ),
                   ),
           ),
@@ -803,7 +848,7 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
     final email = supervisor['email'] as String? ?? '';
     final supervisorId = supervisor['id'] as String? ?? '';
     final adminId = supervisor['admin_id'] as String?;
-    
+
     final totalReports = stats['reports'] as int? ?? 0;
     final totalMaintenance = stats['maintenance'] as int? ?? 0;
     final completedReports = stats['completed_reports'] as int? ?? 0;
@@ -858,7 +903,9 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                             ),
                             child: Center(
                               child: Text(
-                                username.isNotEmpty ? username[0].toUpperCase() : 'س',
+                                username.isNotEmpty
+                                    ? username[0].toUpperCase()
+                                    : 'س',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 16,
@@ -875,17 +922,20 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                               width: 12,
                               height: 12,
                               decoration: BoxDecoration(
-                                color: adminId != null ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                                color: adminId != null
+                                    ? const Color(0xFF10B981)
+                                    : const Color(0xFFF59E0B),
                                 shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2),
+                                border:
+                                    Border.all(color: Colors.white, width: 2),
                               ),
                             ),
                           ),
                         ],
                       ),
-                      
+
                       const SizedBox(width: 16),
-                      
+
                       // Name and Email Section
                       Expanded(
                         child: Column(
@@ -898,7 +948,9 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 15,
-                                color: isDark ? Colors.white : const Color(0xFF1E293B),
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF1E293B),
                                 height: 1.2,
                               ),
                               maxLines: 1,
@@ -910,7 +962,9 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                                 email,
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                  color: isDark
+                                      ? const Color(0xFF94A3B8)
+                                      : const Color(0xFF64748B),
                                   height: 1.2,
                                 ),
                                 maxLines: 1,
@@ -920,11 +974,15 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                             const SizedBox(height: 4),
                             // Admin Assignment
                             Text(
-                              adminId != null ? _getAdminName(adminId) : 'غير مُعيّن',
+                              adminId != null
+                                  ? _getAdminName(adminId)
+                                  : 'غير مُعيّن',
                               style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
-                                color: adminId != null ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                                color: adminId != null
+                                    ? const Color(0xFF10B981)
+                                    : const Color(0xFFF59E0B),
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -935,7 +993,7 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                     ],
                   ),
                 ),
-                
+
                 // Right side - Stats, Progress, and Actions (all aligned)
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -944,29 +1002,86 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _buildCompactStat(totalReports, 'بلاغات', const Color(0xFF3B82F6), Icons.report_outlined),
+                        _buildCompactStat(totalReports, 'بلاغات',
+                            const Color(0xFF3B82F6), Icons.report_outlined),
                         const SizedBox(width: 12),
-                        _buildCompactStat(totalMaintenance, 'صيانة', const Color(0xFFEF4444), Icons.build_outlined),
+                        _buildCompactStat(totalMaintenance, 'صيانة',
+                            const Color(0xFFEF4444), Icons.build_outlined),
                         const SizedBox(width: 12),
-                        _buildCompactStat(completedWork, 'مكتمل', const Color(0xFF10B981), Icons.check_circle_outlined),
+                        _buildCompactStat(
+                            completedWork,
+                            'مكتمل',
+                            const Color(0xFF10B981),
+                            Icons.check_circle_outlined),
                         if (lateReports > 0 || lateCompletedReports > 0) ...[
                           const SizedBox(width: 12),
-                          _buildCompactStat(lateReports + lateCompletedReports, 'متأخر', const Color(0xFFF59E0B), Icons.schedule_outlined),
+                          _buildCompactStat(
+                              lateReports + lateCompletedReports,
+                              'متأخر',
+                              const Color(0xFFF59E0B),
+                              Icons.schedule_outlined),
                         ],
                       ],
                     ),
-                    
+
+                    const SizedBox(width: 12),
+
+                    // Technician Management Button
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        color: const Color(0xFF10B981).withOpacity(0.1),
+                        border: Border.all(
+                          color: const Color(0xFF10B981).withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () =>
+                              _openTechnicianManagement(context, supervisor),
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 6),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.build_circle,
+                                  size: 14,
+                                  color: Color(0xFF10B981),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${_getTechnicianCount(supervisor)}',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF10B981),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
                     const SizedBox(width: 20),
-                    
+
                     // Completion Rate Circle
                     Container(
                       width: 60,
                       height: 60,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: _getCompletionRateColor(completionRate * 100).withOpacity(0.1),
+                        color: _getCompletionRateColor(completionRate * 100)
+                            .withOpacity(0.1),
                         border: Border.all(
-                          color: _getCompletionRateColor(completionRate * 100).withOpacity(0.3),
+                          color: _getCompletionRateColor(completionRate * 100)
+                              .withOpacity(0.3),
                           width: 2,
                         ),
                       ),
@@ -993,7 +1108,8 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.w800,
-                                    color: _getCompletionRateColor(completionRate * 100),
+                                    color: _getCompletionRateColor(
+                                        completionRate * 100),
                                     height: 1,
                                   ),
                                 ),
@@ -1002,7 +1118,8 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                                   style: TextStyle(
                                     fontSize: 8,
                                     fontWeight: FontWeight.w600,
-                                    color: _getCompletionRateColor(completionRate * 100),
+                                    color: _getCompletionRateColor(
+                                        completionRate * 100),
                                     height: 1,
                                   ),
                                 ),
@@ -1012,10 +1129,6 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                         ],
                       ),
                     ),
-                    
-                   
-                    
-                
                   ],
                 ),
               ],
@@ -1026,9 +1139,8 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
     );
   }
 
-
-
-  Widget _buildCompactStat(int value, String label, Color color, IconData icon) {
+  Widget _buildCompactStat(
+      int value, String label, Color color, IconData icon) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1068,38 +1180,119 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
     );
   }
 
- 
-
   Color _getCompletionRateColor(double rate) {
     if (rate >= 81) return const Color(0xFF10B981); // Green - Excellent
-    if (rate >= 61) return const Color(0xFF3B82F6);  // Blue - Good
-    if (rate >= 51) return const Color(0xFFF59E0B);  // Orange - Average
+    if (rate >= 61) return const Color(0xFF3B82F6); // Blue - Good
+    if (rate >= 51) return const Color(0xFFF59E0B); // Orange - Average
     return const Color(0xFFEF4444); // Red - Bad
   }
 
   // Navigation methods (placeholder implementations)
-  void _showSupervisorDetails(BuildContext context, Map<String, dynamic> supervisor) {
-    // TODO: Implement supervisor details dialog
-    print('Show details for supervisor: ${supervisor['username']}');
+  void _showSupervisorDetails(
+      BuildContext context, Map<String, dynamic> supervisor) {
+    SupervisorDetailDialog.show(context, supervisor);
   }
 
-  void _navigateToSupervisorReports(BuildContext context, String supervisorId, String username) {
-    context.go('/all-reports?supervisor_id=$supervisorId&supervisor_name=$username');
+  void _navigateToSupervisorReports(
+      BuildContext context, String supervisorId, String username) {
+    context.go(
+        '/all-reports?supervisor_id=$supervisorId&supervisor_name=$username');
   }
 
-  void _navigateToSupervisorMaintenance(BuildContext context, String supervisorId, String username) {
-    context.go('/all-maintenance?supervisor_id=$supervisorId&supervisor_name=$username');
+  void _navigateToSupervisorMaintenance(
+      BuildContext context, String supervisorId, String username) {
+    context.go(
+        '/all-maintenance?supervisor_id=$supervisorId&supervisor_name=$username');
   }
 
-  void _navigateToSupervisorCompleted(BuildContext context, String supervisorId, String username) {
-    context.go('/all-reports?supervisor_id=$supervisorId&supervisor_name=$username&filter=completed');
+  void _navigateToSupervisorCompleted(
+      BuildContext context, String supervisorId, String username) {
+    context.go(
+        '/all-reports?supervisor_id=$supervisorId&supervisor_name=$username&filter=completed');
   }
 
-  void _navigateToSupervisorLateReports(BuildContext context, String supervisorId, String username) {
-    context.go('/all-reports?supervisor_id=$supervisorId&supervisor_name=$username&filter=late');
+  void _navigateToSupervisorLateReports(
+      BuildContext context, String supervisorId, String username) {
+    context.go(
+        '/all-reports?supervisor_id=$supervisorId&supervisor_name=$username&filter=late');
   }
 
-  void _navigateToSupervisorLateCompleted(BuildContext context, String supervisorId, String username) {
-    context.go('/all-reports?supervisor_id=$supervisorId&supervisor_name=$username&filter=late_completed');
+  void _navigateToSupervisorLateCompleted(
+      BuildContext context, String supervisorId, String username) {
+    context.go(
+        '/all-reports?supervisor_id=$supervisorId&supervisor_name=$username&filter=late_completed');
   }
-} 
+
+  void _openTechnicianManagement(
+      BuildContext context, Map<String, dynamic> supervisorData) {
+    try {
+      // Ensure we have the minimum required data
+      if (supervisorData['id'] == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('خطأ: لا يمكن العثور على معرف المشرف'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      final supervisor = Supervisor.fromMap(supervisorData);
+      context.showEscDismissibleDialog(
+        barrierDismissible: false,
+        builder: (dialogContext) => BlocProvider.value(
+          value: context.read<SuperAdminBloc>(),
+          child: TechnicianManagementDialog(
+            supervisor: supervisor,
+            onSaveDetailed: (supervisorId, techniciansDetailed) {
+              // Handle technician update like team management dialog using detailed format
+              context
+                  .read<SuperAdminBloc>()
+                  .add(SupervisorTechniciansUpdatedEvent(
+                    supervisorId: supervisorId,
+                    techniciansDetailed:
+                        techniciansDetailed.map((t) => t.toMap()).toList(),
+                  ));
+            },
+            onTechniciansUpdated: () {
+              // Force a hard page refresh by triggering the SuperAdminBloc
+              try {
+                final superAdminBloc = BlocManager().getSuperAdminBloc();
+                superAdminBloc.add(LoadSuperAdminData(forceRefresh: true));
+                print('Triggered SuperAdminBloc refresh from supervisors list');
+              } catch (e) {
+                print(
+                    'Failed to refresh SuperAdminBloc from supervisors list: $e');
+              }
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('خطأ في تحميل بيانات المشرف: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  int _getTechnicianCount(Map<String, dynamic> supervisor) {
+    final techniciansDetailed = supervisor['technicians_detailed'];
+    if (techniciansDetailed is List) {
+      try {
+        // Parse the JSONB list to count valid technician objects
+        return techniciansDetailed
+            .where((item) =>
+                item is Map<String, dynamic> &&
+                (item['name']?.toString().trim().isNotEmpty ?? false))
+            .length;
+      } catch (e) {
+        print('Error parsing technicians_detailed: $e');
+        return 0;
+      }
+    }
+    return 0;
+  }
+}

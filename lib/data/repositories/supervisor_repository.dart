@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/supervisor.dart';
+import '../models/technician.dart';
 
 class SupervisorRepository {
   final SupabaseClient _client;
@@ -88,5 +89,204 @@ class SupervisorRepository {
 
   Future<void> deleteSupervisor(String id) async {
     await _client.from('supervisors').delete().eq('id', id);
+  }
+
+  /// Update supervisor technicians list
+  Future<void> updateSupervisorTechnicians(
+    String supervisorId,
+    List<String> technicians,
+  ) async {
+    // Validate technician names
+    final validTechnicians = technicians
+        .where((name) => name.trim().isNotEmpty)
+        .map((name) => name.trim())
+        .toList();
+
+    await _client
+        .from('supervisors')
+        .update({'technicians': validTechnicians}).eq('id', supervisorId);
+  }
+
+  /// Add a single technician to supervisor
+  Future<void> addTechnicianToSupervisor(
+    String supervisorId,
+    String technicianName,
+  ) async {
+    final trimmedName = technicianName.trim();
+    if (trimmedName.isEmpty) return;
+
+    // Get current supervisor data
+    final response = await _client
+        .from('supervisors')
+        .select('technicians')
+        .eq('id', supervisorId)
+        .single();
+
+    final currentTechnicians = _parseTechnicians(response['technicians']);
+
+    // Add if not already exists
+    if (!currentTechnicians.contains(trimmedName)) {
+      final updatedTechnicians = [...currentTechnicians, trimmedName];
+      await updateSupervisorTechnicians(supervisorId, updatedTechnicians);
+    }
+  }
+
+  /// Remove a technician from supervisor
+  Future<void> removeTechnicianFromSupervisor(
+    String supervisorId,
+    String technicianName,
+  ) async {
+    // Get current supervisor data
+    final response = await _client
+        .from('supervisors')
+        .select('technicians')
+        .eq('id', supervisorId)
+        .single();
+
+    final currentTechnicians = _parseTechnicians(response['technicians']);
+    final updatedTechnicians = currentTechnicians
+        .where((name) => name != technicianName.trim())
+        .toList();
+
+    await updateSupervisorTechnicians(supervisorId, updatedTechnicians);
+  }
+
+  static List<String> _parseTechnicians(dynamic techniciansData) {
+    if (techniciansData == null) return [];
+    if (techniciansData is List) {
+      return techniciansData.map((e) => e.toString()).toList();
+    }
+    return [];
+  }
+
+  /// Update supervisor technicians with detailed information
+  Future<void> updateSupervisorTechniciansDetailed(
+    String supervisorId,
+    List<Technician> technicians,
+  ) async {
+    print(
+        '🔥 DB: updateSupervisorTechniciansDetailed called for supervisor $supervisorId');
+    print('🔥 DB: Input technicians count: ${technicians.length}');
+
+    // Validate and clean technician data
+    final validTechnicians = technicians
+        .where((tech) => tech.name.trim().isNotEmpty)
+        .map((tech) => tech.copyWith(
+              name: tech.name.trim(),
+              workId: tech.workId.trim(),
+              profession: tech.profession.trim(),
+              phoneNumber: tech.phoneNumber.trim(),
+            ))
+        .toList();
+
+    print('🔥 DB: Valid technicians count: ${validTechnicians.length}');
+    print(
+        '🔥 DB: Valid technicians: ${validTechnicians.map((t) => t.name).toList()}');
+
+    // Convert to JSON format for database storage
+    final techniciansData =
+        validTechnicians.map((tech) => tech.toMap()).toList();
+
+    print('🔥 DB: About to update database...');
+
+    // Only update technicians_detailed column
+    final result = await _client.from('supervisors').update({
+      'technicians_detailed': techniciansData,
+    }).eq('id', supervisorId);
+
+    print('🔥 DB: Database update completed. Result: $result');
+  }
+
+  /// Get supervisor technicians in detailed format
+  Future<List<Technician>> getSupervisorTechniciansDetailed(
+      String supervisorId) async {
+    final response = await _client
+        .from('supervisors')
+        .select('technicians_detailed, technicians')
+        .eq('id', supervisorId)
+        .single();
+
+    // Try to parse detailed technicians first
+    if (response['technicians_detailed'] != null) {
+      try {
+        final List<dynamic> detailedData = response['technicians_detailed'];
+        return detailedData.map((data) => Technician.fromMap(data)).toList();
+      } catch (e) {
+        print('Error parsing detailed technicians: $e');
+      }
+    }
+
+    // Fallback to simple technicians format
+    final simpleTechnicians = _parseTechnicians(response['technicians']);
+    return simpleTechnicians
+        .map((name) => Technician(name: name, workId: '', profession: ''))
+        .toList();
+  }
+
+  /// Add a detailed technician to supervisor
+  Future<void> addDetailedTechnicianToSupervisor(
+    String supervisorId,
+    Technician technician,
+  ) async {
+    if (technician.name.trim().isEmpty) return;
+
+    // Get current technicians
+    final currentTechnicians =
+        await getSupervisorTechniciansDetailed(supervisorId);
+
+    // Check if technician already exists (by name)
+    final existingIndex = currentTechnicians.indexWhere(
+      (tech) => tech.name.toLowerCase() == technician.name.toLowerCase(),
+    );
+
+    if (existingIndex >= 0) {
+      // Update existing technician
+      currentTechnicians[existingIndex] = technician;
+    } else {
+      // Add new technician
+      currentTechnicians.add(technician);
+    }
+
+    await updateSupervisorTechniciansDetailed(supervisorId, currentTechnicians);
+  }
+
+  /// Remove a technician from supervisor (by name)
+  Future<void> removeDetailedTechnicianFromSupervisor(
+    String supervisorId,
+    String technicianName,
+  ) async {
+    // Get current technicians
+    final currentTechnicians =
+        await getSupervisorTechniciansDetailed(supervisorId);
+
+    // Remove technician by name
+    final updatedTechnicians = currentTechnicians
+        .where(
+            (tech) => tech.name.toLowerCase() != technicianName.toLowerCase())
+        .toList();
+
+    await updateSupervisorTechniciansDetailed(supervisorId, updatedTechnicians);
+  }
+
+  /// Update a specific technician's details
+  Future<void> updateTechnicianDetails(
+    String supervisorId,
+    String originalName,
+    Technician updatedTechnician,
+  ) async {
+    // Get current technicians
+    final currentTechnicians =
+        await getSupervisorTechniciansDetailed(supervisorId);
+
+    // Find and update the technician
+    final index = currentTechnicians.indexWhere(
+      (tech) => tech.name.toLowerCase() == originalName.toLowerCase(),
+    );
+
+    if (index >= 0) {
+      currentTechnicians[index] = updatedTechnician;
+      await updateSupervisorTechniciansDetailed(
+          supervisorId, currentTechnicians);
+    }
   }
 }

@@ -265,6 +265,7 @@ class _MaintenanceFormContentState extends State<_MaintenanceFormContent> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return AppBar(
+      automaticallyImplyLeading: true,
       title: Text(
         'إضافة صيانة دورية',
         style: TextStyle(

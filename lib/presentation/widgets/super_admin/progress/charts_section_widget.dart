@@ -22,20 +22,25 @@ class ChartsSectionWidget extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-         
-            
             // Report Types Container
             _buildReportTypesContainer(context, isExtraWide, isWide, isMedium),
             const SizedBox(height: 24),
-            
+
             // Report Sources Container
-            _buildReportSourcesContainer(context, isExtraWide, isWide, isMedium),
+            _buildReportSourcesContainer(
+                context, isExtraWide, isWide, isMedium),
             const SizedBox(height: 24),
-            
+
             // Performance and Admin Distribution Container
-            _buildPerformanceAdminContainer(context, isExtraWide, isWide, isMedium),
+            _buildPerformanceAdminContainer(
+                context, isExtraWide, isWide, isMedium),
             const SizedBox(height: 24),
-            
+
+            // Emergency and Routine Container
+            _buildEmergencyRoutineContainer(
+                context, isExtraWide, isWide, isMedium),
+            const SizedBox(height: 24),
+
             // Maintenance Container
             _buildMaintenanceContainer(context),
           ],
@@ -44,11 +49,10 @@ class ChartsSectionWidget extends StatelessWidget {
     );
   }
 
-
-
-  Widget _buildReportTypesContainer(BuildContext context, bool isExtraWide, bool isWide, bool isMedium) {
+  Widget _buildReportTypesContainer(
+      BuildContext context, bool isExtraWide, bool isWide, bool isMedium) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -112,7 +116,7 @@ class ChartsSectionWidget extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          
+
           // Charts Grid
           if (isWide) ...[
             // Wide screens: side by side
@@ -135,9 +139,10 @@ class ChartsSectionWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildReportSourcesContainer(BuildContext context, bool isExtraWide, bool isWide, bool isMedium) {
+  Widget _buildReportSourcesContainer(
+      BuildContext context, bool isExtraWide, bool isWide, bool isMedium) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -201,7 +206,7 @@ class ChartsSectionWidget extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          
+
           // Charts Grid
           if (isWide) ...[
             // Wide screens: side by side
@@ -224,11 +229,10 @@ class ChartsSectionWidget extends StatelessWidget {
     );
   }
 
-
-
-  Widget _buildPerformanceAdminContainer(BuildContext context, bool isExtraWide, bool isWide, bool isMedium) {
+  Widget _buildPerformanceAdminContainer(
+      BuildContext context, bool isExtraWide, bool isWide, bool isMedium) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -292,7 +296,7 @@ class ChartsSectionWidget extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-          
+
           // Charts Grid
           if (isWide) ...[
             // Wide screens: side by side
@@ -315,9 +319,99 @@ class ChartsSectionWidget extends StatelessWidget {
     );
   }
 
+  Widget _buildEmergencyRoutineContainer(
+      BuildContext context, bool isExtraWide, bool isWide, bool isMedium) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1A1B) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.black.withValues(alpha: 0.05),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Section Title
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.emergency_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'تحليل البلاغات الطارئة والروتينية',
+                      style: AppFonts.sectionTitle(isDark: isDark).copyWith(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'توزيع ومعدلات إنجاز البلاغات حسب الأولوية',
+                      style: AppFonts.bodyText(isDark: isDark).copyWith(
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : Colors.black54,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Charts Grid
+          if (isWide) ...[
+            // Wide screens: side by side
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: _buildEmergencyRoutineChart(context)),
+                const SizedBox(width: 20),
+                Expanded(child: _buildEmergencyRoutineCompletionChart(context)),
+              ],
+            ),
+          ] else ...[
+            // Medium and small screens: stacked
+            _buildEmergencyRoutineChart(context),
+            const SizedBox(height: 20),
+            _buildEmergencyRoutineCompletionChart(context),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildMaintenanceContainer(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -384,14 +478,16 @@ class ChartsSectionWidget extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth > 800;
-              
+
               if (isWide) {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(child: _buildMaintenanceStatusChart(context)),
                     const SizedBox(width: 20),
-                    Expanded(child: _buildAdminMaintenanceDistributionChart(context)),
+                    Expanded(
+                        child:
+                            _buildAdminMaintenanceDistributionChart(context)),
                   ],
                 );
               } else {
@@ -523,10 +619,13 @@ class ChartsSectionWidget extends StatelessWidget {
                   children: [
                     _buildLegendItem('مكتملة', const Color(0xFF10B981), isDark),
                     const SizedBox(height: 8),
-                    _buildLegendItem('قيد التنفيذ', const Color(0xFFF59E0B), isDark),
+                    _buildLegendItem(
+                        'قيد التنفيذ', const Color(0xFFF59E0B), isDark),
                     const SizedBox(height: 8),
-                    _buildLegendItem('معلقة', const Color(0xFFEF4444), isDark),
-                   
+                    _buildLegendItem('متأخرة', const Color(0xFFEF4444), isDark),
+                    const SizedBox(height: 8),
+                    _buildLegendItem(
+                        'متأخرة مكتملة', const Color(0xFF8B5CF6), isDark),
                   ],
                 ),
               ),
@@ -717,7 +816,7 @@ class ChartsSectionWidget extends StatelessWidget {
 
   Widget _buildCompletionRatesByType(bool isDark) {
     final completionRates = state.reportTypesCompletionRates;
-    
+
     if (completionRates.isEmpty) {
       return Center(
         child: Column(
@@ -789,18 +888,18 @@ class ChartsSectionWidget extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
                 arabicType,
-              style: AppFonts.bodyText(isDark: isDark).copyWith(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+                style: AppFonts.bodyText(isDark: isDark).copyWith(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
               Row(
                 children: [
                   Text(
@@ -811,46 +910,46 @@ class ChartsSectionWidget extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-            Text(
-              '$percentage%',
-              style: TextStyle(
-                color: color,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-              ),
+                  Text(
+                    '$percentage%',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Container(
-          height: 8,
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.1)
-                : Colors.black.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(4),
+              ),
+            ],
           ),
-          child: FractionallySizedBox(
-            alignment: Alignment.centerLeft,
+          const SizedBox(height: 8),
+          Container(
+            height: 8,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.black.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
               widthFactor: rate,
-            child: Container(
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(4),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(4),
+                ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
       ),
     );
   }
 
   Widget _buildCompletionRatesBySource(bool isDark) {
     final completionRates = state.reportSourcesCompletionRates;
-    
+
     if (completionRates.isEmpty) {
       return Center(
         child: Column(
@@ -951,7 +1050,7 @@ class ChartsSectionWidget extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-        Container(
+          Container(
             height: 8,
             decoration: BoxDecoration(
               color: isDark
@@ -963,8 +1062,8 @@ class ChartsSectionWidget extends StatelessWidget {
               alignment: Alignment.centerLeft,
               widthFactor: rate,
               child: Container(
-          decoration: BoxDecoration(
-            color: color,
+                decoration: BoxDecoration(
+                  color: color,
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
@@ -1165,7 +1264,7 @@ class ChartsSectionWidget extends StatelessWidget {
 
   Map<String, dynamic> _calculateReportTypesData() {
     final reportTypes = state.reportTypesStats;
-    
+
     int totalReports = 0;
     String mostCommonTypeName = 'غير محدد';
     int mostCommonTypeCount = 0;
@@ -1174,7 +1273,7 @@ class ChartsSectionWidget extends StatelessWidget {
     for (final entry in reportTypes.entries) {
       final count = entry.value;
       totalReports += count;
-      
+
       if (count > mostCommonTypeCount) {
         mostCommonTypeCount = count;
         // Translate to Arabic
@@ -1222,10 +1321,10 @@ class ChartsSectionWidget extends StatelessWidget {
     // Colors for each type
     final colors = {
       'Electricity': const Color(0xFFF59E0B), // Orange
-      'Plumbing': const Color(0xFF3B82F6),    // Blue
-      'AC': const Color(0xFF10B981),          // Green
-      'Civil': const Color(0xFFEF4444),       // Red
-      'Fire': const Color(0xFF8B5CF6),        // Purple
+      'Plumbing': const Color(0xFF3B82F6), // Blue
+      'AC': const Color(0xFF10B981), // Green
+      'Civil': const Color(0xFFEF4444), // Red
+      'Fire': const Color(0xFF8B5CF6), // Purple
     };
 
     List<PieChartSectionData> sections = [];
@@ -1233,7 +1332,7 @@ class ChartsSectionWidget extends StatelessWidget {
     for (final entry in reportTypes.entries) {
       final type = entry.key;
       final count = entry.value;
-      
+
       if (count > 0) {
         sections.add(
           PieChartSectionData(
@@ -1265,11 +1364,13 @@ class ChartsSectionWidget extends StatelessWidget {
     int totalReports = 0;
     int completedReports = 0;
     int lateReports = 0;
+    int lateCompletedReports = 0;
 
     for (final stats in state.adminStats.values) {
       totalReports += (stats['reports'] as int? ?? 0);
       completedReports += (stats['completed_reports'] as int? ?? 0);
       lateReports += (stats['late_reports'] as int? ?? 0);
+      lateCompletedReports += (stats['late_completed_reports'] as int? ?? 0);
     }
 
     final completionRate =
@@ -1279,6 +1380,7 @@ class ChartsSectionWidget extends StatelessWidget {
       'totalReports': totalReports,
       'completedReports': completedReports,
       'lateReports': lateReports,
+      'lateCompletedReports': lateCompletedReports,
       'completionRate': completionRate,
     };
   }
@@ -1288,11 +1390,13 @@ class ChartsSectionWidget extends StatelessWidget {
     final totalReports = analytics['totalReports'] as int;
     final completedReports = analytics['completedReports'] as int;
     final lateReports = analytics['lateReports'] as int;
-    final inProgressReports = totalReports - completedReports - lateReports;
+    final lateCompletedReports = analytics['lateCompletedReports'] as int;
+    final pendingReports =
+        totalReports - completedReports - lateReports - lateCompletedReports;
 
     return [
       PieChartSectionData(
-        color: const Color(0xFF4ECDC4),
+        color: const Color(0xFF10B981),
         value: completedReports.toDouble(),
         title: completedReports > 0 ? '$completedReports' : '',
         radius: 50,
@@ -1303,9 +1407,9 @@ class ChartsSectionWidget extends StatelessWidget {
         ),
       ),
       PieChartSectionData(
-        color: const Color(0xFF667EEA),
-        value: inProgressReports.toDouble(),
-        title: inProgressReports > 0 ? '$inProgressReports' : '',
+        color: const Color(0xFFF59E0B),
+        value: pendingReports.toDouble(),
+        title: pendingReports > 0 ? '$pendingReports' : '',
         radius: 50,
         titleStyle: const TextStyle(
           fontSize: 12,
@@ -1314,9 +1418,20 @@ class ChartsSectionWidget extends StatelessWidget {
         ),
       ),
       PieChartSectionData(
-        color: const Color(0xFFFF6B6B),
+        color: const Color(0xFFEF4444),
         value: lateReports.toDouble(),
         title: lateReports > 0 ? '$lateReports' : '',
+        radius: 50,
+        titleStyle: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+      ),
+      PieChartSectionData(
+        color: const Color(0xFF8B5CF6),
+        value: lateCompletedReports.toDouble(),
+        title: lateCompletedReports > 0 ? '$lateCompletedReports' : '',
         radius: 50,
         titleStyle: const TextStyle(
           fontSize: 12,
@@ -1464,11 +1579,14 @@ class ChartsSectionWidget extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildLegendItem('يونيفاير', const Color(0xFF8B5CF6), isDark),
+                    _buildLegendItem(
+                        'يونيفاير', const Color(0xFF8B5CF6), isDark),
                     const SizedBox(height: 8),
-                    _buildLegendItem('تشيك ليست', const Color(0xFF06B6D4), isDark),
+                    _buildLegendItem(
+                        'تشيك ليست', const Color(0xFF06B6D4), isDark),
                     const SizedBox(height: 8),
-                    _buildLegendItem('استشاري', const Color(0xFFEF4444), isDark),
+                    _buildLegendItem(
+                        'استشاري', const Color(0xFFEF4444), isDark),
                   ],
                 ),
               ),
@@ -1539,7 +1657,7 @@ class ChartsSectionWidget extends StatelessWidget {
 
   Map<String, dynamic> _calculateReportSourcesData() {
     final reportSources = state.reportSourcesStats;
-    
+
     int totalReports = 0;
     String mostCommonSourceName = 'غير محدد';
     int mostCommonSourceCount = 0;
@@ -1548,7 +1666,7 @@ class ChartsSectionWidget extends StatelessWidget {
     for (final entry in reportSources.entries) {
       final count = entry.value;
       totalReports += count;
-      
+
       if (count > mostCommonSourceCount) {
         mostCommonSourceCount = count;
         // Translate to Arabic
@@ -1599,11 +1717,90 @@ class ChartsSectionWidget extends StatelessWidget {
     for (final entry in reportSources.entries) {
       final source = entry.key;
       final count = entry.value;
-      
+
       if (count > 0) {
         sections.add(
           PieChartSectionData(
             color: colors[source] ?? const Color(0xFF9CA3AF),
+            value: count.toDouble(),
+            title: count > 0 ? '$count' : '',
+            radius: 50,
+            titleStyle: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+            ),
+          ),
+        );
+      }
+    }
+
+    return sections;
+  }
+
+  Map<String, dynamic> _calculateEmergencyRoutineData() {
+    final priorityStats = state.reportPriorityStats;
+
+    int totalReports = 0;
+    String mostCommonPriorityName = 'غير محدد';
+    int mostCommonPriorityCount = 0;
+
+    // Calculate totals and find most common priority
+    for (final entry in priorityStats.entries) {
+      final count = entry.value;
+      totalReports += count;
+
+      if (count > mostCommonPriorityCount) {
+        mostCommonPriorityCount = count;
+        // Translate to Arabic
+        switch (entry.key) {
+          case 'emergency':
+            mostCommonPriorityName = 'طارئة';
+            break;
+          case 'routine':
+            mostCommonPriorityName = 'روتينية';
+            break;
+          default:
+            mostCommonPriorityName = 'غير محدد';
+        }
+      }
+    }
+
+    return {
+      'totalReports': totalReports,
+      'priorityStats': priorityStats,
+      'mostCommonPriority': {
+        'name': mostCommonPriorityName,
+        'count': mostCommonPriorityCount,
+      },
+    };
+  }
+
+  List<PieChartSectionData> _calculateEmergencyRoutinePieChartData(
+      Map<String, dynamic> priorityData) {
+    final priorityStats = priorityData['priorityStats'] as Map<String, int>;
+    final totalReports = priorityData['totalReports'] as int;
+
+    if (totalReports == 0) {
+      return [];
+    }
+
+    // Colors for each priority
+    final colors = {
+      'emergency': const Color(0xFFEF4444), // Red for emergency
+      'routine': const Color(0xFF3B82F6), // Blue for routine
+    };
+
+    List<PieChartSectionData> sections = [];
+
+    for (final entry in priorityStats.entries) {
+      final priority = entry.key;
+      final count = entry.value;
+
+      if (count > 0) {
+        sections.add(
+          PieChartSectionData(
+            color: colors[priority] ?? const Color(0xFF9CA3AF),
             value: count.toDouble(),
             title: count > 0 ? '$count' : '',
             radius: 50,
@@ -1731,8 +1928,8 @@ class ChartsSectionWidget extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    
-                    _buildLegendItem('قيد التنفيذ', const Color(0xFF3B82F6), isDark),
+                    _buildLegendItem(
+                        'قيد التنفيذ', const Color(0xFF3B82F6), isDark),
                     const SizedBox(height: 8),
                     _buildLegendItem('مكتمل', const Color(0xFF10B981), isDark),
                   ],
@@ -1805,7 +2002,7 @@ class ChartsSectionWidget extends StatelessWidget {
 
   Map<String, dynamic> _calculateMaintenanceStatusData() {
     final maintenanceStatus = state.maintenanceStatusStats;
-    
+
     int totalReports = 0;
     String mostCommonStatusName = 'غير محدد';
     int mostCommonStatusCount = 0;
@@ -1814,7 +2011,7 @@ class ChartsSectionWidget extends StatelessWidget {
     for (final entry in maintenanceStatus.entries) {
       final count = entry.value;
       totalReports += count;
-      
+
       if (count > mostCommonStatusCount) {
         mostCommonStatusCount = count;
         // Translate to Arabic
@@ -1822,8 +2019,7 @@ class ChartsSectionWidget extends StatelessWidget {
           case 'pending':
             mostCommonStatusName = 'قيد التنفيذ';
             break;
-          
-            
+
           case 'completed':
             mostCommonStatusName = 'مكتمل';
             break;
@@ -1845,7 +2041,8 @@ class ChartsSectionWidget extends StatelessWidget {
 
   List<PieChartSectionData> _calculateMaintenancePieChartData(
       Map<String, dynamic> maintenanceData) {
-    final maintenanceStatus = maintenanceData['maintenanceStatus'] as Map<String, int>;
+    final maintenanceStatus =
+        maintenanceData['maintenanceStatus'] as Map<String, int>;
     final totalReports = maintenanceData['totalReports'] as int;
 
     if (totalReports == 0) {
@@ -1854,9 +2051,9 @@ class ChartsSectionWidget extends StatelessWidget {
 
     // Colors for each status
     final colors = {
-      'pending': const Color(0xFF6B7280),    // Gray
+      'pending': const Color(0xFF6B7280), // Gray
       'in_progress': const Color(0xFF3B82F6), // Blue
-      'completed': const Color(0xFF10B981),   // Green
+      'completed': const Color(0xFF10B981), // Green
     };
 
     List<PieChartSectionData> sections = [];
@@ -1864,7 +2061,7 @@ class ChartsSectionWidget extends StatelessWidget {
     for (final entry in maintenanceStatus.entries) {
       final status = entry.key;
       final count = entry.value;
-      
+
       if (count > 0) {
         sections.add(
           PieChartSectionData(
@@ -1993,7 +2190,8 @@ class ChartsSectionWidget extends StatelessWidget {
               const SizedBox(width: 24),
               Expanded(
                 flex: 2,
-                child: _buildAdminLegend(adminData['adminReportsDistribution'], isDark),
+                child: _buildAdminLegend(
+                    adminData['adminReportsDistribution'], isDark),
               ),
             ],
           ),
@@ -2062,7 +2260,7 @@ class ChartsSectionWidget extends StatelessWidget {
 
   Map<String, dynamic> _calculateAdminReportsData() {
     final adminReports = state.adminReportsDistribution;
-    
+
     int totalReports = 0;
     String topAdminName = 'غير محدد';
     int topAdminReports = 0;
@@ -2071,7 +2269,7 @@ class ChartsSectionWidget extends StatelessWidget {
     for (final entry in adminReports.entries) {
       final count = entry.value;
       totalReports += count;
-      
+
       if (count > topAdminReports) {
         topAdminReports = count;
         topAdminName = entry.key;
@@ -2090,7 +2288,8 @@ class ChartsSectionWidget extends StatelessWidget {
 
   List<PieChartSectionData> _calculateAdminReportsPieChartData(
       Map<String, dynamic> adminData) {
-    final adminReports = adminData['adminReportsDistribution'] as Map<String, int>;
+    final adminReports =
+        adminData['adminReportsDistribution'] as Map<String, int>;
     final totalReports = adminData['totalReports'] as int;
 
     if (totalReports == 0) {
@@ -2114,7 +2313,7 @@ class ChartsSectionWidget extends StatelessWidget {
 
     for (final entry in adminReports.entries) {
       final count = entry.value;
-      
+
       if (count > 0) {
         sections.add(
           PieChartSectionData(
@@ -2136,7 +2335,8 @@ class ChartsSectionWidget extends StatelessWidget {
     return sections;
   }
 
-  Widget _buildAdminLegend(Map<String, int> adminReportsDistribution, bool isDark) {
+  Widget _buildAdminLegend(
+      Map<String, int> adminReportsDistribution, bool isDark) {
     final colorList = [
       const Color(0xFF059669), // Green
       const Color(0xFF3B82F6), // Blue
@@ -2155,10 +2355,7 @@ class ChartsSectionWidget extends StatelessWidget {
         for (final entry in adminReportsDistribution.entries)
           if (entry.value > 0)
             _buildLegendItem(
-              entry.key, 
-              colorList[colorIndex++ % colorList.length], 
-              isDark
-            ),
+                entry.key, colorList[colorIndex++ % colorList.length], isDark),
       ],
     );
   }
@@ -2271,7 +2468,8 @@ class ChartsSectionWidget extends StatelessWidget {
               const SizedBox(width: 24),
               Expanded(
                 flex: 2,
-                child: _buildAdminMaintenanceLegend(adminData['adminMaintenanceDistribution'], isDark),
+                child: _buildAdminMaintenanceLegend(
+                    adminData['adminMaintenanceDistribution'], isDark),
               ),
             ],
           ),
@@ -2340,7 +2538,7 @@ class ChartsSectionWidget extends StatelessWidget {
 
   Map<String, dynamic> _calculateAdminMaintenanceData() {
     final adminMaintenance = state.adminMaintenanceDistribution;
-    
+
     int totalReports = 0;
     String topAdminName = 'غير محدد';
     int topAdminReports = 0;
@@ -2349,7 +2547,7 @@ class ChartsSectionWidget extends StatelessWidget {
     for (final entry in adminMaintenance.entries) {
       final count = entry.value;
       totalReports += count;
-      
+
       if (count > topAdminReports) {
         topAdminReports = count;
         topAdminName = entry.key;
@@ -2368,7 +2566,8 @@ class ChartsSectionWidget extends StatelessWidget {
 
   List<PieChartSectionData> _calculateAdminMaintenancePieChartData(
       Map<String, dynamic> adminData) {
-    final adminMaintenance = adminData['adminMaintenanceDistribution'] as Map<String, int>;
+    final adminMaintenance =
+        adminData['adminMaintenanceDistribution'] as Map<String, int>;
     final totalReports = adminData['totalReports'] as int;
 
     if (totalReports == 0) {
@@ -2392,7 +2591,7 @@ class ChartsSectionWidget extends StatelessWidget {
 
     for (final entry in adminMaintenance.entries) {
       final count = entry.value;
-      
+
       if (count > 0) {
         sections.add(
           PieChartSectionData(
@@ -2414,7 +2613,8 @@ class ChartsSectionWidget extends StatelessWidget {
     return sections;
   }
 
-  Widget _buildAdminMaintenanceLegend(Map<String, int> adminMaintenanceDistribution, bool isDark) {
+  Widget _buildAdminMaintenanceLegend(
+      Map<String, int> adminMaintenanceDistribution, bool isDark) {
     final colorList = [
       const Color(0xFF059669), // Green
       const Color(0xFF3B82F6), // Blue
@@ -2433,11 +2633,375 @@ class ChartsSectionWidget extends StatelessWidget {
         for (final entry in adminMaintenanceDistribution.entries)
           if (entry.value > 0)
             _buildLegendItem(
-              entry.key, 
-              colorList[colorIndex++ % colorList.length], 
-              isDark
-            ),
+                entry.key, colorList[colorIndex++ % colorList.length], isDark),
       ],
+    );
+  }
+
+  Widget _buildEmergencyRoutineChart(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final priorityData = _calculateEmergencyRoutineData();
+    final pieData = _calculateEmergencyRoutinePieChartData(priorityData);
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1A1B) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.black.withValues(alpha: 0.05),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFEF4444), Color(0xFFDC2626)],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.emergency_rounded,
+                  color: Colors.white,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'البلاغات الطارئة والروتينية',
+                      style: AppFonts.sectionTitle(isDark: isDark).copyWith(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      'توزيع البلاغات حسب الأولوية',
+                      style: AppFonts.bodyText(isDark: isDark).copyWith(
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : Colors.black54,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: SizedBox(
+                  height: 200,
+                  child: priorityData['totalReports'] > 0
+                      ? PieChart(
+                          PieChartData(
+                            sections: pieData,
+                            centerSpaceRadius: 50,
+                            sectionsSpace: 2,
+                            startDegreeOffset: -90,
+                          ),
+                        )
+                      : Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.emergency_outlined,
+                                size: 48,
+                                color: isDark ? Colors.white30 : Colors.black26,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'لا توجد بيانات',
+                                style:
+                                    AppFonts.bodyText(isDark: isDark).copyWith(
+                                  color:
+                                      isDark ? Colors.white60 : Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 24),
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildLegendItem('طارئة', const Color(0xFFEF4444), isDark),
+                    const SizedBox(height: 8),
+                    _buildLegendItem(
+                        'روتينية', const Color(0xFF3B82F6), isDark),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.05)
+                  : Colors.black.withValues(alpha: 0.02),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                Column(
+                  children: [
+                    Text(
+                      '${priorityData['totalReports']}',
+                      style: AppFonts.cardTitle(isDark: isDark).copyWith(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFFEF4444),
+                      ),
+                    ),
+                    Text(
+                      'إجمالي البلاغات',
+                      style: AppFonts.bodyText(isDark: isDark).copyWith(
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : Colors.black54,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  width: 1,
+                  height: 40,
+                  color: isDark ? Colors.white12 : Colors.black12,
+                ),
+                Column(
+                  children: [
+                    Text(
+                      '${priorityData['mostCommonPriority']['name']}',
+                      style: AppFonts.cardTitle(isDark: isDark).copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFFEF4444),
+                      ),
+                    ),
+                    Text(
+                      'الأولوية الأكثر شيوعاً',
+                      style: AppFonts.bodyText(isDark: isDark).copyWith(
+                        fontSize: 12,
+                        color: isDark ? Colors.white60 : Colors.black54,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmergencyRoutineCompletionChart(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1A1B) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.black.withValues(alpha: 0.05),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF10B981), Color(0xFF059669)],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.task_alt_rounded,
+                  color: Colors.white,
+                  size: 16,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'معدل الإنجاز حسب الأولوية',
+                style: AppFonts.sectionTitle(isDark: isDark).copyWith(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            height: 200, // Match the pie chart height
+            child: _buildCompletionRatesByPriority(isDark),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompletionRatesByPriority(bool isDark) {
+    final completionRates = state.reportPriorityCompletionRates;
+
+    if (completionRates.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.task_alt_outlined,
+              size: 48,
+              color: isDark ? Colors.white30 : Colors.black26,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'لا توجد بيانات',
+              style: AppFonts.bodyText(isDark: isDark).copyWith(
+                color: isDark ? Colors.white60 : Colors.black54,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final validEntries = completionRates.entries
+        .where((entry) => entry.value['total'] > 0)
+        .toList();
+
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (final entry in validEntries)
+            _buildPriorityCompletionRateMetric(entry.key, entry.value, isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPriorityCompletionRateMetric(
+      String priority, Map<String, dynamic> priorityData, bool isDark) {
+    final rate = priorityData['rate'] as double;
+    final total = priorityData['total'] as int;
+    final completed = priorityData['completed'] as int;
+    final percentage = (rate * 100).toInt();
+    final color = _getHealthColor(rate);
+
+    // Translate priority to Arabic
+    String arabicPriority;
+    switch (priority) {
+      case 'emergency':
+        arabicPriority = 'طارئة';
+        break;
+      case 'routine':
+        arabicPriority = 'روتينية';
+        break;
+      default:
+        arabicPriority = priority;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                arabicPriority,
+                style: AppFonts.bodyText(isDark: isDark).copyWith(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Row(
+                children: [
+                  Text(
+                    '$completed/$total',
+                    style: AppFonts.bodyText(isDark: isDark).copyWith(
+                      fontSize: 12,
+                      color: isDark ? Colors.white60 : Colors.black54,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$percentage%',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            height: 8,
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.black.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: rate,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

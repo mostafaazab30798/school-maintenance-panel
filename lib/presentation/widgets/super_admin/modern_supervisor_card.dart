@@ -1,5 +1,14 @@
 import 'package:flutter/material.dart';
-import 'dart:ui';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'dialogs/technician_management_dialog.dart';
+import '../../../data/models/supervisor.dart';
+import '../../../logic/blocs/supervisors/supervisor_bloc.dart';
+import '../../../logic/blocs/supervisors/supervisor_event.dart';
+import '../../../logic/blocs/super_admin/super_admin_bloc.dart';
+import '../../../logic/blocs/super_admin/super_admin_event.dart';
+import '../../../logic/blocs/super_admin/super_admin_state.dart';
+import '../../../core/services/bloc_manager.dart';
+import '../../widgets/common/esc_dismissible_dialog.dart';
 
 class ModernSupervisorCard extends StatefulWidget {
   final Map<String, dynamic> supervisor;
@@ -71,11 +80,36 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
 
   @override
   Widget build(BuildContext context) {
-    final stats = widget.supervisor['stats'] as Map<String, dynamic>;
-    final username = widget.supervisor['username'] as String? ?? 'غير محدد';
-    final email = widget.supervisor['email'] as String? ?? '';
-    final adminId = widget.supervisor['admin_id'] as String?;
-    final supervisorId = widget.supervisor['id'] as String? ?? '';
+    return BlocBuilder<SuperAdminBloc, SuperAdminState>(
+      builder: (context, superAdminState) {
+        // Get the latest supervisor data from SuperAdminBloc if available
+        Map<String, dynamic> currentSupervisor = widget.supervisor;
+
+        if (superAdminState is SuperAdminLoaded) {
+          final supervisorId = widget.supervisor['id'] as String? ?? '';
+
+          // Find the updated supervisor data in the SuperAdminBloc state
+          final updatedSupervisor =
+              superAdminState.supervisorsWithStats.firstWhere(
+            (s) => s['id'] == supervisorId,
+            orElse: () => widget.supervisor,
+          );
+
+          currentSupervisor = updatedSupervisor;
+        }
+
+        return _buildSupervisorCard(context, currentSupervisor);
+      },
+    );
+  }
+
+  Widget _buildSupervisorCard(
+      BuildContext context, Map<String, dynamic> supervisor) {
+    final stats = supervisor['stats'] as Map<String, dynamic>;
+    final username = supervisor['username'] as String? ?? 'غير محدد';
+    final email = supervisor['email'] as String? ?? '';
+    final adminId = supervisor['admin_id'] as String?;
+    final supervisorId = supervisor['id'] as String? ?? '';
 
     final totalReports = stats['reports'] as int? ?? 0;
     final totalMaintenance = stats['maintenance'] as int? ?? 0;
@@ -168,7 +202,7 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
                   children: [
                     // Main card content
                     Container(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
@@ -188,14 +222,21 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildModernHeader(
-                              context, username, email, adminId, isDark),
-                          const SizedBox(height: 16),
-                          _buildCircularProgress(context, completionRate, isDark),
-                          const SizedBox(height: 16),
-                          _buildStatsGrid(context, totalReports, totalMaintenance,
-                              completedWork, supervisorId, username, isDark),
-                          const SizedBox(height: 16),
+                          _buildModernHeader(context, username, email, adminId,
+                              isDark, supervisor),
+                          const SizedBox(height: 12),
+                          _buildCircularProgress(
+                              context, completionRate, isDark),
+                          const SizedBox(height: 12),
+                          _buildStatsGrid(
+                              context,
+                              totalReports,
+                              totalMaintenance,
+                              completedWork,
+                              supervisorId,
+                              username,
+                              isDark),
+                          const SizedBox(height: 12),
                           _buildLateReportsSection(
                               context,
                               lateReports,
@@ -236,8 +277,10 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
                               child: Container(
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
-                                    begin: Alignment(_shimmerAnimation.value, -1),
-                                    end: Alignment(_shimmerAnimation.value + 0.5, 0),
+                                    begin:
+                                        Alignment(_shimmerAnimation.value, -1),
+                                    end: Alignment(
+                                        _shimmerAnimation.value + 0.5, 0),
                                     colors: [
                                       Colors.transparent,
                                       Colors.white
@@ -262,7 +305,7 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
   }
 
   Widget _buildModernHeader(BuildContext context, String username, String email,
-      String? adminId, bool isDark) {
+      String? adminId, bool isDark, Map<String, dynamic> supervisor) {
     return Row(
       children: [
         // Modern Avatar with Status Ring
@@ -315,6 +358,41 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  // Technician Management Button
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _openTechnicianManagement(context),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          color: const Color(0xFF10B981).withOpacity(0.1),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.build_circle,
+                              size: 14,
+                              color: Color(0xFF10B981),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${_getTechnicianCount(supervisor)}',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF10B981),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   // Info Button
                   Material(
                     color: Colors.transparent,
@@ -688,18 +766,22 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
       String username,
       bool isDark) {
     final hasLateReports = lateReports > 0 || lateCompletedReports > 0;
-    
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        color: hasLateReports 
+        color: hasLateReports
             ? Colors.orange.withOpacity(0.05)
-            : (isDark ? const Color(0xFF1E293B).withOpacity(0.3) : Colors.grey.withOpacity(0.05)),
+            : (isDark
+                ? const Color(0xFF1E293B).withOpacity(0.3)
+                : Colors.grey.withOpacity(0.05)),
         border: Border.all(
-          color: hasLateReports 
+          color: hasLateReports
               ? Colors.orange.withOpacity(0.2)
-              : (isDark ? const Color(0xFF334155).withOpacity(0.3) : Colors.grey.withOpacity(0.2)),
+              : (isDark
+                  ? const Color(0xFF334155).withOpacity(0.3)
+                  : Colors.grey.withOpacity(0.2)),
           width: 1,
         ),
       ),
@@ -711,9 +793,11 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
               Icon(
                 Icons.schedule_rounded,
                 size: 14,
-                color: hasLateReports 
+                color: hasLateReports
                     ? Colors.orange[600]
-                    : (isDark ? const Color(0xFF64748B) : const Color(0xFF9CA3AF)),
+                    : (isDark
+                        ? const Color(0xFF64748B)
+                        : const Color(0xFF9CA3AF)),
               ),
               const SizedBox(width: 6),
               Text(
@@ -721,9 +805,11 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: hasLateReports 
+                  color: hasLateReports
                       ? Colors.orange[700]
-                      : (isDark ? const Color(0xFF64748B) : const Color(0xFF9CA3AF)),
+                      : (isDark
+                          ? const Color(0xFF64748B)
+                          : const Color(0xFF9CA3AF)),
                 ),
               ),
             ],
@@ -733,24 +819,25 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
             Row(
               children: [
                 if (lateReports > 0)
-                  Expanded(
+                  Flexible(
                     child: _buildLateChip(
                       'متأخرة',
                       lateReports,
                       Colors.orange,
-                      () => widget.onLateReportsTap?.call(supervisorId, username),
+                      () =>
+                          widget.onLateReportsTap?.call(supervisorId, username),
                     ),
                   ),
                 if (lateReports > 0 && lateCompletedReports > 0)
                   const SizedBox(width: 8),
                 if (lateCompletedReports > 0)
-                  Expanded(
+                  Flexible(
                     child: _buildLateChip(
                       'مكتملة متأخرة',
                       lateCompletedReports,
                       Colors.amber,
-                      () =>
-                          widget.onLateCompletedTap?.call(supervisorId, username),
+                      () => widget.onLateCompletedTap
+                          ?.call(supervisorId, username),
                     ),
                   ),
               ],
@@ -761,7 +848,7 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(8),
-                color: isDark 
+                color: isDark
                     ? const Color(0xFF1E293B).withOpacity(0.2)
                     : const Color(0xFFF8FAFC),
               ),
@@ -770,7 +857,7 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
-                  color: isDark 
+                  color: isDark
                       ? const Color(0xFF64748B)
                       : const Color(0xFF9CA3AF),
                 ),
@@ -832,8 +919,8 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
 
   Color _getCompletionRateColor(double rate) {
     if (rate >= 81) return const Color(0xFF10B981); // Green - Excellent
-    if (rate >= 61) return const Color(0xFF3B82F6);  // Blue - Good
-    if (rate >= 51) return const Color(0xFFF59E0B);  // Orange - Average
+    if (rate >= 61) return const Color(0xFF3B82F6); // Blue - Good
+    if (rate >= 51) return const Color(0xFFF59E0B); // Orange - Average
     return const Color(0xFFEF4444); // Red - Bad
   }
 
@@ -849,5 +936,107 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
     if (rate >= 61) return Icons.sentiment_satisfied;
     if (rate >= 51) return Icons.sentiment_neutral;
     return Icons.sentiment_dissatisfied;
+  }
+
+  void _openTechnicianManagement(BuildContext context) {
+    try {
+      // Ensure we have the minimum required data
+      if (widget.supervisor['id'] == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('خطأ: لا يمكن العثور على معرف المشرف'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      print('🔍 DEBUG: Raw supervisor data for technician dialog:');
+      print('🔍 ID: ${widget.supervisor['id']}');
+      print('🔍 Username: ${widget.supervisor['username']}');
+      print(
+          '🔍 technicians_detailed: ${widget.supervisor['technicians_detailed']}');
+      print(
+          '🔍 technicians_detailed type: ${widget.supervisor['technicians_detailed'].runtimeType}');
+      print(
+          '🔍 technicians_detailed length: ${widget.supervisor['technicians_detailed']?.length ?? 'null'}');
+
+      // Convert the map to a Supervisor object
+      final supervisor = Supervisor.fromMap(widget.supervisor);
+
+      print('🔍 DEBUG: Parsed supervisor object:');
+      print(
+          '🔍 techniciansDetailed length: ${supervisor.techniciansDetailed.length}');
+      print(
+          '🔍 techniciansDetailed: ${supervisor.techniciansDetailed.map((t) => t.toMap()).toList()}');
+      context.showEscDismissibleDialog(
+        barrierDismissible: false,
+        builder: (dialogContext) => BlocProvider.value(
+          value: context.read<SuperAdminBloc>(),
+          child: TechnicianManagementDialog(
+            supervisor: supervisor,
+            onSaveDetailed: (supervisorId, techniciansDetailed) {
+              // Handle technician update like team management dialog using detailed format
+              context
+                  .read<SuperAdminBloc>()
+                  .add(SupervisorTechniciansUpdatedEvent(
+                    supervisorId: supervisorId,
+                    techniciansDetailed:
+                        techniciansDetailed.map((t) => t.toMap()).toList(),
+                  ));
+            },
+            onTechniciansUpdated: () {
+              // Force a hard refresh by triggering both blocs
+              setState(() {}); // Trigger local rebuild
+              _refreshSupervisorData(context);
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('خطأ في تحميل بيانات المشرف: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  int _getTechnicianCount(Map<String, dynamic> supervisor) {
+    final techniciansDetailed = supervisor['technicians_detailed'];
+    if (techniciansDetailed is List) {
+      try {
+        // Parse the JSONB list to count valid technician objects
+        return techniciansDetailed
+            .where((item) =>
+                item is Map<String, dynamic> &&
+                (item['name']?.toString().trim().isNotEmpty ?? false))
+            .length;
+      } catch (e) {
+        print('Error parsing technicians_detailed: $e');
+        return 0;
+      }
+    }
+    return 0;
+  }
+
+  void _refreshSupervisorData(BuildContext context) {
+    // Trigger refresh for both SupervisorBloc and SuperAdminBloc
+    try {
+      // Refresh SupervisorBloc if available
+      context.read<SupervisorBloc?>()?.add(const SupervisorsStarted());
+    } catch (e) {
+      print('SupervisorBloc not available in this context: $e');
+    }
+
+    try {
+      // Also refresh SuperAdminBloc to update dashboard data
+      final superAdminBloc = BlocManager().getSuperAdminBloc();
+      superAdminBloc.add(LoadSuperAdminData(forceRefresh: true));
+      print('Triggered SuperAdminBloc refresh from callback');
+    } catch (e) {
+      print('Failed to refresh SuperAdminBloc from callback: $e');
+    }
   }
 }

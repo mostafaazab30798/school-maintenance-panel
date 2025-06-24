@@ -96,7 +96,7 @@ class _AdminProgressScreenState extends State<AdminProgressScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return AppBar(
-      automaticallyImplyLeading: false,
+      automaticallyImplyLeading: true,
       toolbarHeight: 70,
       elevation: 0,
       backgroundColor: Colors.transparent,

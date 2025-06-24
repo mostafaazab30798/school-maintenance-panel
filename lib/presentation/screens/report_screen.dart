@@ -193,6 +193,7 @@ class _ReportScreenState extends State<ReportScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
+          automaticallyImplyLeading: true,
           title: _isSearching
               ? TextField(
                   controller: _searchController,

@@ -8,21 +8,22 @@ class SupervisorNavigationService {
   static final CacheService _cacheService = CacheService();
 
   /// Navigate to all reports with optional preloading
-  static void navigateToAllReports(BuildContext context, {bool preload = true}) {
+  static void navigateToAllReports(BuildContext context,
+      {bool preload = true}) {
     if (preload) _preloadAllReportsData();
-    context.go('/all-reports');
+    context.push('/all-reports');
   }
 
   /// Navigate to completed reports with preloading
   static void navigateToCompletedReports(BuildContext context) {
     _preloadAllReportsData();
-    context.go('/all-reports?filter=completed');
+    context.push('/all-reports?filter=completed');
   }
 
   /// Navigate to all maintenance with preloading
   static void navigateToAllMaintenance(BuildContext context) {
     _preloadMaintenanceData();
-    context.go('/all-maintenance');
+    context.push('/all-maintenance');
   }
 
   /// Navigate to supervisor-specific reports
@@ -32,7 +33,8 @@ class SupervisorNavigationService {
     String supervisorName,
   ) {
     _preloadReportsData();
-    context.go('/all-reports?supervisor_id=$supervisorId&supervisor_name=$supervisorName');
+    context.push(
+        '/all-reports?supervisor_id=$supervisorId&supervisor_name=$supervisorName');
   }
 
   /// Navigate to supervisor-specific maintenance
@@ -42,7 +44,8 @@ class SupervisorNavigationService {
     String supervisorName,
   ) {
     _preloadMaintenanceData();
-    context.go('/all-maintenance?supervisor_id=$supervisorId&supervisor_name=$supervisorName');
+    context.push(
+        '/all-maintenance?supervisor_id=$supervisorId&supervisor_name=$supervisorName');
   }
 
   /// Navigate to supervisor completed work (both reports and maintenance)
@@ -53,7 +56,8 @@ class SupervisorNavigationService {
   ) {
     _preloadReportsData();
     _preloadMaintenanceData();
-    context.go('/all-reports?supervisor_id=$supervisorId&supervisor_name=$supervisorName&filter=completed');
+    context.push(
+        '/all-reports?supervisor_id=$supervisorId&supervisor_name=$supervisorName&filter=completed');
   }
 
   /// Navigate to supervisor late reports
@@ -63,7 +67,8 @@ class SupervisorNavigationService {
     String supervisorName,
   ) {
     _preloadReportsData();
-    context.go('/all-reports?supervisor_id=$supervisorId&supervisor_name=$supervisorName&filter=late');
+    context.push(
+        '/all-reports?supervisor_id=$supervisorId&supervisor_name=$supervisorName&filter=late');
   }
 
   /// Navigate to supervisor late completed reports
@@ -73,17 +78,18 @@ class SupervisorNavigationService {
     String supervisorName,
   ) {
     _preloadReportsData();
-    context.go('/all-reports?supervisor_id=$supervisorId&supervisor_name=$supervisorName&filter=late_completed');
+    context.push(
+        '/all-reports?supervisor_id=$supervisorId&supervisor_name=$supervisorName&filter=late_completed');
   }
 
   /// Navigate to supervisors list
   static void navigateToSupervisorsList(BuildContext context) {
-    context.go('/supervisors-list');
+    context.push('/supervisors-list');
   }
 
   /// Navigate to admins list
   static void navigateToAdminsList(BuildContext context) {
-    context.go('/admins-list');
+    context.push('/admins-list');
   }
 
   /// Preload reports data for faster navigation
@@ -99,7 +105,8 @@ class SupervisorNavigationService {
         final reportsData = List<Map<String, dynamic>>.from(response);
         _cacheService.setCached(CacheKeys.allReports, reportsData);
 
-        debugPrint('NavigationService: Preloaded ${reportsData.length} reports');
+        debugPrint(
+            'NavigationService: Preloaded ${reportsData.length} reports');
       } catch (e) {
         debugPrint('NavigationService: Failed to preload reports: $e');
       }
@@ -118,7 +125,8 @@ class SupervisorNavigationService {
       final reportsData = List<Map<String, dynamic>>.from(response);
       _cacheService.setCached(CacheKeys.allReports, reportsData);
 
-      debugPrint('NavigationService: Preloaded ${reportsData.length} all reports');
+      debugPrint(
+          'NavigationService: Preloaded ${reportsData.length} all reports');
     } catch (e) {
       debugPrint('NavigationService: Failed to preload all reports: $e');
     }
@@ -137,7 +145,8 @@ class SupervisorNavigationService {
         final maintenanceData = List<Map<String, dynamic>>.from(response);
         _cacheService.setCached(CacheKeys.allMaintenance, maintenanceData);
 
-        debugPrint('NavigationService: Preloaded ${maintenanceData.length} maintenance reports');
+        debugPrint(
+            'NavigationService: Preloaded ${maintenanceData.length} maintenance reports');
       } catch (e) {
         debugPrint('NavigationService: Failed to preload maintenance: $e');
       }
@@ -156,7 +165,8 @@ class SupervisorNavigationService {
 
         final reportsData = List<Map<String, dynamic>>.from(reportsResponse);
         _cacheService.setCached(CacheKeys.allReports, reportsData);
-        debugPrint('NavigationService: Background preloaded ${reportsData.length} reports');
+        debugPrint(
+            'NavigationService: Background preloaded ${reportsData.length} reports');
       }
 
       // Preload maintenance data
@@ -166,9 +176,11 @@ class SupervisorNavigationService {
             .select('*, supervisors(username)')
             .order('created_at', ascending: false);
 
-        final maintenanceData = List<Map<String, dynamic>>.from(maintenanceResponse);
+        final maintenanceData =
+            List<Map<String, dynamic>>.from(maintenanceResponse);
         _cacheService.setCached(CacheKeys.allMaintenance, maintenanceData);
-        debugPrint('NavigationService: Background preloaded ${maintenanceData.length} maintenance reports');
+        debugPrint(
+            'NavigationService: Background preloaded ${maintenanceData.length} maintenance reports');
       }
 
       debugPrint('NavigationService: Background preloading completed');
@@ -186,11 +198,11 @@ class SupervisorNavigationService {
   static void clearCache() {
     _cacheService.invalidate(CacheKeys.allReports);
     _cacheService.invalidate(CacheKeys.allMaintenance);
-    
+
     // Clear supervisor-specific cache keys
     _cacheService.invalidatePattern('${CacheKeys.allReports}_supervisor_');
     _cacheService.invalidatePattern('${CacheKeys.allMaintenance}_supervisor_');
-    
+
     debugPrint('NavigationService: Cache cleared');
   }
-} 
+}

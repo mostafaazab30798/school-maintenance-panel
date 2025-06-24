@@ -6,6 +6,7 @@ import '../../../core/services/cache_invalidation_service.dart';
 import '../../../data/repositories/supervisor_repository.dart';
 import '../../../data/repositories/report_repository.dart';
 import '../../../data/repositories/maintenance_repository.dart';
+import '../../../data/models/technician.dart';
 import 'super_admin_event.dart';
 import 'super_admin_state.dart';
 
@@ -28,6 +29,7 @@ class SuperAdminBloc extends Bloc<SuperAdminEvent, SuperAdminState> {
     on<AssignSupervisorsToAdmin>(_onAssignSupervisors);
     on<CreateNewAdminComplete>(_onCreateAdminComplete);
     on<CreateNewAdminManual>(_onCreateAdminManual);
+    on<SupervisorTechniciansUpdatedEvent>(_onSupervisorTechniciansUpdated);
   }
 
   Future<void> _onLoadData(
@@ -48,20 +50,46 @@ class SuperAdminBloc extends Bloc<SuperAdminEvent, SuperAdminState> {
                   .cast<String, Map<String, dynamic>>(),
               supervisorsWithStats: (cachedData['supervisorsWithStats'] as List)
                   .cast<Map<String, dynamic>>(),
-              reportTypesStats: (cachedData['reportTypesStats'] as Map<String, dynamic>?)
-                  ?.cast<String, int>() ?? <String, int>{},
-              reportSourcesStats: (cachedData['reportSourcesStats'] as Map<String, dynamic>?)
-                  ?.cast<String, int>() ?? <String, int>{},
-              maintenanceStatusStats: (cachedData['maintenanceStatusStats'] as Map<String, dynamic>?)
-                  ?.cast<String, int>() ?? <String, int>{},
-              adminReportsDistribution: (cachedData['adminReportsDistribution'] as Map<String, dynamic>?)
-                  ?.cast<String, int>() ?? <String, int>{},
-              adminMaintenanceDistribution: (cachedData['adminMaintenanceDistribution'] as Map<String, dynamic>?)
-                  ?.cast<String, int>() ?? <String, int>{},
-              reportTypesCompletionRates: (cachedData['reportTypesCompletionRates'] as Map<String, dynamic>?)
-                  ?.cast<String, Map<String, dynamic>>() ?? <String, Map<String, dynamic>>{},
-              reportSourcesCompletionRates: (cachedData['reportSourcesCompletionRates'] as Map<String, dynamic>?)
-                  ?.cast<String, Map<String, dynamic>>() ?? <String, Map<String, dynamic>>{},
+              reportTypesStats:
+                  (cachedData['reportTypesStats'] as Map<String, dynamic>?)
+                          ?.cast<String, int>() ??
+                      <String, int>{},
+              reportSourcesStats:
+                  (cachedData['reportSourcesStats'] as Map<String, dynamic>?)
+                          ?.cast<String, int>() ??
+                      <String, int>{},
+              maintenanceStatusStats: (cachedData['maintenanceStatusStats']
+                          as Map<String, dynamic>?)
+                      ?.cast<String, int>() ??
+                  <String, int>{},
+              adminReportsDistribution: (cachedData['adminReportsDistribution']
+                          as Map<String, dynamic>?)
+                      ?.cast<String, int>() ??
+                  <String, int>{},
+              adminMaintenanceDistribution:
+                  (cachedData['adminMaintenanceDistribution']
+                              as Map<String, dynamic>?)
+                          ?.cast<String, int>() ??
+                      <String, int>{},
+              reportTypesCompletionRates:
+                  (cachedData['reportTypesCompletionRates']
+                              as Map<String, dynamic>?)
+                          ?.cast<String, Map<String, dynamic>>() ??
+                      <String, Map<String, dynamic>>{},
+              reportSourcesCompletionRates:
+                  (cachedData['reportSourcesCompletionRates']
+                              as Map<String, dynamic>?)
+                          ?.cast<String, Map<String, dynamic>>() ??
+                      <String, Map<String, dynamic>>{},
+              reportPriorityStats:
+                  (cachedData['reportPriorityStats'] as Map<String, dynamic>?)
+                          ?.cast<String, int>() ??
+                      <String, int>{},
+              reportPriorityCompletionRates:
+                  (cachedData['reportPriorityCompletionRates']
+                              as Map<String, dynamic>?)
+                          ?.cast<String, Map<String, dynamic>>() ??
+                      <String, Map<String, dynamic>>{},
             ));
 
             // If cache is near expiry, refresh in background
@@ -97,9 +125,14 @@ class SuperAdminBloc extends Bloc<SuperAdminEvent, SuperAdminState> {
         reportSourcesStats: dashboardData['reportSourcesStats'],
         maintenanceStatusStats: dashboardData['maintenanceStatusStats'],
         adminReportsDistribution: dashboardData['adminReportsDistribution'],
-        adminMaintenanceDistribution: dashboardData['adminMaintenanceDistribution'],
+        adminMaintenanceDistribution:
+            dashboardData['adminMaintenanceDistribution'],
         reportTypesCompletionRates: dashboardData['reportTypesCompletionRates'],
-        reportSourcesCompletionRates: dashboardData['reportSourcesCompletionRates'],
+        reportSourcesCompletionRates:
+            dashboardData['reportSourcesCompletionRates'],
+        reportPriorityStats: dashboardData['reportPriorityStats'],
+        reportPriorityCompletionRates:
+            dashboardData['reportPriorityCompletionRates'],
       ));
     } catch (e) {
       emit(SuperAdminError(e.toString()));
@@ -110,12 +143,13 @@ class SuperAdminBloc extends Bloc<SuperAdminEvent, SuperAdminState> {
     // 🚀 Use the new optimized method that eliminates N+1 queries and runs everything in parallel
     print('🚀 Using optimized dashboard data loading...');
     final stopwatch = Stopwatch()..start();
-    
+
     final dashboardData = await _adminService.getAllDashboardDataOptimized();
-    
+
     stopwatch.stop();
-    print('✅ Dashboard data loaded in ${stopwatch.elapsedMilliseconds}ms (was taking 5000-10000ms before optimization)');
-    
+    print(
+        '✅ Dashboard data loaded in ${stopwatch.elapsedMilliseconds}ms (was taking 5000-10000ms before optimization)');
+
     return dashboardData;
   }
 
@@ -140,9 +174,15 @@ class SuperAdminBloc extends Bloc<SuperAdminEvent, SuperAdminState> {
             reportSourcesStats: dashboardData['reportSourcesStats'],
             maintenanceStatusStats: dashboardData['maintenanceStatusStats'],
             adminReportsDistribution: dashboardData['adminReportsDistribution'],
-            adminMaintenanceDistribution: dashboardData['adminMaintenanceDistribution'],
-            reportTypesCompletionRates: dashboardData['reportTypesCompletionRates'],
-            reportSourcesCompletionRates: dashboardData['reportSourcesCompletionRates'],
+            adminMaintenanceDistribution:
+                dashboardData['adminMaintenanceDistribution'],
+            reportTypesCompletionRates:
+                dashboardData['reportTypesCompletionRates'],
+            reportSourcesCompletionRates:
+                dashboardData['reportSourcesCompletionRates'],
+            reportPriorityStats: dashboardData['reportPriorityStats'],
+            reportPriorityCompletionRates:
+                dashboardData['reportPriorityCompletionRates'],
           ));
         }
       }
@@ -232,9 +272,14 @@ class SuperAdminBloc extends Bloc<SuperAdminEvent, SuperAdminState> {
           reportSourcesStats: currentState.reportSourcesStats,
           maintenanceStatusStats: currentState.maintenanceStatusStats,
           adminReportsDistribution: currentState.adminReportsDistribution,
-          adminMaintenanceDistribution: currentState.adminMaintenanceDistribution,
+          adminMaintenanceDistribution:
+              currentState.adminMaintenanceDistribution,
           reportTypesCompletionRates: currentState.reportTypesCompletionRates,
-          reportSourcesCompletionRates: currentState.reportSourcesCompletionRates,
+          reportSourcesCompletionRates:
+              currentState.reportSourcesCompletionRates,
+          reportPriorityStats: currentState.reportPriorityStats,
+          reportPriorityCompletionRates:
+              currentState.reportPriorityCompletionRates,
         ));
 
         // Update cache with new data
@@ -247,9 +292,14 @@ class SuperAdminBloc extends Bloc<SuperAdminEvent, SuperAdminState> {
           'reportSourcesStats': currentState.reportSourcesStats,
           'maintenanceStatusStats': currentState.maintenanceStatusStats,
           'adminReportsDistribution': currentState.adminReportsDistribution,
-          'adminMaintenanceDistribution': currentState.adminMaintenanceDistribution,
+          'adminMaintenanceDistribution':
+              currentState.adminMaintenanceDistribution,
           'reportTypesCompletionRates': currentState.reportTypesCompletionRates,
-          'reportSourcesCompletionRates': currentState.reportSourcesCompletionRates,
+          'reportSourcesCompletionRates':
+              currentState.reportSourcesCompletionRates,
+          'reportPriorityStats': currentState.reportPriorityStats,
+          'reportPriorityCompletionRates':
+              currentState.reportPriorityCompletionRates,
         };
         _cacheService.setCached(CacheKeys.dashboardStats, updatedData);
       } else {
@@ -286,6 +336,115 @@ class SuperAdminBloc extends Bloc<SuperAdminEvent, SuperAdminState> {
         role: event.role,
       );
       add(LoadSuperAdminData(forceRefresh: true));
+    } catch (e) {
+      emit(SuperAdminError(e.toString()));
+    }
+  }
+
+  Future<void> _onSupervisorTechniciansUpdated(
+      SupervisorTechniciansUpdatedEvent event,
+      Emitter<SuperAdminState> emit) async {
+    try {
+      print(
+          '🔥 SuperAdminBloc: Processing technician update for supervisor ${event.supervisorId}');
+      print(
+          '🔥 Technicians detailed count: ${event.techniciansDetailed.length}');
+
+      // Perform the technician update - prioritize detailed format if available
+      if (event.techniciansDetailed.isNotEmpty) {
+        // Use detailed technician update
+        final technicians = event.techniciansDetailed
+            .map((data) => Technician.fromMap(data as Map<String, dynamic>))
+            .toList();
+        await _supervisorRepo.updateSupervisorTechniciansDetailed(
+          event.supervisorId,
+          technicians,
+        );
+      } else {
+        // Fallback to simple technician update
+        await _supervisorRepo.updateSupervisorTechnicians(
+          event.supervisorId,
+          event.technicians,
+        );
+      }
+
+      // 🚀 Critical Fix: Clear all supervisor-related caches
+      CacheInvalidationService.invalidateSupervisorCaches();
+
+      // Instead of reloading everything, just update the specific supervisor's data
+      if (state is SuperAdminLoaded) {
+        final currentState = state as SuperAdminLoaded;
+
+        // Update the supervisorsWithStats list with new technicians
+        final updatedSupervisorsWithStats =
+            currentState.supervisorsWithStats.map((supervisor) {
+          if (supervisor['id'] == event.supervisorId) {
+            // Update this supervisor's technicians_detailed only
+            return {
+              ...supervisor,
+              'technicians_detailed': event.techniciansDetailed,
+            };
+          }
+          return supervisor;
+        }).toList();
+
+        // Also update allSupervisors if it contains technician data
+        final updatedAllSupervisors =
+            currentState.allSupervisors.map((supervisor) {
+          if (supervisor['id'] == event.supervisorId) {
+            // Update this supervisor's technicians_detailed only
+            return {
+              ...supervisor,
+              'technicians_detailed': event.techniciansDetailed,
+            };
+          }
+          return supervisor;
+        }).toList();
+
+        // Emit the updated state immediately
+        emit(SuperAdminLoaded(
+          admins: currentState.admins,
+          allSupervisors: updatedAllSupervisors,
+          adminStats: currentState.adminStats,
+          supervisorsWithStats: updatedSupervisorsWithStats,
+          reportTypesStats: currentState.reportTypesStats,
+          reportSourcesStats: currentState.reportSourcesStats,
+          maintenanceStatusStats: currentState.maintenanceStatusStats,
+          adminReportsDistribution: currentState.adminReportsDistribution,
+          adminMaintenanceDistribution:
+              currentState.adminMaintenanceDistribution,
+          reportTypesCompletionRates: currentState.reportTypesCompletionRates,
+          reportSourcesCompletionRates:
+              currentState.reportSourcesCompletionRates,
+          reportPriorityStats: currentState.reportPriorityStats,
+          reportPriorityCompletionRates:
+              currentState.reportPriorityCompletionRates,
+        ));
+
+        // Update cache with new data
+        final updatedData = {
+          'admins': currentState.admins,
+          'allSupervisors': updatedAllSupervisors,
+          'adminStats': currentState.adminStats,
+          'supervisorsWithStats': updatedSupervisorsWithStats,
+          'reportTypesStats': currentState.reportTypesStats,
+          'reportSourcesStats': currentState.reportSourcesStats,
+          'maintenanceStatusStats': currentState.maintenanceStatusStats,
+          'adminReportsDistribution': currentState.adminReportsDistribution,
+          'adminMaintenanceDistribution':
+              currentState.adminMaintenanceDistribution,
+          'reportTypesCompletionRates': currentState.reportTypesCompletionRates,
+          'reportSourcesCompletionRates':
+              currentState.reportSourcesCompletionRates,
+          'reportPriorityStats': currentState.reportPriorityStats,
+          'reportPriorityCompletionRates':
+              currentState.reportPriorityCompletionRates,
+        };
+        _cacheService.setCached(CacheKeys.dashboardStats, updatedData);
+      } else {
+        // Fallback to full reload if state is not loaded
+        add(LoadSuperAdminData(forceRefresh: true));
+      }
     } catch (e) {
       emit(SuperAdminError(e.toString()));
     }

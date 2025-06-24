@@ -1,13 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../logic/blocs/maintenance_reports/maintenance_bloc.dart';
+import '../../logic/blocs/maintenance_reports/maintenance_event.dart';
+import '../../logic/blocs/maintenance_reports/maintenance_state.dart';
+import '../../data/repositories/maintenance_repository.dart';
+import '../../core/services/admin_service.dart';
+import '../widgets/dashboard/expandable_maintenance_card.dart';
+import '../widgets/common/standard_refresh_button.dart';
+import '../widgets/common/shared_app_bar.dart';
 import 'package:excel/excel.dart' as excel_lib;
 import 'package:file_saver/file_saver.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:intl/date_symbol_data_local.dart';
 import 'dart:typed_data';
 import '../../core/services/cache_service.dart';
-import '../../core/services/admin_service.dart';
-import '../widgets/common/standard_refresh_button.dart';
 
 class AllMaintenanceScreen extends StatefulWidget {
   final String? initialFilter;
@@ -379,65 +386,33 @@ class _AllMaintenanceScreenState extends State<AllMaintenanceScreen>
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: colorScheme.surface,
+        appBar: SharedAppBar(
+          title: 'جميع بلاغات الصيانة',
+          actions: [
+            StandardRefreshButton(
+              onPressed: () => _loadMaintenanceReports(forceRefresh: true),
+            ),
+          ],
+        ),
         floatingActionButton: _buildFloatingActionButton(),
-        body: CustomScrollView(
-          slivers: [
-            // Modern App Bar
-            SliverAppBar.large(
-              automaticallyImplyLeading: false,
-              backgroundColor: colorScheme.surface,
-              surfaceTintColor: Colors.transparent,
-              elevation: 0,
-              pinned: true,
-              expandedHeight: 120,
-              title: Text(
-                'جميع بلاغات الصيانة',
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurface,
-                ),
-              ),
-              actions: [
-                Padding(
-                  padding: const EdgeInsets.only(left: 10),
-                  child: StandardRefreshButton(
-                    onPressed: () => _loadMaintenanceReports(forceRefresh: true),
-                  ),
-                ),
-              ],
-              flexibleSpace: FlexibleSpaceBar(
-                background: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        colorScheme.surface,
-                        colorScheme.surface.withOpacity(0.8),
+        body: isLoading
+            ? _buildModernLoadingView()
+            : error != null
+                ? _buildModernErrorView()
+                : SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        // Filter Section
+                        if (!isLoading && error == null)
+                          _buildModernFilterSection(),
+
+                        // Content
+                        filteredReports.isEmpty
+                            ? _buildModernEmptyView()
+                            : _buildModernMaintenanceList(),
                       ],
                     ),
                   ),
-                ),
-              ),
-            ),
-
-            // Filter Section
-            if (!isLoading && error == null)
-              SliverToBoxAdapter(
-                child: _buildModernFilterSection(),
-              ),
-
-            // Content
-            if (isLoading)
-              SliverToBoxAdapter(child: _buildModernLoadingView())
-            else if (error != null)
-              SliverToBoxAdapter(child: _buildModernErrorView())
-            else if (filteredReports.isEmpty)
-              SliverToBoxAdapter(child: _buildModernEmptyView())
-            else
-              _buildModernMaintenanceList(),
-          ],
-        ),
       ),
     );
   }
@@ -666,69 +641,61 @@ class _AllMaintenanceScreenState extends State<AllMaintenanceScreen>
   }
 
   Widget _buildModernMaintenanceList() {
-    return SliverPadding(
-      padding: const EdgeInsets.all(16),
-      sliver: SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (context, index) {
-            final crossAxisCount = _getCrossAxisCount();
+    final crossAxisCount = _getCrossAxisCount();
+    final rows = <Widget>[];
 
-            // Build rows with elastic heights
-            if (index % crossAxisCount == 0) {
-              // Start of a new row
-              final rowStartIndex = index;
-              final rowEndIndex = (rowStartIndex + crossAxisCount - 1)
-                  .clamp(0, filteredReports.length - 1);
-              final reportsInRow =
-                  filteredReports.sublist(rowStartIndex, rowEndIndex + 1);
+    for (int i = 0; i < filteredReports.length; i += crossAxisCount) {
+      final rowStartIndex = i;
+      final rowEndIndex =
+          (i + crossAxisCount - 1).clamp(0, filteredReports.length - 1);
+      final reportsInRow =
+          filteredReports.sublist(rowStartIndex, rowEndIndex + 1);
 
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: reportsInRow.asMap().entries.map((entry) {
-                      final reportIndex = rowStartIndex + entry.key;
-                      final report = entry.value;
+      rows.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: reportsInRow.asMap().entries.map((entry) {
+                final reportIndex = rowStartIndex + entry.key;
+                final report = entry.value;
 
-                      return Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.only(
-                            right: entry.key < reportsInRow.length - 1 ? 12 : 0,
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      right: entry.key < reportsInRow.length - 1 ? 12 : 0,
+                    ),
+                    child: FadeTransition(
+                      opacity: _fadeAnimation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.1),
+                          end: Offset.zero,
+                        ).animate(CurvedAnimation(
+                          parent: _animationController,
+                          curve: Interval(
+                            (reportIndex * 0.1).clamp(0.0, 1.0),
+                            ((reportIndex + 1) * 0.1).clamp(0.0, 1.0),
+                            curve: Curves.easeOutCubic,
                           ),
-                          child: FadeTransition(
-                            opacity: _fadeAnimation,
-                            child: SlideTransition(
-                              position: Tween<Offset>(
-                                begin: const Offset(0, 0.1),
-                                end: Offset.zero,
-                              ).animate(CurvedAnimation(
-                                parent: _animationController,
-                                curve: Interval(
-                                  (reportIndex * 0.1).clamp(0.0, 1.0),
-                                  ((reportIndex + 1) * 0.1).clamp(0.0, 1.0),
-                                  curve: Curves.easeOutCubic,
-                                ),
-                              )),
-                              child: _buildModernMaintenanceCard(
-                                  report, reportIndex),
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                        )),
+                        child: _buildModernMaintenanceCard(report, reportIndex),
+                      ),
+                    ),
                   ),
-                ),
-              );
-            } else {
-              // Skip indices that are not row starts
-              return const SizedBox.shrink();
-            }
-          },
-          childCount: ((filteredReports.length / _getCrossAxisCount()).ceil() *
-                  _getCrossAxisCount())
-              .clamp(0, filteredReports.length),
+                );
+              }).toList(),
+            ),
+          ),
         ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: rows,
       ),
     );
   }

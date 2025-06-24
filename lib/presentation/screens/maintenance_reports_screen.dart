@@ -120,6 +120,7 @@ class _MaintenanceReportsScreenState extends State<MaintenanceReportsScreen> {
       child: Scaffold(
         backgroundColor: isDark ? const Color(0xFF0F172A) : null,
         appBar: AppBar(
+          automaticallyImplyLeading: true,
           title: Text(
             widget.title,
             style: Theme.of(context).appBarTheme.titleTextStyle,

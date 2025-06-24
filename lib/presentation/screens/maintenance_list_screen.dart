@@ -18,7 +18,8 @@ class SupervisorMaintenanceListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('بلاغات الصيانة')),
+      appBar: AppBar(
+          automaticallyImplyLeading: true, title: const Text('بلاغات الصيانة')),
       body: FutureBuilder<List<Map<String, dynamic>>>(
         future: _fetchReports(),
         builder: (context, snapshot) {

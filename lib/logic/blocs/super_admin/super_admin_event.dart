@@ -59,3 +59,15 @@ class CreateNewAdminManual extends SuperAdminEvent {
     required this.role,
   });
 }
+
+class SupervisorTechniciansUpdatedEvent extends SuperAdminEvent {
+  final String supervisorId;
+  final List<String> technicians; // Legacy support
+  final List<dynamic> techniciansDetailed; // New enhanced format
+
+  SupervisorTechniciansUpdatedEvent({
+    required this.supervisorId,
+    this.technicians = const [],
+    this.techniciansDetailed = const [],
+  });
+}

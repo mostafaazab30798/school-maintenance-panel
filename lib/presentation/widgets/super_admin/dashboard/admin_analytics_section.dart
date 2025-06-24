@@ -7,9 +7,12 @@ import '../../common/ui_components/ranking_utils.dart';
 
 class AdminAnalyticsSection extends StatelessWidget {
   final SuperAdminLoaded state;
-  final Function(BuildContext, dynamic, List<Map<String, dynamic>>) onTeamManagement;
-  final Function(BuildContext, dynamic, List<Map<String, dynamic>>) onShowReports;
-  final Function(BuildContext, dynamic, List<Map<String, dynamic>>) onShowMaintenance;
+  final Function(BuildContext, dynamic, List<Map<String, dynamic>>)
+      onTeamManagement;
+  final Function(BuildContext, dynamic, List<Map<String, dynamic>>)
+      onShowReports;
+  final Function(BuildContext, dynamic, List<Map<String, dynamic>>)
+      onShowMaintenance;
 
   const AdminAnalyticsSection({
     super.key,
@@ -28,7 +31,8 @@ class AdminAnalyticsSection extends StatelessWidget {
       return _buildEmptyAdminsState();
     }
 
-    final topAdmins = RankingUtils.getTopPerformingAdmins(regularAdmins, state.adminStats, 4);
+    final topAdmins =
+        RankingUtils.getTopPerformingAdmins(regularAdmins, state.adminStats, 4);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -78,7 +82,7 @@ class AdminAnalyticsSection extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => context.go('/admins-list'),
+        onTap: () => context.push('/admins-list'),
         borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -122,26 +126,27 @@ class AdminAnalyticsSection extends StatelessWidget {
         final index = entry.key;
         final admin = entry.value;
         final stats = state.adminStats[admin.id] ?? <String, dynamic>{};
-        
+
         return _buildAdminCardWithBadge(context, admin, stats, index);
       }).toList(),
     );
   }
 
-  Widget _buildAdminCardWithBadge(BuildContext context, dynamic admin, Map<String, dynamic> stats, int index) {
+  Widget _buildAdminCardWithBadge(BuildContext context, dynamic admin,
+      Map<String, dynamic> stats, int index) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-                 buildModernAdminPerformanceCard(
-           context,
-           admin,
-           stats,
-           state.allSupervisors,
-           state.supervisorsWithStats,
-           onTeamManagement: onTeamManagement,
-           onShowReports: onShowReports,
-           onShowMaintenance: onShowMaintenance,
-         ),
+        buildModernAdminPerformanceCard(
+          context,
+          admin,
+          stats,
+          state.allSupervisors,
+          state.supervisorsWithStats,
+          onTeamManagement: onTeamManagement,
+          onShowReports: onShowReports,
+          onShowMaintenance: onShowMaintenance,
+        ),
         // Performance rank badge
         RankingUtils.buildPerformanceBadgeForAdmin(index),
       ],
@@ -195,4 +200,4 @@ class AdminAnalyticsSection extends StatelessWidget {
       ),
     );
   }
-} 
+}

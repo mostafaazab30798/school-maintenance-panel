@@ -138,6 +138,7 @@ class _AdminManagementView extends StatelessWidget {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
+          automaticallyImplyLeading: true,
           title: const Text('إدارة المسؤولين'),
           backgroundColor: const Color(0xFF1E88E5),
           foregroundColor: Colors.white,

@@ -182,7 +182,7 @@ class AdminManagementService {
   Future<List<Map<String, dynamic>>> getUnassignedSupervisors() async {
     final response = await _client
         .from('supervisors')
-        .select('id, username, email')
+        .select('id, username, email, technicians_detailed')
         .filter('admin_id', 'is', null);
 
     return List<Map<String, dynamic>>.from(response);
@@ -352,7 +352,7 @@ class AdminManagementService {
     // Get all supervisors
     final supervisorsResponse = await _client
         .from('supervisors')
-        .select('id, username, email, admin_id')
+        .select('id, username, email, admin_id, technicians_detailed')
         .order('created_at', ascending: false);
 
     List<Map<String, dynamic>> supervisorsWithStats = [];
@@ -366,6 +366,7 @@ class AdminManagementService {
         'username': supervisor['username'],
         'email': supervisor['email'],
         'admin_id': supervisor['admin_id'],
+        'technicians_detailed': supervisor['technicians_detailed'] ?? [],
         'stats': stats,
       });
     }
@@ -375,9 +376,7 @@ class AdminManagementService {
 
   /// Get report types statistics for super admin dashboard
   Future<Map<String, int>> getReportTypesStats() async {
-    final reportsResponse = await _client
-        .from('reports')
-        .select('type');
+    final reportsResponse = await _client.from('reports').select('type');
 
     Map<String, int> typeCounts = {
       'Civil': 0,
@@ -399,9 +398,8 @@ class AdminManagementService {
 
   /// Get report sources statistics for super admin dashboard
   Future<Map<String, int>> getReportSourcesStats() async {
-    final reportsResponse = await _client
-        .from('reports')
-        .select('report_source');
+    final reportsResponse =
+        await _client.from('reports').select('report_source');
 
     Map<String, int> sourceCounts = {
       'unifier': 0,
@@ -410,7 +408,8 @@ class AdminManagementService {
     };
 
     for (final report in reportsResponse) {
-      final source = report['report_source'] as String? ?? 'unifier'; // Default to unifier
+      final source =
+          report['report_source'] as String? ?? 'unifier'; // Default to unifier
       if (sourceCounts.containsKey(source)) {
         sourceCounts[source] = (sourceCounts[source] ?? 0) + 1;
       }
@@ -421,9 +420,8 @@ class AdminManagementService {
 
   /// Get maintenance status statistics for super admin dashboard
   Future<Map<String, int>> getMaintenanceStatusStats() async {
-    final maintenanceResponse = await _client
-        .from('maintenance_reports')
-        .select('status');
+    final maintenanceResponse =
+        await _client.from('maintenance_reports').select('status');
 
     Map<String, int> statusCounts = {
       'pending': 0,
@@ -470,10 +468,10 @@ class AdminManagementService {
   }
 
   /// Get completion rates by report type for super admin dashboard
-  Future<Map<String, Map<String, dynamic>>> getReportTypesCompletionRates() async {
-    final reportsResponse = await _client
-        .from('reports')
-        .select('type, status');
+  Future<Map<String, Map<String, dynamic>>>
+      getReportTypesCompletionRates() async {
+    final reportsResponse =
+        await _client.from('reports').select('type, status');
 
     Map<String, Map<String, dynamic>> typeStats = {
       'Civil': {'total': 0, 'completed': 0, 'rate': 0.0},
@@ -486,12 +484,13 @@ class AdminManagementService {
     for (final report in reportsResponse) {
       final type = report['type'] as String?;
       final status = report['status'] as String?;
-      
+
       if (type != null && typeStats.containsKey(type)) {
         typeStats[type]!['total'] = (typeStats[type]!['total'] as int) + 1;
-        
+
         if (status == 'completed') {
-          typeStats[type]!['completed'] = (typeStats[type]!['completed'] as int) + 1;
+          typeStats[type]!['completed'] =
+              (typeStats[type]!['completed'] as int) + 1;
         }
       }
     }
@@ -508,10 +507,10 @@ class AdminManagementService {
   }
 
   /// Get completion rates by report source for super admin dashboard
-  Future<Map<String, Map<String, dynamic>>> getReportSourcesCompletionRates() async {
-    final reportsResponse = await _client
-        .from('reports')
-        .select('report_source, status');
+  Future<Map<String, Map<String, dynamic>>>
+      getReportSourcesCompletionRates() async {
+    final reportsResponse =
+        await _client.from('reports').select('report_source, status');
 
     Map<String, Map<String, dynamic>> sourceStats = {
       'unifier': {'total': 0, 'completed': 0, 'rate': 0.0},
@@ -520,14 +519,17 @@ class AdminManagementService {
     };
 
     for (final report in reportsResponse) {
-      final source = report['report_source'] as String? ?? 'unifier'; // Default to unifier
+      final source =
+          report['report_source'] as String? ?? 'unifier'; // Default to unifier
       final status = report['status'] as String?;
-      
+
       if (sourceStats.containsKey(source)) {
-        sourceStats[source]!['total'] = (sourceStats[source]!['total'] as int) + 1;
-        
+        sourceStats[source]!['total'] =
+            (sourceStats[source]!['total'] as int) + 1;
+
         if (status == 'completed') {
-          sourceStats[source]!['completed'] = (sourceStats[source]!['completed'] as int) + 1;
+          sourceStats[source]!['completed'] =
+              (sourceStats[source]!['completed'] as int) + 1;
         }
       }
     }
@@ -555,10 +557,16 @@ class AdminManagementService {
       final baseDataFutures = await Future.wait<dynamic>([
         // Basic entities
         getAllAdmins(),
-        _client.from('supervisors').select('id, username, email, admin_id').order('created_at', ascending: false),
-        
+        _client
+            .from('supervisors')
+            .select(
+                'id, username, email, admin_id, technicians, technicians_detailed')
+            .order('created_at', ascending: false),
+
         // All reports and maintenance data (we'll process these in memory)
-        _client.from('reports').select('id, type, status, report_source, supervisor_id'),
+        _client
+            .from('reports')
+            .select('id, type, status, report_source, supervisor_id, priority'),
         _client.from('maintenance_reports').select('id, status, supervisor_id'),
       ]);
 
@@ -568,44 +576,62 @@ class AdminManagementService {
       final allMaintenance = baseDataFutures[3] as List<Map<String, dynamic>>;
 
       print('🔄 Base data fetched in ${stopwatch.elapsedMilliseconds}ms');
-      print('📊 Data summary: ${admins.length} admins, ${supervisorsRaw.length} supervisors, ${allReports.length} reports, ${allMaintenance.length} maintenance');
+      print(
+          '📊 Data summary: ${admins.length} admins, ${supervisorsRaw.length} supervisors, ${allReports.length} reports, ${allMaintenance.length} maintenance');
 
       // Step 2: Process all statistics in memory (much faster than separate DB calls)
       print('🔄 Processing statistics in memory...');
-      
+
       // Convert supervisors to the expected format
-      final allSupervisors = supervisorsRaw.map((s) => {
-        'id': s['id'],
-        'username': s['username'],
-        'email': s['email'],
-        'admin_id': s['admin_id'],
-      }).toList();
+      final allSupervisors = supervisorsRaw
+          .map((s) => {
+                'id': s['id'],
+                'username': s['username'],
+                'email': s['email'],
+                'admin_id': s['admin_id'],
+                'technicians': s['technicians'] ?? [],
+                'technicians_detailed': s['technicians_detailed'] ?? [],
+              })
+          .toList();
 
       // Calculate supervisor stats in memory
-      final supervisorsWithStats = _calculateSupervisorsWithStatsInMemory(supervisorsRaw, allReports, allMaintenance);
-      
+      final supervisorsWithStats = _calculateSupervisorsWithStatsInMemory(
+          supervisorsRaw, allReports, allMaintenance);
+
       // Calculate admin stats in memory
-      final adminStats = _calculateAdminStatsInMemory(admins, allSupervisors, allReports, allMaintenance);
-      
+      final adminStats = _calculateAdminStatsInMemory(
+          admins, allSupervisors, allReports, allMaintenance);
+
       // Calculate report type statistics
       final reportTypesStats = _calculateReportTypesStats(allReports);
-      
+
       // Calculate report source statistics
       final reportSourcesStats = _calculateReportSourcesStats(allReports);
-      
+
       // Calculate maintenance status statistics
-      final maintenanceStatusStats = _calculateMaintenanceStatusStats(allMaintenance);
-      
+      final maintenanceStatusStats =
+          _calculateMaintenanceStatusStats(allMaintenance);
+
       // Calculate admin distributions
-      final adminReportsDistribution = _calculateAdminReportsDistribution(admins, adminStats);
-      final adminMaintenanceDistribution = _calculateAdminMaintenanceDistribution(admins, adminStats);
-      
+      final adminReportsDistribution =
+          _calculateAdminReportsDistribution(admins, adminStats);
+      final adminMaintenanceDistribution =
+          _calculateAdminMaintenanceDistribution(admins, adminStats);
+
       // Calculate completion rates
-      final reportTypesCompletionRates = _calculateReportTypesCompletionRates(allReports);
-      final reportSourcesCompletionRates = _calculateReportSourcesCompletionRates(allReports);
+      final reportTypesCompletionRates =
+          _calculateReportTypesCompletionRates(allReports);
+      final reportSourcesCompletionRates =
+          _calculateReportSourcesCompletionRates(allReports);
+
+      // Calculate priority statistics (emergency/routine)
+      final reportPriorityStats = _calculateReportPriorityStats(allReports);
+      final reportPriorityCompletionRates =
+          _calculateReportPriorityCompletionRates(allReports);
 
       stopwatch.stop();
-      print('✅ Optimized dashboard data fetch completed in ${stopwatch.elapsedMilliseconds}ms');
+      print(
+          '✅ Optimized dashboard data fetch completed in ${stopwatch.elapsedMilliseconds}ms');
 
       return {
         'admins': admins,
@@ -619,10 +645,13 @@ class AdminManagementService {
         'adminMaintenanceDistribution': adminMaintenanceDistribution,
         'reportTypesCompletionRates': reportTypesCompletionRates,
         'reportSourcesCompletionRates': reportSourcesCompletionRates,
+        'reportPriorityStats': reportPriorityStats,
+        'reportPriorityCompletionRates': reportPriorityCompletionRates,
       };
     } catch (e) {
       stopwatch.stop();
-      print('❌ Error in optimized dashboard fetch after ${stopwatch.elapsedMilliseconds}ms: $e');
+      print(
+          '❌ Error in optimized dashboard fetch after ${stopwatch.elapsedMilliseconds}ms: $e');
       rethrow;
     }
   }
@@ -635,17 +664,25 @@ class AdminManagementService {
   ) {
     return supervisors.map((supervisor) {
       final supervisorId = supervisor['id'] as String;
-      
+
       // Filter reports for this supervisor
-      final supervisorReports = allReports.where((r) => r['supervisor_id'] == supervisorId).toList();
-      final supervisorMaintenance = allMaintenance.where((m) => m['supervisor_id'] == supervisorId).toList();
-      
+      final supervisorReports =
+          allReports.where((r) => r['supervisor_id'] == supervisorId).toList();
+      final supervisorMaintenance = allMaintenance
+          .where((m) => m['supervisor_id'] == supervisorId)
+          .toList();
+
       // Calculate stats
-      final completedReports = supervisorReports.where((r) => r['status'] == 'completed').length;
-      final lateReports = supervisorReports.where((r) => r['status'] == 'late').length;
-      final lateCompletedReports = supervisorReports.where((r) => r['status'] == 'late_completed').length;
-      final completedMaintenance = supervisorMaintenance.where((m) => m['status'] == 'completed').length;
-      
+      final completedReports =
+          supervisorReports.where((r) => r['status'] == 'completed').length;
+      final lateReports =
+          supervisorReports.where((r) => r['status'] == 'late').length;
+      final lateCompletedReports = supervisorReports
+          .where((r) => r['status'] == 'late_completed')
+          .length;
+      final completedMaintenance =
+          supervisorMaintenance.where((m) => m['status'] == 'completed').length;
+
       final totalWork = supervisorReports.length + supervisorMaintenance.length;
       final completedWork = completedReports + completedMaintenance;
       final completionRate = totalWork > 0 ? (completedWork / totalWork) : 0.0;
@@ -655,6 +692,8 @@ class AdminManagementService {
         'username': supervisor['username'],
         'email': supervisor['email'],
         'admin_id': supervisor['admin_id'],
+        'technicians_detailed': supervisor['technicians_detailed'] ??
+            [], // Include detailed technicians field
         'stats': {
           'reports': supervisorReports.length,
           'maintenance': supervisorMaintenance.length,
@@ -679,8 +718,10 @@ class AdminManagementService {
 
     for (final admin in admins) {
       // Get supervisors for this admin
-      final adminSupervisors = allSupervisors.where((s) => s['admin_id'] == admin.id).toList();
-      final supervisorIds = adminSupervisors.map((s) => s['id'] as String).toList();
+      final adminSupervisors =
+          allSupervisors.where((s) => s['admin_id'] == admin.id).toList();
+      final supervisorIds =
+          adminSupervisors.map((s) => s['id'] as String).toList();
 
       if (supervisorIds.isEmpty) {
         adminStats[admin.id] = {
@@ -697,14 +738,22 @@ class AdminManagementService {
       }
 
       // Filter reports and maintenance for this admin's supervisors
-      final adminReports = allReports.where((r) => supervisorIds.contains(r['supervisor_id'])).toList();
-      final adminMaintenance = allMaintenance.where((m) => supervisorIds.contains(m['supervisor_id'])).toList();
+      final adminReports = allReports
+          .where((r) => supervisorIds.contains(r['supervisor_id']))
+          .toList();
+      final adminMaintenance = allMaintenance
+          .where((m) => supervisorIds.contains(m['supervisor_id']))
+          .toList();
 
       // Calculate stats
-      final completedReports = adminReports.where((r) => r['status'] == 'completed').length;
-      final lateReports = adminReports.where((r) => r['status'] == 'late').length;
-      final lateCompletedReports = adminReports.where((r) => r['status'] == 'late_completed').length;
-      final completedMaintenance = adminMaintenance.where((m) => m['status'] == 'completed').length;
+      final completedReports =
+          adminReports.where((r) => r['status'] == 'completed').length;
+      final lateReports =
+          adminReports.where((r) => r['status'] == 'late').length;
+      final lateCompletedReports =
+          adminReports.where((r) => r['status'] == 'late_completed').length;
+      final completedMaintenance =
+          adminMaintenance.where((m) => m['status'] == 'completed').length;
 
       final totalWork = adminReports.length + adminMaintenance.length;
       final completedWork = completedReports + completedMaintenance;
@@ -726,7 +775,8 @@ class AdminManagementService {
   }
 
   /// Calculate report types statistics in memory
-  Map<String, int> _calculateReportTypesStats(List<Map<String, dynamic>> allReports) {
+  Map<String, int> _calculateReportTypesStats(
+      List<Map<String, dynamic>> allReports) {
     final Map<String, int> typeCounts = {
       'Civil': 0,
       'Plumbing': 0,
@@ -746,7 +796,8 @@ class AdminManagementService {
   }
 
   /// Calculate report sources statistics in memory
-  Map<String, int> _calculateReportSourcesStats(List<Map<String, dynamic>> allReports) {
+  Map<String, int> _calculateReportSourcesStats(
+      List<Map<String, dynamic>> allReports) {
     final Map<String, int> sourceCounts = {
       'unifier': 0,
       'check_list': 0,
@@ -764,7 +815,8 @@ class AdminManagementService {
   }
 
   /// Calculate maintenance status statistics in memory
-  Map<String, int> _calculateMaintenanceStatusStats(List<Map<String, dynamic>> allMaintenance) {
+  Map<String, int> _calculateMaintenanceStatusStats(
+      List<Map<String, dynamic>> allMaintenance) {
     final Map<String, int> statusCounts = {
       'pending': 0,
       'in_progress': 0,
@@ -787,7 +839,7 @@ class AdminManagementService {
     Map<String, Map<String, dynamic>> adminStats,
   ) {
     final Map<String, int> distribution = {};
-    
+
     for (final admin in admins) {
       final stats = adminStats[admin.id] ?? {};
       final reportsCount = stats['reports'] as int? ?? 0;
@@ -803,7 +855,7 @@ class AdminManagementService {
     Map<String, Map<String, dynamic>> adminStats,
   ) {
     final Map<String, int> distribution = {};
-    
+
     for (final admin in admins) {
       final stats = adminStats[admin.id] ?? {};
       final maintenanceCount = stats['maintenance'] as int? ?? 0;
@@ -814,7 +866,8 @@ class AdminManagementService {
   }
 
   /// Calculate report types completion rates in memory
-  Map<String, Map<String, dynamic>> _calculateReportTypesCompletionRates(List<Map<String, dynamic>> allReports) {
+  Map<String, Map<String, dynamic>> _calculateReportTypesCompletionRates(
+      List<Map<String, dynamic>> allReports) {
     final Map<String, Map<String, dynamic>> typeStats = {
       'Civil': {'total': 0, 'completed': 0, 'rate': 0.0},
       'Plumbing': {'total': 0, 'completed': 0, 'rate': 0.0},
@@ -826,12 +879,13 @@ class AdminManagementService {
     for (final report in allReports) {
       final type = report['type'] as String?;
       final status = report['status'] as String?;
-      
+
       if (type != null && typeStats.containsKey(type)) {
         typeStats[type]!['total'] = (typeStats[type]!['total'] as int) + 1;
-        
+
         if (status == 'completed') {
-          typeStats[type]!['completed'] = (typeStats[type]!['completed'] as int) + 1;
+          typeStats[type]!['completed'] =
+              (typeStats[type]!['completed'] as int) + 1;
         }
       }
     }
@@ -848,7 +902,8 @@ class AdminManagementService {
   }
 
   /// Calculate report sources completion rates in memory
-  Map<String, Map<String, dynamic>> _calculateReportSourcesCompletionRates(List<Map<String, dynamic>> allReports) {
+  Map<String, Map<String, dynamic>> _calculateReportSourcesCompletionRates(
+      List<Map<String, dynamic>> allReports) {
     final Map<String, Map<String, dynamic>> sourceStats = {
       'unifier': {'total': 0, 'completed': 0, 'rate': 0.0},
       'check_list': {'total': 0, 'completed': 0, 'rate': 0.0},
@@ -858,12 +913,14 @@ class AdminManagementService {
     for (final report in allReports) {
       final source = report['report_source'] as String? ?? 'unifier';
       final status = report['status'] as String?;
-      
+
       if (sourceStats.containsKey(source)) {
-        sourceStats[source]!['total'] = (sourceStats[source]!['total'] as int) + 1;
-        
+        sourceStats[source]!['total'] =
+            (sourceStats[source]!['total'] as int) + 1;
+
         if (status == 'completed') {
-          sourceStats[source]!['completed'] = (sourceStats[source]!['completed'] as int) + 1;
+          sourceStats[source]!['completed'] =
+              (sourceStats[source]!['completed'] as int) + 1;
         }
       }
     }
@@ -877,5 +934,60 @@ class AdminManagementService {
     }
 
     return sourceStats;
+  }
+
+  /// Calculate report priority statistics in memory (emergency/routine)
+  Map<String, int> _calculateReportPriorityStats(
+      List<Map<String, dynamic>> allReports) {
+    final Map<String, int> priorityCounts = {
+      'emergency': 0,
+      'routine': 0,
+    };
+
+    for (final report in allReports) {
+      final priority = report['priority'] as String?;
+      if (priority != null &&
+          priorityCounts.containsKey(priority.toLowerCase())) {
+        priorityCounts[priority.toLowerCase()] =
+            (priorityCounts[priority.toLowerCase()] ?? 0) + 1;
+      }
+    }
+
+    return priorityCounts;
+  }
+
+  /// Calculate report priority completion rates in memory
+  Map<String, Map<String, dynamic>> _calculateReportPriorityCompletionRates(
+      List<Map<String, dynamic>> allReports) {
+    final Map<String, Map<String, dynamic>> priorityStats = {
+      'emergency': {'total': 0, 'completed': 0, 'rate': 0.0},
+      'routine': {'total': 0, 'completed': 0, 'rate': 0.0},
+    };
+
+    for (final report in allReports) {
+      final priority = report['priority'] as String?;
+      final status = report['status'] as String?;
+
+      if (priority != null &&
+          priorityStats.containsKey(priority.toLowerCase())) {
+        priorityStats[priority.toLowerCase()]!['total'] =
+            (priorityStats[priority.toLowerCase()]!['total'] as int) + 1;
+
+        if (status == 'completed') {
+          priorityStats[priority.toLowerCase()]!['completed'] =
+              (priorityStats[priority.toLowerCase()]!['completed'] as int) + 1;
+        }
+      }
+    }
+
+    // Calculate completion rates
+    for (final priority in priorityStats.keys) {
+      final total = priorityStats[priority]!['total'] as int;
+      final completed = priorityStats[priority]!['completed'] as int;
+      final rate = total > 0 ? (completed / total) : 0.0;
+      priorityStats[priority]!['rate'] = rate;
+    }
+
+    return priorityStats;
   }
 }

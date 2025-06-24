@@ -26,7 +26,8 @@ class SupervisorAnalyticsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final totalSupervisors = state.allSupervisors.length;
-    final topSupervisors = _getTopPerformingSupervisors(state.supervisorsWithStats, 3);
+    final topSupervisors =
+        _getTopPerformingSupervisors(state.supervisorsWithStats, 3);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -88,7 +89,7 @@ class SupervisorAnalyticsSection extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () => context.go('/supervisors-list'),
+        onTap: () => context.push('/supervisors-list'),
         borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -124,7 +125,8 @@ class SupervisorAnalyticsSection extends StatelessWidget {
     );
   }
 
-  Widget _buildSupervisorCards(BuildContext context, List<Map<String, dynamic>> topSupervisors) {
+  Widget _buildSupervisorCards(
+      BuildContext context, List<Map<String, dynamic>> topSupervisors) {
     if (state.supervisorsWithStats.isEmpty) {
       return _buildEmptyState();
     }
@@ -135,7 +137,7 @@ class SupervisorAnalyticsSection extends StatelessWidget {
       children: topSupervisors.asMap().entries.map((entry) {
         final index = entry.key;
         final supervisor = entry.value;
-        
+
         return _buildSupervisorCardWithBadge(supervisor, index);
       }).toList(),
     );
@@ -160,23 +162,24 @@ class SupervisorAnalyticsSection extends StatelessWidget {
     );
   }
 
-  Widget _buildSupervisorCardWithBadge(Map<String, dynamic> supervisor, int index) {
+  Widget _buildSupervisorCardWithBadge(
+      Map<String, dynamic> supervisor, int index) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
         ModernSupervisorCard(
           supervisor: supervisor,
-                     onInfoTap: () => onShowSupervisorDetails(supervisor),
-           onReportsTap: (supervisorId, username) =>
-               onNavigateToSupervisorReports(supervisorId, username),
-           onMaintenanceTap: (supervisorId, username) =>
-               onNavigateToSupervisorMaintenance(supervisorId, username),
-           onCompletedTap: (supervisorId, username) =>
-               onNavigateToSupervisorCompleted(supervisorId, username),
-           onLateReportsTap: (supervisorId, username) =>
-               onNavigateToSupervisorLateReports(supervisorId, username),
-           onLateCompletedTap: (supervisorId, username) =>
-               onNavigateToSupervisorLateCompleted(supervisorId, username),
+          onInfoTap: () => onShowSupervisorDetails(supervisor),
+          onReportsTap: (supervisorId, username) =>
+              onNavigateToSupervisorReports(supervisorId, username),
+          onMaintenanceTap: (supervisorId, username) =>
+              onNavigateToSupervisorMaintenance(supervisorId, username),
+          onCompletedTap: (supervisorId, username) =>
+              onNavigateToSupervisorCompleted(supervisorId, username),
+          onLateReportsTap: (supervisorId, username) =>
+              onNavigateToSupervisorLateReports(supervisorId, username),
+          onLateCompletedTap: (supervisorId, username) =>
+              onNavigateToSupervisorLateCompleted(supervisorId, username),
         ),
         _buildRankBadge(index),
       ],
@@ -227,34 +230,42 @@ class SupervisorAnalyticsSection extends StatelessWidget {
   List<Map<String, dynamic>> _getTopPerformingSupervisors(
       List<Map<String, dynamic>> supervisors, int count) {
     final sortedSupervisors = List<Map<String, dynamic>>.from(supervisors);
-    
+
     sortedSupervisors.sort((a, b) {
       final aStats = a['stats'] as Map<String, dynamic>;
       final bStats = b['stats'] as Map<String, dynamic>;
       final aCompletionRate = aStats['completion_rate'] as double? ?? 0.0;
       final bCompletionRate = bStats['completion_rate'] as double? ?? 0.0;
-      
+
       return bCompletionRate.compareTo(aCompletionRate);
     });
-    
+
     return sortedSupervisors.take(count).toList();
   }
 
   List<Color> _getRankColors(int index) {
     switch (index) {
-      case 0: return [const Color(0xFFFFD700), const Color(0xFFFFA500)]; // Gold
-      case 1: return [const Color(0xFFC0C0C0), const Color(0xFF808080)]; // Silver
-      case 2: return [const Color(0xFFCD7F32), const Color(0xFF8B4513)]; // Bronze
-      default: return [const Color(0xFF10B981), const Color(0xFF059669)];
+      case 0:
+        return [const Color(0xFFFFD700), const Color(0xFFFFA500)]; // Gold
+      case 1:
+        return [const Color(0xFFC0C0C0), const Color(0xFF808080)]; // Silver
+      case 2:
+        return [const Color(0xFFCD7F32), const Color(0xFF8B4513)]; // Bronze
+      default:
+        return [const Color(0xFF10B981), const Color(0xFF059669)];
     }
   }
 
   IconData _getRankIcon(int index) {
     switch (index) {
-      case 0: return Icons.emoji_events; // Trophy
-      case 1: return Icons.military_tech; // Medal
-      case 2: return Icons.star; // Star
-      default: return Icons.trending_up;
+      case 0:
+        return Icons.emoji_events; // Trophy
+      case 1:
+        return Icons.military_tech; // Medal
+      case 2:
+        return Icons.star; // Star
+      default:
+        return Icons.trending_up;
     }
   }
-} 
+}

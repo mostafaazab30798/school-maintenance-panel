@@ -38,3 +38,16 @@ class SupervisorError extends SupervisorState {
   @override
   List<Object?> get props => [message];
 }
+
+class SupervisorTechnicianUpdating extends SupervisorState {
+  final String supervisorId;
+  final String operation; // 'add', 'remove', 'update'
+
+  const SupervisorTechnicianUpdating({
+    required this.supervisorId,
+    required this.operation,
+  });
+
+  @override
+  List<Object?> get props => [supervisorId, operation];
+}

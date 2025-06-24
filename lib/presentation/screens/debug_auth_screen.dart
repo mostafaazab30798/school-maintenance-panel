@@ -166,6 +166,7 @@ class _DebugAuthScreenState extends State<DebugAuthScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: true,
         title: const Text('Debug Authentication'),
         backgroundColor: Colors.blue,
         foregroundColor: Colors.white,
