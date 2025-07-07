@@ -14,6 +14,7 @@ class TechnicianManagementDialog extends StatefulWidget {
   final Function(String supervisorId, List<Technician> techniciansDetailed)?
       onSaveDetailed;
   final VoidCallback? onTechniciansUpdated;
+  final bool isReadOnly;
 
   const TechnicianManagementDialog({
     super.key,
@@ -21,6 +22,7 @@ class TechnicianManagementDialog extends StatefulWidget {
     this.onSave,
     this.onSaveDetailed,
     this.onTechniciansUpdated,
+    this.isReadOnly = false,
   });
 
   @override
@@ -104,7 +106,7 @@ class _TechnicianManagementDialogState
     return Dialog(
       child: Container(
         width: 500,
-        constraints: const BoxConstraints(maxHeight: 500),
+        constraints: const BoxConstraints(maxHeight: 600),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           color: isDark ? const Color(0xFF1F2937) : Colors.white,
@@ -142,7 +144,7 @@ class _TechnicianManagementDialogState
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'إدارة الفنيين - ${widget.supervisor.username}',
+                    '${widget.isReadOnly ? 'عرض الفنيين' : 'إدارة الفنيين'} - ${widget.supervisor.username}',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -171,38 +173,46 @@ class _TechnicianManagementDialogState
             ),
 
             // Content
-            SizedBox(
-              height: 360, // Fixed content height
+            Flexible(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Add/Edit Form
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    child: _buildForm(isDark),
-                  ),
-
-                  // Divider
-                  Divider(
-                    height: 1,
-                    color: isDark
-                        ? const Color(0xFF374151)
-                        : const Color(0xFFE5E7EB),
-                  ),
+                  // Add/Edit Form - Only show if not read-only
+                  if (!widget.isReadOnly) ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      child: _buildForm(isDark),
+                    ),
+                    // Divider
+                    Divider(
+                      height: 1,
+                      color: isDark
+                          ? const Color(0xFF374151)
+                          : const Color(0xFFE5E7EB),
+                    ),
+                  ],
 
                   // Technicians List
-                  Expanded(
-                    child: _technicians.isEmpty
-                        ? _buildEmptyState(isDark)
-                        : ListView.builder(
-                            padding: const EdgeInsets.all(8),
-                            itemCount: _technicians.length,
-                            itemBuilder: (context, index) {
-                              final technician = _technicians[index];
-                              final isEditing = _editingIndex == index;
-                              return _buildTechnicianTile(
-                                  technician, index, isEditing, isDark);
-                            },
-                          ),
+                  Flexible(
+                    child: Container(
+                      constraints: BoxConstraints(
+                        maxHeight: widget.isReadOnly ? 400 : 300,
+                        minHeight: 200,
+                      ),
+                      child: _technicians.isEmpty
+                          ? _buildEmptyState(isDark)
+                          : ListView.builder(
+                              padding: const EdgeInsets.all(8),
+                              itemCount: _technicians.length,
+                              itemBuilder: (context, index) {
+                                final technician = _technicians[index];
+                                final isEditing = !widget.isReadOnly &&
+                                    _editingIndex == index;
+                                return _buildTechnicianTile(
+                                    technician, index, isEditing, isDark);
+                              },
+                            ),
+                    ),
                   ),
                 ],
               ),
@@ -226,49 +236,65 @@ class _TechnicianManagementDialogState
                   ),
                 ),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: Text(
-                        'إلغاء',
-                        style: TextStyle(
-                          color: isDark
-                              ? Colors.white.withOpacity(0.7)
-                              : const Color(0xFF6B7280),
+              child: widget.isReadOnly
+                  ? Center(
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text(
+                          'إغلاق',
+                          style: TextStyle(
+                            color:
+                                isDark ? Colors.white : const Color(0xFF374151),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed:
-                          hasChanges && !_isSaving ? _saveTechnicians : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: hasChanges
-                            ? const Color(0xFF10B981)
-                            : const Color(0xFF9CA3AF),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                      ),
-                      child: _isSaving
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
+                    )
+                  : Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: Text(
+                              'إلغاء',
+                              style: TextStyle(
+                                color: isDark
+                                    ? Colors.white.withOpacity(0.7)
+                                    : const Color(0xFF6B7280),
                               ),
-                            )
-                          : const Text('حفظ'),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: hasChanges && !_isSaving
+                                ? _saveTechnicians
+                                : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: hasChanges
+                                  ? const Color(0xFF10B981)
+                                  : const Color(0xFF9CA3AF),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                            child: _isSaving
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('حفظ'),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
-              ),
             ),
           ],
         ),
@@ -617,36 +643,37 @@ class _TechnicianManagementDialogState
             ),
           ),
 
-          // Actions
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                onPressed: () => _startEdit(technician, index),
-                icon: Icon(
-                  Icons.edit,
-                  size: 16,
-                  color: isEditing
-                      ? const Color(0xFF8B5CF6)
-                      : (isDark
-                          ? Colors.white.withOpacity(0.6)
-                          : const Color(0xFF6B7280)),
+          // Actions - Only show if not read-only
+          if (!widget.isReadOnly)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  onPressed: () => _startEdit(technician, index),
+                  icon: Icon(
+                    Icons.edit,
+                    size: 16,
+                    color: isEditing
+                        ? const Color(0xFF8B5CF6)
+                        : (isDark
+                            ? Colors.white.withOpacity(0.6)
+                            : const Color(0xFF6B7280)),
+                  ),
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(),
                 ),
-                padding: const EdgeInsets.all(4),
-                constraints: const BoxConstraints(),
-              ),
-              IconButton(
-                onPressed: () => _removeTechnician(technician, index),
-                icon: const Icon(
-                  Icons.delete_outline,
-                  size: 16,
-                  color: Color(0xFFEF4444),
+                IconButton(
+                  onPressed: () => _removeTechnician(technician, index),
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    size: 16,
+                    color: Color(0xFFEF4444),
+                  ),
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(),
                 ),
-                padding: const EdgeInsets.all(4),
-                constraints: const BoxConstraints(),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -666,7 +693,7 @@ class _TechnicianManagementDialogState
           ),
           const SizedBox(height: 8),
           Text(
-            'لا يوجد فنيون',
+            widget.isReadOnly ? 'لا يوجد فنيون مسجلون' : 'لا يوجد فنيون',
             style: TextStyle(
               fontSize: 14,
               color: isDark
@@ -674,6 +701,18 @@ class _TechnicianManagementDialogState
                   : const Color(0xFF6B7280),
             ),
           ),
+          if (widget.isReadOnly) ...[
+            const SizedBox(height: 4),
+            Text(
+              'لم يتم تعيين أي فنيين لهذا المشرف',
+              style: TextStyle(
+                fontSize: 12,
+                color: isDark
+                    ? Colors.white.withOpacity(0.4)
+                    : const Color(0xFF9CA3AF),
+              ),
+            ),
+          ],
         ],
       ),
     );

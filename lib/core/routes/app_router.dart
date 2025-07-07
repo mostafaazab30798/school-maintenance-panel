@@ -2,15 +2,21 @@ import 'package:admin_panel/data/repositories/multi_reports_repository.dart';
 import 'package:admin_panel/presentation/screens/report_screen.dart';
 import 'package:admin_panel/presentation/screens/all_reports_screen.dart';
 import 'package:admin_panel/presentation/screens/all_maintenance_screen.dart';
+import 'package:admin_panel/presentation/screens/count_inventory_screen.dart';
+import 'package:admin_panel/presentation/screens/damage_inventory_screen.dart';
+import 'package:admin_panel/presentation/screens/damage_count_detail_screen.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/repositories/report_repository.dart';
 import '../../data/repositories/maintenance_repository.dart';
+import '../../data/repositories/maintenance_count_repository.dart';
+import '../../data/repositories/damage_count_repository.dart';
 import '../../data/repositories/supervisor_repository.dart';
 import '../../logic/blocs/maintenance_reports/maintenance_bloc.dart';
 import '../../logic/blocs/maintenance_reports/maintenance_view_bloc.dart';
 import '../../logic/blocs/maintenance_reports/maintenance_view_event.dart';
+import '../../logic/blocs/maintenance_counts/maintenance_counts_bloc.dart';
 import '../../logic/blocs/multi_reports/multi_reports_bloc.dart';
 import '../../logic/blocs/reports/report_bloc.dart';
 import '../../logic/blocs/reports/report_event.dart';
@@ -34,6 +40,9 @@ import '../../presentation/screens/admins_list_screen.dart';
 import '../../presentation/screens/admin_progress_screen.dart';
 import '../../presentation/screens/supervisors_list_screen.dart';
 import '../../presentation/screens/admins_list_screen.dart';
+import '../../presentation/screens/schools_list_screen.dart';
+import '../../presentation/screens/school_details_screen.dart';
+import '../../presentation/screens/schools_with_achievements_screen.dart';
 
 import '../../core/services/admin_service.dart';
 import '../../core/services/admin_management_service.dart';
@@ -61,7 +70,6 @@ final GoRouter appRouter = GoRouter(
       name: 'super-admin',
       builder: (context, state) => const SuperAdminDashboardScreen(),
     ),
-
     GoRoute(
       path: '/super-admin-progress',
       name: 'super-admin-progress',
@@ -98,6 +106,10 @@ final GoRouter appRouter = GoRouter(
           reportRepository: ReportRepository(Supabase.instance.client),
           maintenanceRepository:
               MaintenanceReportRepository(Supabase.instance.client),
+          maintenanceCountRepository:
+              MaintenanceCountRepository(Supabase.instance.client),
+          damageCountRepository:
+              DamageCountRepository(Supabase.instance.client),
           supervisorRepository: SupervisorRepository(Supabase.instance.client),
           adminService: AdminService(Supabase.instance.client),
         )..add(const LoadDashboardData()),
@@ -113,6 +125,7 @@ final GoRouter appRouter = GoRouter(
         final priority = state.uri.queryParameters['priority'];
         final supervisorId = state.uri.queryParameters['supervisorId'];
         final type = state.uri.queryParameters['type'];
+        final schoolName = state.uri.queryParameters['schoolName'];
 
         return MultiBlocProvider(
           providers: [
@@ -124,7 +137,8 @@ final GoRouter appRouter = GoRouter(
                   supervisorId: supervisorId,
                   status: status,
                   priority: priority,
-                  type: type)),
+                  type: type,
+                  schoolName: schoolName)),
             ),
           ],
           child: ReportScreen(
@@ -133,6 +147,7 @@ final GoRouter appRouter = GoRouter(
             status: status,
             priority: priority,
             type: type,
+            schoolName: schoolName,
           ),
         );
       },
@@ -223,6 +238,51 @@ final GoRouter appRouter = GoRouter(
       },
     ),
     GoRoute(
+      path: '/count-inventory',
+      name: 'count-inventory',
+      builder: (context, state) => BlocProvider(
+        create: (_) => MaintenanceCountsBloc(
+          repository: MaintenanceCountRepository(Supabase.instance.client),
+          damageRepository: DamageCountRepository(Supabase.instance.client),
+          adminService: AdminService(Supabase.instance.client),
+        ),
+        child: const CountInventoryScreen(),
+      ),
+    ),
+    GoRoute(
+      path: '/damage-inventory',
+      name: 'damage-inventory',
+      builder: (context, state) {
+        final schoolId = state.uri.queryParameters['schoolId'];
+        final schoolName = state.uri.queryParameters['schoolName'];
+
+        // If schoolId is provided, go directly to damage count detail screen
+        if (schoolId != null && schoolName != null) {
+          return BlocProvider(
+            create: (_) => MaintenanceCountsBloc(
+              repository: MaintenanceCountRepository(Supabase.instance.client),
+              damageRepository: DamageCountRepository(Supabase.instance.client),
+              adminService: AdminService(Supabase.instance.client),
+            ),
+            child: DamageCountDetailScreen(
+              schoolId: schoolId,
+              schoolName: schoolName,
+            ),
+          );
+        }
+
+        // Otherwise, show the general damage inventory screen
+        return BlocProvider(
+          create: (_) => MaintenanceCountsBloc(
+            repository: MaintenanceCountRepository(Supabase.instance.client),
+            damageRepository: DamageCountRepository(Supabase.instance.client),
+            adminService: AdminService(Supabase.instance.client),
+          ),
+          child: const DamageInventoryScreen(),
+        );
+      },
+    ),
+    GoRoute(
       path: '/supervisors',
       name: 'supervisors',
       builder: (context, state) => const SupervisorListScreen(),
@@ -266,6 +326,24 @@ final GoRouter appRouter = GoRouter(
           supervisorId: supervisorId,
           supervisorName: supervisorName,
         );
+      },
+    ),
+    GoRoute(
+      path: '/schools',
+      name: 'schools',
+      builder: (context, state) => const SchoolsListScreen(),
+    ),
+    GoRoute(
+      path: '/schools-with-achievements',
+      name: 'schools-with-achievements',
+      builder: (context, state) => const SchoolsWithAchievementsScreen(),
+    ),
+    GoRoute(
+      path: '/school-details/:schoolId',
+      name: 'school-details',
+      builder: (context, state) {
+        final schoolId = state.pathParameters['schoolId'] ?? '';
+        return SchoolDetailsScreen(schoolId: schoolId);
       },
     ),
   ],

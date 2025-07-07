@@ -4,6 +4,8 @@ import '../super_admin/modern_supervisor_card.dart';
 import '../../../data/models/admin.dart';
 import '../super_admin/dialogs/supervisor_detail_dialog.dart';
 import '../super_admin/dialogs/technician_management_dialog.dart';
+import '../super_admin/dialogs/schools_list_dialog.dart';
+import '../super_admin/dialogs/school_assignment_dialog.dart';
 import '../../../data/models/supervisor.dart';
 import '../../../logic/blocs/super_admin/super_admin_bloc.dart';
 import '../../../logic/blocs/super_admin/super_admin_event.dart';
@@ -1026,6 +1028,102 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
 
                     const SizedBox(width: 12),
 
+                    // School Assignment Button
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        color: const Color(0xFF3B82F6).withOpacity(0.1),
+                        border: Border.all(
+                          color: const Color(0xFF3B82F6).withOpacity(0.3),
+                          width: 1,
+                        ),
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () =>
+                              _openSchoolAssignment(context, supervisor),
+                          borderRadius: BorderRadius.circular(8),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 6),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.school_rounded,
+                                  size: 14,
+                                  color: Color(0xFF3B82F6),
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'مدارس',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF3B82F6),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 8),
+
+                    // Schools Small Badge
+                    GestureDetector(
+                      onTap: () => _showSchoolsList(context, supervisor),
+                      child: Stack(
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF10B981).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.school_rounded,
+                              size: 16,
+                              color: Color(0xFF10B981),
+                            ),
+                          ),
+                          if (_getSchoolCount(supervisor) > 0)
+                            Positioned(
+                              top: -2,
+                              right: -2,
+                              child: Container(
+                                constraints: const BoxConstraints(minWidth: 18),
+                                height: 18,
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF10B981),
+                                  borderRadius: BorderRadius.circular(9),
+                                  border:
+                                      Border.all(color: Colors.white, width: 1),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '${_getSchoolCount(supervisor)}',
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(width: 8),
+
                     // Technician Management Button
                     Container(
                       decoration: BoxDecoration(
@@ -1278,6 +1376,18 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
     }
   }
 
+  void _openSchoolAssignment(
+      BuildContext context, Map<String, dynamic> supervisor) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => BlocProvider.value(
+        value: context.read<SuperAdminBloc>(),
+        child: SchoolAssignmentDialog(supervisor: supervisor),
+      ),
+    );
+  }
+
   int _getTechnicianCount(Map<String, dynamic> supervisor) {
     final techniciansDetailed = supervisor['technicians_detailed'];
     if (techniciansDetailed is List) {
@@ -1294,5 +1404,29 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
       }
     }
     return 0;
+  }
+
+  int _getSchoolCount(Map<String, dynamic> supervisor) {
+    // For now, return a test count. This will be replaced with actual data
+    // when the backend includes school assignments in supervisor data
+    final supervisorId = supervisor['id'] as String? ?? '';
+    // Temporary test data - shows random counts for demonstration
+    final username = supervisor['username'] as String? ?? '';
+    return username.length % 5 +
+        1; // This gives a count between 1-5 for testing
+  }
+
+  void _showSchoolsList(BuildContext context, Map<String, dynamic> supervisor) {
+    // Open read-only schools list with search functionality
+    final supervisorId = supervisor['id'] as String? ?? '';
+    final username = supervisor['username'] as String? ?? 'غير محدد';
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => SchoolsListDialog(
+        supervisorId: supervisorId,
+        supervisorName: username,
+      ),
+    );
   }
 }

@@ -37,17 +37,16 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
 
   Future<void> _onFetchReports(
       FetchReports event, Emitter<ReportState> emit) async {
-    
     // 🚀 Create cache key based on filters
     final cacheKey = _generateCacheKey(event);
-    
+
     // 🚀 Check cache first if not forcing refresh (instant loading like dashboard)
     if (!event.forceRefresh) {
       final cachedReports = _cacheService.getCached<List<Report>>(cacheKey);
       if (cachedReports != null) {
         // ⚡ Emit cached data first for instant loading
         emit(ReportLoaded(cachedReports));
-        
+
         // If cache is near expiry, refresh in background
         if (_cacheService.isNearExpiry(cacheKey)) {
           _refreshReportsInBackground(event, emit);
@@ -108,6 +107,7 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
                   type: event.type,
                   status: event.status,
                   priority: event.priority,
+                  schoolName: event.schoolName,
                   forceRefresh: event.forceRefresh,
                 );
               },
@@ -117,6 +117,7 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
                   type: event.type,
                   status: event.status,
                   priority: event.priority,
+                  schoolName: event.schoolName,
                   forceRefresh: event.forceRefresh,
                 );
               },
@@ -140,6 +141,7 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
               type: event.type,
               status: event.status,
               priority: event.priority,
+              schoolName: event.schoolName,
               forceRefresh: event.forceRefresh,
             );
           }
@@ -151,7 +153,8 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
       );
 
       totalStopwatch.stop();
-      print('🐛 DEBUG: Total ReportBloc operation took ${totalStopwatch.elapsedMilliseconds}ms');
+      print(
+          '🐛 DEBUG: Total ReportBloc operation took ${totalStopwatch.elapsedMilliseconds}ms');
 
       // 🚀 Cache the fresh data
       _cacheService.setCached(cacheKey, reports);
@@ -184,6 +187,7 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
     if (event.type != null) parts.add('type_${event.type}');
     if (event.status != null) parts.add('status_${event.status}');
     if (event.priority != null) parts.add('priority_${event.priority}');
+    if (event.schoolName != null) parts.add('school_${event.schoolName}');
     return parts.join('_');
   }
 
@@ -192,7 +196,7 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
       FetchReports event, Emitter<ReportState> emit) async {
     try {
       print('🔄 Background refresh started for reports...');
-      
+
       final reports =
           await ErrorHandlingService().executeWithResilience<List<Report>>(
         'ReportBloc:BackgroundRefresh',
@@ -203,13 +207,16 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
                 type: event.type,
                 status: event.status,
                 priority: event.priority,
+                schoolName: event.schoolName,
                 forceRefresh: true,
               ),
-              fetchFilteredData: (supervisorIds) => reportRepository.fetchReports(
+              fetchFilteredData: (supervisorIds) =>
+                  reportRepository.fetchReports(
                 supervisorIds: supervisorIds,
                 type: event.type,
                 status: event.status,
                 priority: event.priority,
+                schoolName: event.schoolName,
                 forceRefresh: true,
               ),
               debugContext: 'Reports',
@@ -221,6 +228,7 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
               type: event.type,
               status: event.status,
               priority: event.priority,
+              schoolName: event.schoolName,
               forceRefresh: true,
             );
           }

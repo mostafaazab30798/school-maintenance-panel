@@ -36,6 +36,7 @@ class ReportRepository extends BaseRepository<Report> {
     String? type,
     String? status,
     String? priority,
+    String? schoolName,
     bool forceRefresh = false,
     int? limit,
   }) async {
@@ -56,6 +57,7 @@ class ReportRepository extends BaseRepository<Report> {
       debugPrint('  type: $type');
       debugPrint('  status: $status');
       debugPrint('  priority: $priority');
+      debugPrint('  schoolName: $schoolName');
       debugPrint('  forceRefresh: $forceRefresh');
       debugPrint('  limit: $limit');
     }
@@ -97,6 +99,12 @@ class ReportRepository extends BaseRepository<Report> {
             query = query.eq('priority', priority);
             if (kDebugMode) {
               debugPrint('🔍 Added priority filter: $priority');
+            }
+          }
+          if (schoolName != null) {
+            query = query.eq('school_name', schoolName);
+            if (kDebugMode) {
+              debugPrint('🔍 Added schoolName filter: $schoolName');
             }
           }
 
@@ -143,6 +151,7 @@ class ReportRepository extends BaseRepository<Report> {
           'type': type,
           'status': status,
           'priority': priority,
+          'schoolName': schoolName,
           'limit': limit,
           'userId': client.auth.currentUser
               ?.id, // Add current user ID to prevent cache collision
@@ -179,6 +188,9 @@ class ReportRepository extends BaseRepository<Report> {
             if (priority != null) {
               query = query.eq('priority', priority);
             }
+            if (schoolName != null) {
+              query = query.eq('school_name', schoolName);
+            }
 
             query = query.order('created_at', ascending: false);
 
@@ -199,6 +211,7 @@ class ReportRepository extends BaseRepository<Report> {
             'type': type,
             'status': status,
             'priority': priority,
+            'schoolName': schoolName,
             'limit': limit,
             'userId': client.auth.currentUser?.id,
           },

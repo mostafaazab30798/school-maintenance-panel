@@ -7,6 +7,7 @@ import '../../../../core/services/bloc_manager.dart';
 import '../../saudi_plate.dart';
 import '../../common/esc_dismissible_dialog.dart';
 import 'technician_management_dialog.dart';
+import 'school_assignment_dialog.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class SupervisorDetailDialog extends StatelessWidget {
@@ -627,22 +628,38 @@ class SupervisorDetailDialog extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Technician Management Button
+          // School Assignment Button
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () => _openTechnicianManagement(context),
-              icon: const Icon(Icons.build_circle, size: 16),
-              label: Text('إدارة الفنيين (${_getTechnicianCount()})',
-                  style: const TextStyle(fontSize: 12)),
+              onPressed: () => _openSchoolAssignment(context),
+              icon: const Icon(Icons.school_rounded, size: 16),
+              label:
+                  const Text('تعيين المدارس', style: TextStyle(fontSize: 12)),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                backgroundColor: const Color(0xFF10B981),
+                backgroundColor: const Color(0xFF3B82F6),
                 foregroundColor: Colors.white,
               ),
             ),
           ),
           const SizedBox(height: 8),
+          // // Technician Management Button
+          // SizedBox(
+          //   width: double.infinity,
+          //   child: ElevatedButton.icon(
+          //     onPressed: () => _openTechnicianManagement(context),
+          //     icon: const Icon(Icons.build_circle, size: 16),
+          //     label: Text('إدارة الفنيين (${_getTechnicianCount()})',
+          //         style: const TextStyle(fontSize: 12)),
+          //     style: ElevatedButton.styleFrom(
+          //       padding: const EdgeInsets.symmetric(vertical: 8),
+          //       backgroundColor: const Color(0xFF10B981),
+          //       foregroundColor: Colors.white,
+          //     ),
+          //   ),
+          // ),
+          // const SizedBox(height: 8),
           // Close Button
           SizedBox(
             width: double.infinity,
@@ -726,6 +743,17 @@ class SupervisorDetailDialog extends StatelessWidget {
         );
       }
     }
+  }
+
+  void _openSchoolAssignment(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => BlocProvider.value(
+        value: context.read<SuperAdminBloc>(),
+        child: SchoolAssignmentDialog(supervisor: supervisor),
+      ),
+    );
   }
 
   int _getTechnicianCount() {

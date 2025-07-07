@@ -8,6 +8,7 @@ import '../../logic/blocs/maintenance_reports/maintenance_state.dart';
 import '../../logic/blocs/maintenance_form/maintenance_form_bloc.dart';
 import '../../logic/blocs/maintenance_form/maintenance_form_event.dart';
 import '../../logic/blocs/maintenance_form/maintenance_form_state.dart';
+import '../widgets/common/searchable_school_dropdown.dart';
 
 class AddMultipleMaintenanceScreen extends StatelessWidget {
   final String supervisorId;
@@ -537,49 +538,23 @@ class _MaintenanceFormContentState extends State<_MaintenanceFormContent> {
   }
 
   Widget _buildSchoolNameField(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-        border: Border.all(
-          color: isDark ? const Color(0xFF475569) : const Color(0xFFE2E8F0),
-          width: 1,
-        ),
-      ),
-      child: TextFormField(
-        decoration: InputDecoration(
-          labelText: 'اسم المدرسة',
-          labelStyle: TextStyle(
-            fontSize: 12,
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-            fontWeight: FontWeight.w500,
-          ),
-          prefixIcon: const Icon(
-            Icons.school_rounded,
-            color: Color(0xFF10B981),
-            size: 16,
-          ),
-          border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        ),
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
-        ),
-        controller: _schoolNameController,
-        onChanged: (value) =>
-            context.read<MaintenanceFormBloc>().add(SchoolNameChanged(value)),
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'يرجى إدخال اسم المدرسة';
-          }
-          return null;
-        },
-      ),
+    return BlocBuilder<MaintenanceFormBloc, MaintenanceFormState>(
+      builder: (context, state) {
+        return SearchableSchoolDropdown(
+          supervisorId: widget.supervisorId,
+          selectedSchoolName: state.schoolName,
+          hintText: 'ابحث واختر المدرسة...',
+          errorText: state.schoolName == null || state.schoolName!.isEmpty
+              ? 'يرجى اختيار المدرسة'
+              : null,
+          onSchoolSelected: (schoolName) {
+            print('🏫 Maintenance form received school: $schoolName');
+            context
+                .read<MaintenanceFormBloc>()
+                .add(SchoolNameChanged(schoolName));
+          },
+        );
+      },
     );
   }
 

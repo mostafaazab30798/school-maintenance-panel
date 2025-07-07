@@ -4,16 +4,21 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'data/repositories/report_repository.dart';
 import 'data/repositories/supervisor_repository.dart';
 import 'data/repositories/maintenance_repository.dart';
+import 'data/repositories/maintenance_count_repository.dart';
+import 'data/repositories/damage_count_repository.dart';
 import 'logic/blocs/reports/report_bloc.dart';
 import 'logic/blocs/reports/report_event.dart';
 import 'logic/blocs/dashboard/dashboard_bloc.dart';
 import 'logic/blocs/dashboard/dashboard_event.dart';
 import 'logic/blocs/supervisors/supervisor_bloc.dart';
 import 'logic/blocs/supervisors/supervisor_event.dart';
+import 'logic/blocs/super_admin/super_admin_bloc.dart';
+import 'logic/blocs/super_admin/super_admin_event.dart';
 import 'logic/cubits/theme_cubit.dart';
 import 'core/constants/app_themes.dart';
 import 'core/routes/app_router.dart';
 import 'core/services/admin_service.dart';
+import 'core/services/admin_management_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,7 +39,10 @@ class MyApp extends StatelessWidget {
     final reportRepo = ReportRepository(supabase);
     final supervisorRepo = SupervisorRepository(supabase);
     final maintenanceRepo = MaintenanceReportRepository(supabase);
+    final maintenanceCountRepo = MaintenanceCountRepository(supabase);
+    final damageCountRepo = DamageCountRepository(supabase);
     final adminService = AdminService(supabase);
+    final adminManagementService = AdminManagementService(supabase);
 
     return MultiRepositoryProvider(
       providers: [
@@ -42,7 +50,12 @@ class MyApp extends StatelessWidget {
         RepositoryProvider<SupervisorRepository>.value(value: supervisorRepo),
         RepositoryProvider<MaintenanceReportRepository>.value(
             value: maintenanceRepo),
+        RepositoryProvider<MaintenanceCountRepository>.value(
+            value: maintenanceCountRepo),
+        RepositoryProvider<DamageCountRepository>.value(value: damageCountRepo),
         RepositoryProvider<AdminService>.value(value: adminService),
+        RepositoryProvider<AdminManagementService>.value(
+            value: adminManagementService),
       ],
       child: MultiBlocProvider(
         providers: [
@@ -58,12 +71,22 @@ class MyApp extends StatelessWidget {
               reportRepository: reportRepo,
               supervisorRepository: supervisorRepo,
               maintenanceRepository: maintenanceRepo,
+              maintenanceCountRepository: maintenanceCountRepo,
+              damageCountRepository: damageCountRepo,
               adminService: adminService,
             )..add(LoadDashboardData()),
           ),
           BlocProvider<SupervisorBloc>(
             create: (_) => SupervisorBloc(supervisorRepo, adminService)
               ..add(const SupervisorsStarted()),
+          ),
+          BlocProvider<SuperAdminBloc>(
+            create: (_) => SuperAdminBloc(
+              adminManagementService,
+              supervisorRepo,
+              reportRepo,
+              maintenanceRepo,
+            )..add(LoadSuperAdminData()),
           ),
         ],
         child: BlocBuilder<ThemeCubit, ThemeMode>(

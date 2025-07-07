@@ -17,6 +17,7 @@ class Supervisor extends Equatable {
   final List<String> technicians; // Legacy field for simple technicians
   final List<Technician>
       techniciansDetailed; // Enhanced field for detailed technicians
+  final int? schoolsCount; // Number of schools assigned to this supervisor
 
   const Supervisor({
     required this.id,
@@ -33,6 +34,7 @@ class Supervisor extends Equatable {
     this.adminId,
     this.technicians = const [], // Default empty list
     this.techniciansDetailed = const [], // Default empty list
+    this.schoolsCount,
   });
 
   factory Supervisor.fromMap(Map<String, dynamic> map) {
@@ -54,6 +56,7 @@ class Supervisor extends Equatable {
       technicians: _parseTechnicians(map['technicians']),
       techniciansDetailed:
           _parseTechniciansDetailed(map['technicians_detailed']),
+      schoolsCount: map['schools_count'] as int?,
     );
   }
 
@@ -98,6 +101,7 @@ class Supervisor extends Equatable {
       'technicians': technicians,
       'technicians_detailed':
           techniciansDetailed.map((t) => t.toMap()).toList(),
+      if (schoolsCount != null) 'schools_count': schoolsCount,
     };
   }
 
@@ -117,6 +121,7 @@ class Supervisor extends Equatable {
     String? adminId,
     List<String>? technicians,
     List<Technician>? techniciansDetailed,
+    int? schoolsCount,
   }) {
     return Supervisor(
       id: id ?? this.id,
@@ -133,6 +138,7 @@ class Supervisor extends Equatable {
       adminId: adminId ?? this.adminId,
       technicians: technicians ?? this.technicians,
       techniciansDetailed: techniciansDetailed ?? this.techniciansDetailed,
+      schoolsCount: schoolsCount ?? this.schoolsCount,
     );
   }
 
@@ -166,5 +172,6 @@ class Supervisor extends Equatable {
         adminId,
         technicians, // Add to props for equality comparison
         techniciansDetailed, // Add to props for equality comparison
+        schoolsCount, // Add to props for equality comparison
       ];
 }

@@ -361,12 +361,20 @@ class AdminManagementService {
       final supervisorId = supervisor['id'] as String;
       final stats = await getSupervisorStats(supervisorId);
 
+      // Get school count for this supervisor
+      final schoolsResponse = await _client
+          .from('supervisor_schools')
+          .select('id')
+          .eq('supervisor_id', supervisorId);
+      final schoolsCount = schoolsResponse.length;
+
       supervisorsWithStats.add({
         'id': supervisorId,
         'username': supervisor['username'],
         'email': supervisor['email'],
         'admin_id': supervisor['admin_id'],
         'technicians_detailed': supervisor['technicians_detailed'] ?? [],
+        'schools_count': schoolsCount,
         'stats': stats,
       });
     }
@@ -552,11 +560,9 @@ class AdminManagementService {
     final stopwatch = Stopwatch()..start();
 
     try {
-      // Step 1: Fetch all base data in parallel (no dependencies between these)
-      print('🔄 Fetching base data in parallel...');
+      // Step 1: Fetch all base data in parallel (reduces total query time)
       final baseDataFutures = await Future.wait<dynamic>([
-        // Basic entities
-        getAllAdmins(),
+        getAllAdmins(), // We need admin objects, not just raw data
         _client
             .from('supervisors')
             .select(
@@ -568,16 +574,20 @@ class AdminManagementService {
             .from('reports')
             .select('id, type, status, report_source, supervisor_id, priority'),
         _client.from('maintenance_reports').select('id, status, supervisor_id'),
+
+        // All supervisor school assignments
+        _client.from('supervisor_schools').select('supervisor_id, school_id'),
       ]);
 
       final admins = baseDataFutures[0] as List<Admin>;
       final supervisorsRaw = baseDataFutures[1] as List<Map<String, dynamic>>;
       final allReports = baseDataFutures[2] as List<Map<String, dynamic>>;
       final allMaintenance = baseDataFutures[3] as List<Map<String, dynamic>>;
+      final allSchools = baseDataFutures[4] as List<Map<String, dynamic>>;
 
       print('🔄 Base data fetched in ${stopwatch.elapsedMilliseconds}ms');
       print(
-          '📊 Data summary: ${admins.length} admins, ${supervisorsRaw.length} supervisors, ${allReports.length} reports, ${allMaintenance.length} maintenance');
+          '📊 Data summary: ${admins.length} admins, ${supervisorsRaw.length} supervisors, ${allReports.length} reports, ${allMaintenance.length} maintenance, ${allSchools.length} schools');
 
       // Step 2: Process all statistics in memory (much faster than separate DB calls)
       print('🔄 Processing statistics in memory...');
@@ -596,7 +606,7 @@ class AdminManagementService {
 
       // Calculate supervisor stats in memory
       final supervisorsWithStats = _calculateSupervisorsWithStatsInMemory(
-          supervisorsRaw, allReports, allMaintenance);
+          supervisorsRaw, allReports, allMaintenance, allSchools);
 
       // Calculate admin stats in memory
       final adminStats = _calculateAdminStatsInMemory(
@@ -661,6 +671,7 @@ class AdminManagementService {
     List<Map<String, dynamic>> supervisors,
     List<Map<String, dynamic>> allReports,
     List<Map<String, dynamic>> allMaintenance,
+    List<Map<String, dynamic>> allSchools,
   ) {
     return supervisors.map((supervisor) {
       final supervisorId = supervisor['id'] as String;
@@ -687,6 +698,11 @@ class AdminManagementService {
       final completedWork = completedReports + completedMaintenance;
       final completionRate = totalWork > 0 ? (completedWork / totalWork) : 0.0;
 
+      // Get school count for this supervisor
+      final schoolsResponse =
+          allSchools.where((s) => s['supervisor_id'] == supervisorId).toList();
+      final schoolsCount = schoolsResponse.length;
+
       return {
         'id': supervisorId,
         'username': supervisor['username'],
@@ -694,6 +710,7 @@ class AdminManagementService {
         'admin_id': supervisor['admin_id'],
         'technicians_detailed': supervisor['technicians_detailed'] ??
             [], // Include detailed technicians field
+        'schools_count': schoolsCount,
         'stats': {
           'reports': supervisorReports.length,
           'maintenance': supervisorMaintenance.length,

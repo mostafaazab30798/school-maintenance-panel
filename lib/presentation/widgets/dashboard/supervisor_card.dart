@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:ui';
+import '../../../data/models/supervisor.dart';
+import '../super_admin/dialogs/schools_list_dialog.dart';
+import '../super_admin/dialogs/technician_management_dialog.dart';
+import '../common/esc_dismissible_dialog.dart';
 
 class SupervisorCard extends StatefulWidget {
   final String name;
@@ -12,6 +16,9 @@ class SupervisorCard extends StatefulWidget {
   final int completedCount;
   final String supervisorId;
   final int completedMaintenanceCount;
+  final int techniciansCount;
+  final int schoolsCount;
+  final Supervisor? supervisor; // Add supervisor object for badge functionality
 
   /// The completion rate for this supervisor's reports (0.0 to 1.0)
   final double completionRate;
@@ -28,6 +35,9 @@ class SupervisorCard extends StatefulWidget {
     required this.supervisorId,
     required this.completionRate,
     required this.completedMaintenanceCount,
+    this.techniciansCount = 0,
+    this.schoolsCount = 0,
+    this.supervisor,
   });
 
   @override
@@ -98,23 +108,23 @@ class _SupervisorCardState extends State<SupervisorCard>
             scale: _scaleAnimation.value,
             child: Container(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   // Primary shadow
                   BoxShadow(
                     color: isDark
                         ? Colors.black.withOpacity(0.4)
                         : const Color(0xFF64748B).withOpacity(0.08),
-                    offset: const Offset(0, 8),
-                    blurRadius: 32,
+                    offset: const Offset(0, 4),
+                    blurRadius: 16,
                     spreadRadius: 0,
                   ),
                   // Accent shadow
                   if (_isHovered)
                     BoxShadow(
                       color: const Color(0xFF3B82F6).withOpacity(0.15),
-                      offset: const Offset(0, 4),
-                      blurRadius: 24,
+                      offset: const Offset(0, 2),
+                      blurRadius: 12,
                       spreadRadius: 0,
                     ),
                   // Inner highlight
@@ -129,7 +139,7 @@ class _SupervisorCardState extends State<SupervisorCard>
                 ],
               ),
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(16),
                 child: Stack(
                   children: [
                     // Main card background
@@ -193,22 +203,19 @@ class _SupervisorCardState extends State<SupervisorCard>
                         },
                       ),
 
-                    // Content
+                    // Content - More aggressive padding reduction
                     Padding(
-                      padding: const EdgeInsets.all(20),
-                      // Use SingleChildScrollView to prevent overflow
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildModernHeader(isDark),
-                            const SizedBox(height: 16),
-                            _buildMetricsSection(isDark),
-                            const SizedBox(height: 12),
-                            _buildActionSection(isDark),
-                          ],
-                        ),
+                      padding: const EdgeInsets.all(10),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _buildModernHeader(isDark),
+                          const SizedBox(height: 4),
+                          _buildMetricsSection(isDark),
+                          const SizedBox(height: 4),
+                          _buildActionSection(isDark),
+                        ],
                       ),
                     ),
                   ],
@@ -224,55 +231,54 @@ class _SupervisorCardState extends State<SupervisorCard>
   Widget _buildModernHeader(bool isDark) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        // Supervisor name and info
-        Text(
-          widget.name,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: isDark ? Colors.white : const Color(0xFF1E293B),
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 6),
+        // Supervisor name with badges
         Row(
           children: [
-            Icon(
-              Icons.assignment_outlined,
-              size: 14,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              'إجمالي البلاغات: ${widget.routineCount + widget.emergencyCount + widget.overdueCount + widget.lateCompletedCount + widget.completedCount}',
-              style: TextStyle(
-                fontSize: 12,
-                color:
-                    isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            Expanded(
+              child: Text(
+                widget.name,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : const Color(0xFF1E293B),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            const SizedBox(width: 12),
-            Icon(
-              Icons.build_outlined,
-              size: 14,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            const SizedBox(width: 8),
+            // Technicians badge
+            InkWell(
+              onTap: widget.supervisor != null
+                  ? () => _openTechnicianManagement(context)
+                  : null,
+              borderRadius: BorderRadius.circular(8),
+              child: _buildInfoBadge(
+                icon: Icons.build_circle,
+                count: widget.techniciansCount,
+                color: const Color(0xFF10B981),
+                isDark: isDark,
+              ),
             ),
-            const SizedBox(width: 4),
-            Text(
-              'إجمالي الصيانة: ${widget.maintenanceCount}',
-              style: TextStyle(
-                fontSize: 12,
-                color:
-                    isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            const SizedBox(width: 6),
+            // Schools badge
+            InkWell(
+              onTap: () => _openSchoolsList(context),
+              borderRadius: BorderRadius.circular(8),
+              child: _buildInfoBadge(
+                icon: Icons.school_rounded,
+                count: widget.schoolsCount,
+                color: const Color(0xFF3B82F6),
+                isDark: isDark,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 4),
 
-        // Progress indicators
+        // Progress indicators - More compact
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
@@ -290,15 +296,15 @@ class _SupervisorCardState extends State<SupervisorCard>
     final percentText = '${(clampedRate * 100).toStringAsFixed(0)}%';
 
     return SizedBox(
-      height: 60,
-      width: 60,
+      height: 40,
+      width: 40,
       child: Stack(
         alignment: Alignment.center,
         children: [
           // Background circle
           Container(
-            height: 60,
-            width: 60,
+            height: 40,
+            width: 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isDark
@@ -308,13 +314,13 @@ class _SupervisorCardState extends State<SupervisorCard>
           ),
           // Progress circle
           SizedBox(
-            height: 60,
-            width: 60,
+            height: 40,
+            width: 40,
             child: CircularProgressIndicator(
               value: clampedRate,
               backgroundColor: Colors.transparent,
               valueColor: AlwaysStoppedAnimation<Color>(color),
-              strokeWidth: 6.0,
+              strokeWidth: 4.0,
               strokeCap: StrokeCap.round,
             ),
           ),
@@ -325,7 +331,7 @@ class _SupervisorCardState extends State<SupervisorCard>
               Text(
                 percentText,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 10,
                   fontWeight: FontWeight.bold,
                   color: isDark ? Colors.white : const Color(0xFF334155),
                 ),
@@ -333,7 +339,7 @@ class _SupervisorCardState extends State<SupervisorCard>
               Text(
                 'إنجاز',
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 7,
                   color: color,
                   fontWeight: FontWeight.w500,
                 ),
@@ -354,15 +360,15 @@ class _SupervisorCardState extends State<SupervisorCard>
     final percentText = '${(clampedRate * 100).toStringAsFixed(0)}%';
 
     return SizedBox(
-      height: 60,
-      width: 60,
+      height: 40,
+      width: 40,
       child: Stack(
         alignment: Alignment.center,
         children: [
           // Background circle
           Container(
-            height: 60,
-            width: 60,
+            height: 40,
+            width: 40,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: isDark
@@ -372,13 +378,13 @@ class _SupervisorCardState extends State<SupervisorCard>
           ),
           // Progress circle
           SizedBox(
-            height: 60,
-            width: 60,
+            height: 40,
+            width: 40,
             child: CircularProgressIndicator(
               value: clampedRate,
               backgroundColor: Colors.transparent,
               valueColor: AlwaysStoppedAnimation<Color>(color),
-              strokeWidth: 6.0,
+              strokeWidth: 4.0,
               strokeCap: StrokeCap.round,
             ),
           ),
@@ -389,7 +395,7 @@ class _SupervisorCardState extends State<SupervisorCard>
               Text(
                 percentText,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 10,
                   fontWeight: FontWeight.bold,
                   color: isDark ? Colors.white : const Color(0xFF334155),
                 ),
@@ -397,7 +403,7 @@ class _SupervisorCardState extends State<SupervisorCard>
               Text(
                 'صيانة',
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 7,
                   color: color,
                   fontWeight: FontWeight.w500,
                 ),
@@ -465,22 +471,22 @@ class _SupervisorCardState extends State<SupervisorCard>
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Section header
+        // Section header - Reduced
         Row(
           children: [
             Container(
-              width: 3,
-              height: 16,
+              width: 2,
+              height: 12,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(2),
+                borderRadius: BorderRadius.circular(1),
                 color: const Color(0xFF3B82F6),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Text(
-              'إحصائيات ',
+              'إحصائيات',
               style: TextStyle(
-                fontSize: 14,
+                fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color:
                     isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
@@ -490,7 +496,7 @@ class _SupervisorCardState extends State<SupervisorCard>
           ],
         ),
 
-        const SizedBox(height: 12),
+        const SizedBox(height: 4),
 
         // Modern metrics grid - using LayoutBuilder to ensure proper constraints
         LayoutBuilder(
@@ -509,8 +515,8 @@ class _SupervisorCardState extends State<SupervisorCard>
               crossAxisCount = 3;
             }
 
-            const crossAxisSpacing = 8.0;
-            const mainAxisSpacing = 8.0;
+            const crossAxisSpacing = 6.0;
+            const mainAxisSpacing = 6.0;
 
             // Use Wrap instead of GridView for more flexible layout
             return Wrap(
@@ -550,11 +556,11 @@ class _SupervisorCardState extends State<SupervisorCard>
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(8),
         child: Container(
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(8),
             color: isDark ? color.withOpacity(0.05) : color.withOpacity(0.03),
             border: Border.all(
               color: color.withOpacity(0.15),
@@ -569,14 +575,14 @@ class _SupervisorCardState extends State<SupervisorCard>
                 children: [
                   Icon(
                     icon,
-                    size: 14,
+                    size: 12,
                     color: color,
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 3),
                   Text(
                     '$count',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 14,
                       fontWeight: FontWeight.w800,
                       color: color,
                       height: 1.0,
@@ -584,11 +590,11 @@ class _SupervisorCardState extends State<SupervisorCard>
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: FontWeight.w600,
                   color: isDark
                       ? const Color(0xFF94A3B8)
@@ -677,9 +683,9 @@ class _SupervisorCardState extends State<SupervisorCard>
     bool isPrimary = false,
   }) {
     return Container(
-      height: 42,
+      height: 30,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         gradient: isPrimary
             ? LinearGradient(
                 begin: Alignment.topLeft,
@@ -701,8 +707,8 @@ class _SupervisorCardState extends State<SupervisorCard>
             ? [
                 BoxShadow(
                   color: color.withOpacity(0.3),
-                  offset: const Offset(0, 4),
-                  blurRadius: 12,
+                  offset: const Offset(0, 2),
+                  blurRadius: 8,
                 ),
               ]
             : null,
@@ -711,25 +717,25 @@ class _SupervisorCardState extends State<SupervisorCard>
         color: Colors.transparent,
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
                   icon,
                   color: isPrimary ? Colors.white : color,
-                  size: 18,
+                  size: 12,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
                 Flexible(
                   child: Text(
                     label,
                     style: TextStyle(
                       color: isPrimary ? Colors.white : color,
                       fontWeight: FontWeight.w600,
-                      fontSize: 13,
+                      fontSize: 10,
                     ),
                     overflow: TextOverflow.ellipsis,
                     maxLines: 1,
@@ -743,10 +749,84 @@ class _SupervisorCardState extends State<SupervisorCard>
     );
   }
 
+  Widget _buildInfoBadge({
+    required IconData icon,
+    required int count,
+    required Color color,
+    required bool isDark,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        color: color.withOpacity(0.1),
+        border: Border.all(
+          color: color.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 12,
+            color: color,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Color _getProgressColor(double percent) {
     if (percent >= 0.81) return const Color(0xFF10B981); // Green - Excellent
     if (percent >= 0.61) return const Color(0xFF3B82F6); // Blue - Good
     if (percent >= 0.51) return const Color(0xFFF59E0B); // Orange - Average
     return const Color(0xFFEF4444); // Red - Bad
+  }
+
+  void _openTechnicianManagement(BuildContext context) {
+    if (widget.supervisor == null) return;
+
+    context.showEscDismissibleDialog(
+      barrierDismissible: true,
+      builder: (dialogContext) => TechnicianManagementDialog(
+        supervisor: widget.supervisor!,
+        onSaveDetailed: (supervisorId, techniciansDetailed) {
+          // Read-only mode for regular admins - no save functionality
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('عرض فقط - لا يمكن تعديل بيانات الفنيين'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        },
+        onTechniciansUpdated: () {
+          // Read-only mode - no updates allowed
+        },
+        isReadOnly: true, // Enable read-only mode for regular admins
+      ),
+    );
+  }
+
+  void _openSchoolsList(BuildContext context) {
+    // For regular admin dashboard, show read-only schools list
+    // Super admins get the assignment dialog with Excel upload
+    context.showEscDismissibleDialog(
+      barrierDismissible: true,
+      builder: (dialogContext) => SchoolsListDialog(
+        supervisorId: widget.supervisorId,
+        supervisorName: widget.name,
+      ),
+    );
   }
 }

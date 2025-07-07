@@ -33,6 +33,14 @@ class DashboardLoaded extends DashboardState {
   final int pendingMaintenanceReports;
   final List<MaintenanceReport> maintenanceReports;
 
+  // Inventory count statistics
+  final int schoolsWithCounts;
+  final int schoolsWithDamage;
+
+  // Schools statistics
+  final int totalSchools;
+  final int schoolsWithAchievements;
+
   const DashboardLoaded({
     required this.totalReports,
     required this.emergencyReports,
@@ -49,6 +57,10 @@ class DashboardLoaded extends DashboardState {
     required this.completedMaintenanceReports,
     required this.pendingMaintenanceReports,
     required this.maintenanceReports,
+    required this.schoolsWithCounts,
+    required this.schoolsWithDamage,
+    required this.totalSchools,
+    required this.schoolsWithAchievements,
   });
 
   @override
@@ -68,6 +80,10 @@ class DashboardLoaded extends DashboardState {
         completedMaintenanceReports,
         pendingMaintenanceReports,
         maintenanceReports,
+        schoolsWithCounts,
+        schoolsWithDamage,
+        totalSchools,
+        schoolsWithAchievements,
       ];
 }
 

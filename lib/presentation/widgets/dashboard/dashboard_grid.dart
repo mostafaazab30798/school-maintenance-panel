@@ -32,6 +32,12 @@ class DashboardGrid extends StatefulWidget {
     required this.onTapTotalMaintenanceReports,
     required this.onTapCompletedMaintenanceReports,
     required this.onTapPendingMaintenanceReports,
+    // Inventory count parameters
+    required this.schoolsWithCounts,
+    required this.schoolsWithDamage,
+    // Schools parameters
+    required this.totalSchools,
+    required this.schoolsWithAchievements,
   });
 
   final int totalReports;
@@ -48,6 +54,14 @@ class DashboardGrid extends StatefulWidget {
   final int totalMaintenanceReports;
   final int completedMaintenanceReports;
   final int pendingMaintenanceReports;
+
+  // Inventory counts
+  final int schoolsWithCounts;
+  final int schoolsWithDamage;
+
+  // Schools data
+  final int totalSchools;
+  final int schoolsWithAchievements;
 
   final VoidCallback onTapTotalReports;
   final VoidCallback onTapRoutineReports;
@@ -195,6 +209,15 @@ class _DashboardGridState extends State<DashboardGrid>
               duration: const Duration(milliseconds: 800),
               curve: Curves.easeInOut,
               child: _buildMaintenanceSection(context),
+            ),
+            const SizedBox(height: 32),
+
+            // Inventories Section
+            AnimatedOpacity(
+              opacity: 1.0,
+              duration: const Duration(milliseconds: 800),
+              curve: Curves.easeInOut,
+              child: _buildInventoriesSection(context),
             ),
             const SizedBox(height: 32),
 
@@ -347,6 +370,15 @@ class _DashboardGridState extends State<DashboardGrid>
             height: 180,
             child: _buildProgressChip(context),
           ),
+        ),
+        const SizedBox(height: 16),
+
+        // Schools Section
+        AnimatedOpacity(
+          opacity: 1.0,
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.easeInOut,
+          child: _buildSchoolsSection(context),
         ),
         const SizedBox(height: 16),
 
@@ -676,6 +708,242 @@ class _DashboardGridState extends State<DashboardGrid>
     );
   }
 
+  Widget _buildSchoolsSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF1E293B)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                spreadRadius: 0,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0EA5E9).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.school_rounded,
+                  color: Color(0xFF0EA5E9),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'المدارس',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : const Color(0xFF334155),
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0EA5E9).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.school_rounded,
+                      color: Color(0xFF0EA5E9),
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      '${widget.totalSchools} مدرسة',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF0EA5E9),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        _buildSchoolsFixedHeightGrid(context),
+      ],
+    );
+  }
+
+  Widget _buildSchoolsFixedHeightGrid(BuildContext context) {
+    final schoolsCards = [
+      IndicatorCard(
+        label: 'جميع المدارس',
+        count: widget.totalSchools,
+        color: const Color(0xFF3B82F6),
+        icon: Icons.school_rounded,
+        onTap: () {
+          context.push('/schools');
+        },
+      ),
+      IndicatorCard(
+        label: 'المشاهد والفحوصات',
+        count: widget.schoolsWithAchievements,
+        color: const Color(0xFF10B981),
+        icon: Icons.emoji_events,
+        onTap: () {
+          context.push('/schools-with-achievements');
+        },
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Use same breakpoints for schools cards
+        if (constraints.maxWidth >= 600) {
+          // 2 columns for medium screens and above
+          return _buildFixedRowsLayout(schoolsCards, 2);
+        } else {
+          // 1 column for small screens
+          return _buildFixedRowsLayout(schoolsCards, 1);
+        }
+      },
+    );
+  }
+
+  Widget _buildInventoriesSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF1E293B)
+                : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                spreadRadius: 0,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.inventory_2_outlined,
+                  color: Color(0xFF8B5CF6),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'الحصورات',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : const Color(0xFF334155),
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF8B5CF6).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.inventory_2_outlined,
+                      color: Color(0xFF8B5CF6),
+                      size: 16,
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      'حصر الصيانة',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF8B5CF6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        _buildInventoriesFixedHeightGrid(context),
+      ],
+    );
+  }
+
+  Widget _buildInventoriesFixedHeightGrid(BuildContext context) {
+    final inventoryCards = [
+      IndicatorCard(
+        label: 'حصر الاعداد',
+        count: widget.schoolsWithCounts,
+        color: const Color(0xFF10B981),
+        icon: Icons.inventory_outlined,
+        onTap: () {
+          context.push('/count-inventory');
+        },
+      ),
+      IndicatorCard(
+        label: 'حصر التوالف',
+        count: widget.schoolsWithDamage,
+        color: const Color(0xFFEF4444),
+        icon: Icons.warning_amber_outlined,
+        onTap: () {
+          context.push('/damage-inventory');
+        },
+      ),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Use same breakpoints for inventory cards
+        if (constraints.maxWidth >= 600) {
+          // 2 columns for medium screens and above
+          return _buildFixedRowsLayout(inventoryCards, 2);
+        } else {
+          // 1 column for small screens
+          return _buildFixedRowsLayout(inventoryCards, 1);
+        }
+      },
+    );
+  }
+
   Widget _buildSupervisorsSection(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -767,7 +1035,9 @@ class _DashboardGridState extends State<DashboardGrid>
               crossAxisCount: crossAxisCount,
               mainAxisSpacing: 16,
               crossAxisSpacing: 16,
-              childAspectRatio: 1.6,
+              childAspectRatio: crossAxisCount == 1
+                  ? 1.8
+                  : 1.6, // Increased aspect ratio for much more compact cards
               children: widget.supervisorCards,
             );
           },

@@ -39,7 +39,7 @@ class _CreateAdminDialogState extends State<CreateAdminDialog>
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    
+
     _scaleAnimation = Tween<double>(begin: 0.85, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOutBack),
     );
@@ -49,8 +49,9 @@ class _CreateAdminDialogState extends State<CreateAdminDialog>
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.1),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _slideController, curve: Curves.decelerate));
-    
+    ).animate(
+        CurvedAnimation(parent: _slideController, curve: Curves.decelerate));
+
     _animationController.forward();
     _slideController.forward();
   }
@@ -199,13 +200,11 @@ class _CreateAdminDialogState extends State<CreateAdminDialog>
             ],
           ),
           const SizedBox(height: 20),
-          
         ],
       ),
     );
   }
 
-  
   Widget _buildEnhancedFormFields(bool isDark) {
     return Column(
       children: [
@@ -308,12 +307,13 @@ class _CreateAdminDialogState extends State<CreateAdminDialog>
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: TextStyle(
-                color: isDark ? const Color(0xFF6B7280) : const Color(0xFF9CA3AF),
+                color:
+                    isDark ? const Color(0xFF6B7280) : const Color(0xFF9CA3AF),
                 fontWeight: FontWeight.w400,
               ),
               suffixIcon: suffixIcon,
               filled: true,
-              fillColor: isDark 
+              fillColor: isDark
                   ? const Color(0xFF374151).withOpacity(0.8)
                   : const Color(0xFFF8FAFC),
               border: OutlineInputBorder(
@@ -323,7 +323,7 @@ class _CreateAdminDialogState extends State<CreateAdminDialog>
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16),
                 borderSide: BorderSide(
-                  color: isDark 
+                  color: isDark
                       ? const Color(0xFF4B5563).withOpacity(0.6)
                       : const Color(0xFFE2E8F0),
                   width: 1.5,
@@ -439,8 +439,6 @@ class _CreateAdminDialogState extends State<CreateAdminDialog>
   Widget _buildEnhancedActionButtons(bool isDark) {
     return Column(
       children: [
-     
-
         // action buttons
         Row(
           children: [
@@ -450,14 +448,15 @@ class _CreateAdminDialogState extends State<CreateAdminDialog>
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: isDark 
-                        ? const Color(0xFF4B5563) 
+                    color: isDark
+                        ? const Color(0xFF4B5563)
                         : const Color(0xFFD1D5DB),
                     width: 1.5,
                   ),
                 ),
                 child: TextButton(
-                  onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                  onPressed:
+                      _isLoading ? null : () => Navigator.of(context).pop(),
                   style: TextButton.styleFrom(
                     backgroundColor: Colors.transparent,
                     shape: RoundedRectangleBorder(
@@ -478,7 +477,8 @@ class _CreateAdminDialogState extends State<CreateAdminDialog>
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : const Color(0xFF374151),
+                          color:
+                              isDark ? Colors.white : const Color(0xFF374151),
                         ),
                       ),
                     ],

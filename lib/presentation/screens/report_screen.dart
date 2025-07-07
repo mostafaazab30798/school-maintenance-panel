@@ -19,6 +19,7 @@ class ReportScreen extends StatefulWidget {
     this.type,
     this.status,
     this.priority,
+    this.schoolName,
   });
 
   final String title;
@@ -26,6 +27,7 @@ class ReportScreen extends StatefulWidget {
   final String? type;
   final String? status;
   final String? priority;
+  final String? schoolName;
 
   @override
   State<ReportScreen> createState() => _ReportScreenState();
@@ -72,6 +74,7 @@ class _ReportScreenState extends State<ReportScreen> {
           type: widget.type,
           status: widget.status,
           priority: widget.priority,
+          schoolName: widget.schoolName,
           forceRefresh: forceRefresh,
         ));
   }

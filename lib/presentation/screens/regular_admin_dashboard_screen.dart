@@ -16,6 +16,8 @@ import '../../logic/cubits/theme_cubit.dart';
 import '../../data/repositories/report_repository.dart';
 import '../../data/repositories/supervisor_repository.dart';
 import '../../data/repositories/maintenance_repository.dart';
+import '../../data/repositories/maintenance_count_repository.dart';
+import '../../data/repositories/damage_count_repository.dart';
 import '../widgets/dashboard/dashboard_grid.dart';
 import '../widgets/dashboard/supervisor_card.dart';
 import '../widgets/common/esc_dismissible_dialog.dart';
@@ -60,6 +62,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             reportRepository: ReportRepository(supabase),
             supervisorRepository: SupervisorRepository(supabase),
             maintenanceRepository: MaintenanceReportRepository(supabase),
+            maintenanceCountRepository: MaintenanceCountRepository(supabase),
+            damageCountRepository: DamageCountRepository(supabase),
             adminService: AdminService(supabase),
           )..add(const LoadDashboardData()), // 🚀 Trigger loading immediately
         ),
@@ -194,40 +198,71 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ],
                     ),
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.refresh_rounded,
-                        color: Color(0xFF3B82F6),
-                      ),
-                      tooltip: 'تحديث البيانات',
-                      onPressed: () {
-                        context
-                            .read<DashboardBloc>()
-                            .add(const LoadDashboardData(forceRefresh: true));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Row(
-                              children: [
-                                Icon(
-                                  Icons.sync_rounded,
-                                  color: Colors.white,
-                                  size: 20,
+                    child: BlocBuilder<DashboardBloc, DashboardState>(
+                      builder: (context, state) {
+                        final isLoading = state is DashboardLoading;
+                        return IconButton(
+                          icon: isLoading
+                              ? SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor:
+                                        const AlwaysStoppedAnimation<Color>(
+                                      Color(0xFF3B82F6),
+                                    ),
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.refresh_rounded,
+                                  color: Color(0xFF3B82F6),
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'جاري تحديث البيانات...',
-                                  style: AppFonts.buttonText(),
-                                ),
-                              ],
-                            ),
-                            backgroundColor: const Color(0xFF3B82F6),
-                            duration: Duration(seconds: 1),
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            margin: const EdgeInsets.all(16),
-                          ),
+                          tooltip:
+                              isLoading ? 'جاري التحديث...' : 'تحديث البيانات',
+                          onPressed: isLoading
+                              ? null
+                              : () {
+                                  context
+                                      .read<DashboardBloc>()
+                                      .add(const RefreshDashboard());
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Row(
+                                        children: [
+                                          SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor:
+                                                  const AlwaysStoppedAnimation<
+                                                      Color>(
+                                                Colors.white,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          const Text(
+                                            'جاري تحديث جميع البيانات والإحصائيات...',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      backgroundColor: const Color(0xFF3B82F6),
+                                      duration: const Duration(seconds: 3),
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      margin: const EdgeInsets.all(16),
+                                    ),
+                                  );
+                                },
                         );
                       },
                     ),
@@ -741,6 +776,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ? 0.0
                           : completedCount / supervisorReports.length;
 
+                      // Calculate technicians count
+                      final techniciansCount =
+                          supervisor.techniciansDetailed.isNotEmpty
+                              ? supervisor.techniciansDetailed.length
+                              : supervisor.technicians.length;
+
+                      // Get schools count from enriched supervisor data
+                      final schoolsCount = supervisor.schoolsCount ?? 0;
+
                       return SupervisorCard(
                         supervisorId: supervisor.id,
                         name: supervisor.username,
@@ -752,6 +796,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         completedCount: completedCount,
                         completionRate: completionRate,
                         completedMaintenanceCount: completedMaintenance,
+                        techniciansCount: techniciansCount,
+                        schoolsCount: schoolsCount,
+                        supervisor:
+                            supervisor, // Pass the supervisor object for badge functionality
                       );
                     }).toList();
 
@@ -771,6 +819,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           state.completedMaintenanceReports,
                       pendingMaintenanceReports:
                           state.pendingMaintenanceReports,
+                      // Inventory count data
+                      schoolsWithCounts: state.schoolsWithCounts,
+                      schoolsWithDamage: state.schoolsWithDamage,
+                      // Schools data
+                      totalSchools: state.totalSchools,
+                      schoolsWithAchievements: state.schoolsWithAchievements,
                       onTapTotalReports: () => context.push('/reports'),
                       onTapEmergencyReports: () => context.push(
                           '/reports?title=البلاغات الطارئة&priority=Emergency'),
@@ -790,6 +844,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           '/maintenance-reports?title=بلاغات الصيانة المكتملة&status=completed'),
                       onTapPendingMaintenanceReports: () => context.push(
                           '/maintenance-reports?title=بلاغات الصيانة الجارية&status=pending'),
+                      // Schools callback
                     );
                   }
 

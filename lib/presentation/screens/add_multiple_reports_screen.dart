@@ -8,6 +8,7 @@ import '../../logic/blocs/multi_reports/multi_reports_event.dart';
 import '../../logic/blocs/multi_reports/multi_reports_state.dart';
 import '../../logic/cubits/add_multiple_reports_cubit.dart';
 import '../../logic/cubits/add_multiple_reports_state.dart';
+import '../widgets/common/searchable_school_dropdown.dart';
 
 class AddMultipleReportsScreen extends StatelessWidget {
   final String supervisorId;
@@ -630,41 +631,17 @@ class _ModernReportCardState extends State<_ModernReportCard> {
       buildWhen: (previous, current) =>
           previous.validationFailed != current.validationFailed,
       builder: (context, state) {
-        return Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-            border: Border.all(
-              color: isDark ? const Color(0xFF475569) : const Color(0xFFE2E8F0),
-              width: 1,
-            ),
-          ),
-          child: TextFormField(
-            decoration: InputDecoration(
-              labelText: 'اسم المدرسة',
-              labelStyle: AppFonts.inputLabel(isDark: isDark),
-              prefixIcon: const Icon(
-                Icons.school_rounded,
-                color: Color(0xFF3B82F6),
-                size: 16,
-              ),
-              border: InputBorder.none,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              errorText: state.validationFailed &&
-                      (data.schoolName == null || data.schoolName!.isEmpty)
-                  ? 'اسم المدرسة مطلوب'
-                  : null,
-              errorStyle: const TextStyle(
-                color: Color(0xFFEF4444),
-                fontSize: 10,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            style: AppFonts.inputText(isDark: isDark),
-            initialValue: data.schoolName,
-            onChanged: (val) => cubit.updateSchoolName(widget.index, val),
-          ),
+        return SearchableSchoolDropdown(
+          supervisorId: data.supervisorId ?? '',
+          selectedSchoolName: data.schoolName,
+          hintText: 'ابحث واختر المدرسة...',
+          errorText: state.validationFailed &&
+                  (data.schoolName == null || data.schoolName!.isEmpty)
+              ? 'اسم المدرسة مطلوب'
+              : null,
+          onSchoolSelected: (schoolName) {
+            cubit.updateSchoolName(widget.index, schoolName);
+          },
         );
       },
     );

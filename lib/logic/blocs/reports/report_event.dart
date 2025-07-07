@@ -12,6 +12,7 @@ class FetchReports extends ReportEvent {
   final String? type;
   final String? status;
   final String? priority;
+  final String? schoolName;
   final bool forceRefresh;
   final int? limit;
 
@@ -20,11 +21,12 @@ class FetchReports extends ReportEvent {
     this.type,
     this.status,
     this.priority,
+    this.schoolName,
     this.forceRefresh = false,
     this.limit,
   });
 
   @override
   List<Object?> get props =>
-      [supervisorId, type, status, priority, forceRefresh, limit];
+      [supervisorId, type, status, priority, schoolName, forceRefresh, limit];
 }

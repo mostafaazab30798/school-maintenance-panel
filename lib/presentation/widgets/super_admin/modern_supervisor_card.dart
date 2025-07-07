@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dialogs/technician_management_dialog.dart';
+import 'dialogs/schools_list_dialog.dart';
 import '../../../data/models/supervisor.dart';
 import '../../../logic/blocs/supervisors/supervisor_bloc.dart';
 import '../../../logic/blocs/supervisors/supervisor_event.dart';
@@ -385,6 +386,51 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF10B981),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Schools Badge - Always show
+                  Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () => _openSchoolsList(context, supervisor),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 6),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          color: const Color(0xFF7C3AED).withOpacity(0.1),
+                          border: Border.all(
+                            color: const Color(0xFF7C3AED).withOpacity(0.2),
+                            width: 0.5,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(
+                              Icons.school,
+                              size: 14,
+                              color: Color(0xFF7C3AED),
+                            ),
+                            const SizedBox(width: 4),
+                            Container(
+                              constraints: const BoxConstraints(minWidth: 16),
+                              child: Text(
+                                '${_getSchoolCount(supervisor)}',
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF7C3AED),
+                                ),
+                                textAlign: TextAlign.center,
                               ),
                             ),
                           ],
@@ -1038,5 +1084,36 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
     } catch (e) {
       print('Failed to refresh SuperAdminBloc from callback: $e');
     }
+  }
+
+  int _getSchoolCount(Map<String, dynamic> supervisor) {
+    // Get actual school count from database
+    try {
+      final schoolsCount = supervisor['schools_count'] as int?;
+      if (schoolsCount != null) {
+        return schoolsCount;
+      }
+
+      // Fallback: check if schools data exists in supervisor object
+      final schools = supervisor['schools'] as List?;
+      if (schools != null) {
+        return schools.length;
+      }
+
+      return 0;
+    } catch (e) {
+      return 0;
+    }
+  }
+
+  void _openSchoolsList(BuildContext context, Map<String, dynamic> supervisor) {
+    // Open read-only schools list with search functionality
+    context.showEscDismissibleDialog(
+      barrierDismissible: true,
+      builder: (dialogContext) => SchoolsListDialog(
+        supervisorId: supervisor['id'] as String? ?? '',
+        supervisorName: supervisor['username'] as String? ?? 'غير محدد',
+      ),
+    );
   }
 }
