@@ -796,6 +796,8 @@ class DamageCountDetailView extends StatelessWidget {
       'fire_pump_1750',
       'fire_alarm_panel',
       'fire_suppression_box',
+      'fire_extinguishing_networks',
+      'thermal_wires_alarm_networks',
     ];
     return fireSafetyItems.contains(itemKey);
   }
@@ -813,6 +815,8 @@ class DamageCountDetailView extends StatelessWidget {
       'pvc_pipe_connection_4',
       'electric_water_heater_50l',
       'electric_water_heater_100l',
+      'feeding_pipes',
+      'external_drainage_pipes',
     ];
     return mechanicalItems.contains(itemKey);
   }
@@ -836,6 +840,19 @@ class DamageCountDetailView extends StatelessWidget {
       'hidden_boxes',
       'plastic_chair',
       'plastic_chair_external',
+      'site_tile_damage',
+      'external_facade_paint',
+      'internal_wall_ceiling_paint',
+      'external_plastering',
+      'internal_wall_ceiling_plastering',
+      'internal_marble_damage',
+      'internal_tile_damage',
+      'main_building_roof_insulation',
+      'internal_windows',
+      'external_windows',
+      'metal_slats_suspended_ceiling',
+      'suspended_ceiling_grids',
+      'underground_tanks',
     ];
     return civilItems.contains(itemKey);
   }
@@ -898,6 +915,29 @@ class DamageCountDetailView extends StatelessWidget {
       'split_ac': 'سبليت',
       'window_ac': 'شباك',
       'package_ac': 'باكدج',
+
+      // New items from items.md - Civil Works (using actual database keys)
+      'site_tile_damage': 'هبوط او تلف بلاط الموقع العام',
+      'external_facade_paint': 'دهانات الواجهات الخارجية',
+      'internal_wall_ceiling_paint': 'دهانات الحوائط والاسقف الداخلية',
+      'external_plastering': 'اللياسة الخارجية',
+      'internal_wall_ceiling_plastering': 'لياسة الحوائط والاسقف الداخلية',
+      'internal_marble_damage': 'هبوط او تلف رخام الارضيات والحوائط الداخلية',
+      'internal_tile_damage': 'هبوط او تلف بلاط الارضيات والحوائط الداخلية',
+      'main_building_roof_insulation': 'عزل سطج المبنى الرئيسي',
+      'internal_windows': 'النوافذ الداخلية',
+      'external_windows': 'النوافذ الخارجية',
+      'metal_slats_suspended_ceiling': 'شرائح معدنية ( اسقف مستعارة )',
+      'suspended_ceiling_grids': 'تربيعات (اسقف مستعارة)',
+      'underground_tanks': 'الخزانات الارضية',
+
+      // New items from items.md - Mechanical Works (using actual database keys)
+      'feeding_pipes': 'مواسير التغذية',
+      'external_drainage_pipes': 'مواسير الصرف الخارجية',
+
+      // New items from items.md - Fire Safety Works (using actual database keys)
+      'fire_extinguishing_networks': 'شبكات الحريق والاطفاء',
+      'thermal_wires_alarm_networks': 'اسلاك حرارية لشبكات الانذار',
     };
 
     return itemNames[itemKey] ?? itemKey;

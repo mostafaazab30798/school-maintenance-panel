@@ -16,7 +16,8 @@ class PerformanceMonitoringService {
   final Map<String, CacheMetrics> _cacheMetrics = {};
 
   static const int _maxEvents = 1000;
-  static const Duration _slowOperationThreshold = Duration(milliseconds: 500);
+  // 🚀 PERFORMANCE OPTIMIZATION: Reduced slow operation threshold for better detection
+  static const Duration _slowOperationThreshold = Duration(milliseconds: 300);
 
   void initialize() {
     _logDebug('Performance monitoring service initialized');
@@ -96,6 +97,20 @@ class PerformanceMonitoringService {
     } else if (duration > _slowOperationThreshold) {
       _logWarning(
           'Slow operation detected: $operationName (${duration.inMilliseconds}ms)');
+      
+      // 🚀 PERFORMANCE OPTIMIZATION: Provide actionable suggestions for slow operations
+      _suggestOptimizations(operationName, duration);
+    }
+  }
+
+  /// 🚀 PERFORMANCE OPTIMIZATION: Provide optimization suggestions for slow operations
+  void _suggestOptimizations(String operationName, Duration duration) {
+    if (operationName.contains('fetchReports') || operationName.contains('fetchMaintenanceReports')) {
+      _logDebug('💡 Performance suggestion: Consider implementing pagination or reducing query scope for $operationName');
+    } else if (operationName.contains('Cache')) {
+      _logDebug('💡 Performance suggestion: Review cache hit rates and TTL settings for $operationName');
+    } else if (duration.inMilliseconds > 1000) {
+      _logDebug('💡 Performance suggestion: Consider optimizing database queries or implementing background processing for $operationName');
     }
   }
 

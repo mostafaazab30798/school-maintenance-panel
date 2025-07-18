@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../logic/blocs/super_admin/super_admin_state.dart';
 import '../modern_supervisor_card.dart';
+import '../../attendance/attendance_dialog.dart';
 
 class SupervisorAnalyticsSection extends StatelessWidget {
   final SuperAdminLoaded state;
@@ -138,7 +139,7 @@ class SupervisorAnalyticsSection extends StatelessWidget {
         final index = entry.key;
         final supervisor = entry.value;
 
-        return _buildSupervisorCardWithBadge(supervisor, index);
+        return _buildSupervisorCardWithBadge(context, supervisor, index);
       }).toList(),
     );
   }
@@ -163,7 +164,7 @@ class SupervisorAnalyticsSection extends StatelessWidget {
   }
 
   Widget _buildSupervisorCardWithBadge(
-      Map<String, dynamic> supervisor, int index) {
+      BuildContext context, Map<String, dynamic> supervisor, int index) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -180,6 +181,8 @@ class SupervisorAnalyticsSection extends StatelessWidget {
               onNavigateToSupervisorLateReports(supervisorId, username),
           onLateCompletedTap: (supervisorId, username) =>
               onNavigateToSupervisorLateCompleted(supervisorId, username),
+          onAttendanceTap: (supervisorId, username) =>
+              AttendanceDialog.show(context, supervisorId, username),
         ),
         _buildRankBadge(index),
       ],

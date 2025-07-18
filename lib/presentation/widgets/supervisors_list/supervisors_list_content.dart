@@ -11,7 +11,12 @@ import '../../../logic/blocs/super_admin/super_admin_bloc.dart';
 import '../../../logic/blocs/super_admin/super_admin_event.dart';
 import '../../../core/services/bloc_manager.dart';
 import '../common/esc_dismissible_dialog.dart';
+import '../attendance/attendance_dialog.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'export_attendance_excel.dart';
+import '../../../data/repositories/supervisor_attendance_repository.dart';
+import '../../../data/models/supervisor_attendance.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupervisorsListContent extends StatefulWidget {
   final List<Map<String, dynamic>> supervisorsWithStats;
@@ -135,14 +140,15 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
     final filtered = _filteredAndSortedSupervisors;
     final startIndex = _currentPage * _itemsPerPage;
     final endIndex = (startIndex + _itemsPerPage).clamp(0, filtered.length);
-
-    if (startIndex >= filtered.length) return [];
-    return filtered.sublist(startIndex, endIndex);
+    if (filtered.isEmpty || startIndex >= filtered.length) return [];
+    // Ensure startIndex is never negative or > filtered.length
+    return filtered.sublist(startIndex.clamp(0, filtered.length), endIndex);
   }
 
   int get _totalPages {
     final filtered = _filteredAndSortedSupervisors;
-    return (filtered.length / _itemsPerPage).ceil();
+    // Always return at least 1 to avoid ArgumentError in pagination
+    return ((filtered.length / _itemsPerPage).ceil()).clamp(1, 9999);
   }
 
   Map<String, List<Map<String, dynamic>>> get _groupedSupervisors {
@@ -182,42 +188,112 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
     final filteredCount = _filteredAndSortedSupervisors.length;
 
     if (widget.supervisorsWithStats.isEmpty) {
-      return CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: _buildControlsSection(context, filteredCount),
-          ),
-          SliverToBoxAdapter(
-            child: _buildEmptyState(),
-          ),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildControlsSection(context, filteredCount),
+          _buildEmptyState(),
         ],
       );
     }
 
-    return CustomScrollView(
-      slivers: [
-        // Controls Section as a sliver
-        SliverToBoxAdapter(
-          child: _buildControlsSection(context, filteredCount),
-        ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Controls Section
+        _buildControlsSection(context, filteredCount),
 
         // Content based on view type
-        if (_isGridView) _buildSliverGridView() else _buildSliverListView(),
+        if (_isGridView) _buildGridView() else _buildListView(),
 
         // Pagination Controls
         if (_totalPages > 1)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: _buildPaginationControls(),
-            ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: _buildPaginationControls(),
           ),
 
         // Bottom padding
-        const SliverToBoxAdapter(
-          child: SizedBox(height: 24),
-        ),
+        const SizedBox(height: 24),
       ],
+    );
+  }
+
+  // Helper methods to replace sliver widgets with normal widgets
+  Widget _buildGridView() {
+    final paginatedSupervisors = _paginatedSupervisors;
+
+    if (paginatedSupervisors.isEmpty) {
+      return _buildNoResultsState();
+    }
+
+    // Responsive crossAxisCount
+    int crossAxisCount = 1;
+    final width = MediaQuery.of(context).size.width;
+    if (width > 1400) {
+      crossAxisCount = 4;
+    } else if (width > 1000) {
+      crossAxisCount = 3;
+    } else if (width > 600) {
+      crossAxisCount = 2;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16), // Add vertical padding
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: crossAxisCount,
+          mainAxisSpacing: 24, // Increased spacing between rows
+          crossAxisSpacing: 24, // Increased spacing between columns
+          childAspectRatio: 0.7, // Make cards taller to prevent overflow
+        ),
+        itemCount: paginatedSupervisors.length,
+        itemBuilder: (context, index) {
+          final supervisor = paginatedSupervisors[index];
+          return ModernSupervisorCard(
+            supervisor: supervisor,
+            onInfoTap: () => _showSupervisorDetails(context, supervisor),
+            onReportsTap: (supervisorId, username) =>
+                _navigateToSupervisorReports(context, supervisorId, username),
+            onMaintenanceTap: (supervisorId, username) =>
+                _navigateToSupervisorMaintenance(context, supervisorId, username),
+            onCompletedTap: (supervisorId, username) =>
+                _navigateToSupervisorCompleted(context, supervisorId, username),
+            onLateReportsTap: (supervisorId, username) =>
+                _navigateToSupervisorLateReports(context, supervisorId, username),
+            onLateCompletedTap: (supervisorId, username) =>
+                _navigateToSupervisorLateCompleted(context, supervisorId, username),
+            onAttendanceTap: (supervisorId, username) =>
+                _showAttendanceDialog(context, supervisorId, username),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildListView() {
+    final paginatedSupervisors = _paginatedSupervisors;
+
+    if (paginatedSupervisors.isEmpty) {
+      return _buildNoResultsState();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16), // Add vertical padding
+      child: ListView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: paginatedSupervisors.length,
+        itemBuilder: (context, index) {
+          final supervisor = paginatedSupervisors[index];
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16), // Add space between cards
+            child: _buildSupervisorListItem(supervisor),
+          );
+        },
+      ),
     );
   }
 
@@ -243,7 +319,7 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
       ),
       child: Column(
         children: [
-          // Search Bar and View Toggle
+          // Search Bar and View Toggle + Export Button
           Row(
             children: [
               Expanded(
@@ -283,6 +359,7 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
               ),
               const SizedBox(width: 16),
 
+              const SizedBox(width: 16),
               // View Toggle
               Container(
                 decoration: BoxDecoration(
@@ -307,9 +384,7 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                   ],
                 ),
               ),
-
               const SizedBox(width: 16),
-
               // Results count
               Container(
                 padding:
@@ -635,6 +710,8 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                   onLateCompletedTap: (supervisorId, username) =>
                       _navigateToSupervisorLateCompleted(
                           context, supervisorId, username),
+                  onAttendanceTap: (supervisorId, username) =>
+                      _showAttendanceDialog(context, supervisorId, username),
                 );
               },
               childCount: paginatedSupervisors.length,
@@ -759,9 +836,9 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
 
   List<Widget> _buildPageNumbers() {
     final List<Widget> pageButtons = [];
-    final int startPage =
-        (_currentPage - 2).clamp(0, _totalPages - 5).clamp(0, _totalPages);
-    final int endPage = (startPage + 4).clamp(0, _totalPages - 1);
+    final int totalPages = _totalPages;
+    final int startPage = (_currentPage - 2).clamp(0, totalPages - 1);
+    final int endPage = (startPage + 4).clamp(0, totalPages - 1);
 
     for (int i = startPage; i <= endPage; i++) {
       pageButtons.add(
@@ -1091,33 +1168,32 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                               color: Color(0xFF10B981),
                             ),
                           ),
-                          if (_getSchoolCount(supervisor) > 0)
-                            Positioned(
-                              top: -2,
-                              right: -2,
-                              child: Container(
-                                constraints: const BoxConstraints(minWidth: 18),
-                                height: 18,
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 4),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF10B981),
-                                  borderRadius: BorderRadius.circular(9),
-                                  border:
-                                      Border.all(color: Colors.white, width: 1),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    '${_getSchoolCount(supervisor)}',
-                                    style: const TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.white,
-                                    ),
+                          Positioned(
+                            top: -2,
+                            right: -2,
+                            child: Container(
+                              constraints: const BoxConstraints(minWidth: 18),
+                              height: 18,
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981),
+                                borderRadius: BorderRadius.circular(9),
+                                border:
+                                    Border.all(color: Colors.white, width: 1),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '${_getSchoolCount(supervisor)}',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
                                   ),
                                 ),
                               ),
                             ),
+                          ),
                         ],
                       ),
                     ),
@@ -1321,6 +1397,11 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
         '/all-reports?supervisor_id=$supervisorId&supervisor_name=$username&filter=late_completed');
   }
 
+  void _showAttendanceDialog(
+      BuildContext context, String supervisorId, String username) {
+    AttendanceDialog.show(context, supervisorId, username);
+  }
+
   void _openTechnicianManagement(
       BuildContext context, Map<String, dynamic> supervisorData) {
     try {
@@ -1407,13 +1488,19 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
   }
 
   int _getSchoolCount(Map<String, dynamic> supervisor) {
-    // For now, return a test count. This will be replaced with actual data
-    // when the backend includes school assignments in supervisor data
-    final supervisorId = supervisor['id'] as String? ?? '';
-    // Temporary test data - shows random counts for demonstration
-    final username = supervisor['username'] as String? ?? '';
-    return username.length % 5 +
-        1; // This gives a count between 1-5 for testing
+    try {
+      final schoolsCount = supervisor['schools_count'] as int?;
+      if (schoolsCount != null && schoolsCount > 0) {
+        return schoolsCount;
+      }
+      final schools = supervisor['schools'] as List?;
+      if (schools != null && schools.isNotEmpty) {
+        return schools.length;
+      }
+      return 0;
+    } catch (e) {
+      return 0;
+    }
   }
 
   void _showSchoolsList(BuildContext context, Map<String, dynamic> supervisor) {
@@ -1429,4 +1516,6 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
       ),
     );
   }
+
+
 }

@@ -18,6 +18,7 @@ class MaintenanceCount extends Equatable {
   final Map<String, String> fireSafetyConditionOnlyData;
   final Map<String, String> fireSafetyExpiryDates;
   final Map<String, List<String>> sectionPhotos;
+  final Map<String, dynamic> heaterEntries; // New field for heater entries
 
   final DateTime createdAt;
   final DateTime? updatedAt;
@@ -38,6 +39,7 @@ class MaintenanceCount extends Equatable {
     this.fireSafetyConditionOnlyData = const {},
     this.fireSafetyExpiryDates = const {},
     this.sectionPhotos = const {},
+    this.heaterEntries = const {},
     required this.createdAt,
     this.updatedAt,
   });
@@ -61,6 +63,7 @@ class MaintenanceCount extends Equatable {
           _parseStringMap(map['fire_safety_condition_only_data']),
       fireSafetyExpiryDates: _parseStringMap(map['fire_safety_expiry_dates']),
       sectionPhotos: _parseStringListMap(map['section_photos']),
+      heaterEntries: _parseHeaterEntriesMap(map['heater_entries']),
       createdAt: map['created_at'] != null
           ? DateTime.parse(map['created_at'].toString())
           : DateTime.now(),
@@ -87,6 +90,7 @@ class MaintenanceCount extends Equatable {
       'fire_safety_condition_only_data': fireSafetyConditionOnlyData,
       'fire_safety_expiry_dates': fireSafetyExpiryDates,
       'section_photos': sectionPhotos,
+      'heater_entries': heaterEntries,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
     };
@@ -108,6 +112,7 @@ class MaintenanceCount extends Equatable {
     Map<String, String>? fireSafetyConditionOnlyData,
     Map<String, String>? fireSafetyExpiryDates,
     Map<String, List<String>>? sectionPhotos,
+    Map<String, dynamic>? heaterEntries,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -130,6 +135,7 @@ class MaintenanceCount extends Equatable {
       fireSafetyExpiryDates:
           fireSafetyExpiryDates ?? this.fireSafetyExpiryDates,
       sectionPhotos: sectionPhotos ?? this.sectionPhotos,
+      heaterEntries: heaterEntries ?? this.heaterEntries,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -171,6 +177,14 @@ class MaintenanceCount extends Equatable {
         }
         return MapEntry(key, <String>[]);
       });
+    }
+    return {};
+  }
+
+  static Map<String, dynamic> _parseHeaterEntriesMap(dynamic data) {
+    if (data == null) return {};
+    if (data is Map<String, dynamic>) {
+      return data;
     }
     return {};
   }
@@ -227,6 +241,7 @@ class MaintenanceCount extends Equatable {
         fireSafetyConditionOnlyData,
         fireSafetyExpiryDates,
         sectionPhotos,
+        heaterEntries,
         createdAt,
         updatedAt,
       ];

@@ -1,5 +1,7 @@
 // lib/data/models/report_form_data.dart
-class ReportFormData {
+import 'package:equatable/equatable.dart';
+
+class ReportFormData extends Equatable {
   @override
   String toString() {
     return 'ReportFormData(schoolName: \$schoolName, description: \$description, type: \$type, priority: \$priority, date: \$scheduledDate, images: \$imageUrls, supervisorId: \$supervisorId, reportSource: \$reportSource)';
@@ -24,6 +26,18 @@ class ReportFormData {
     this.supervisorId,
     this.reportSource,
   });
+
+  @override
+  List<Object?> get props => [
+        schoolName,
+        description,
+        type,
+        priority,
+        scheduledDate,
+        imageUrls,
+        supervisorId,
+        reportSource,
+      ];
 
   ReportFormData copyWith({
     String? schoolName,

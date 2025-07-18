@@ -9,12 +9,14 @@ import '../../core/services/admin_service.dart';
 import '../widgets/dashboard/expandable_maintenance_card.dart';
 import '../widgets/common/standard_refresh_button.dart';
 import '../widgets/common/shared_app_bar.dart';
-import 'package:excel/excel.dart' as excel_lib;
 import 'package:file_saver/file_saver.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:intl/date_symbol_data_local.dart';
 import 'dart:typed_data';
 import '../../core/services/cache_service.dart';
+// Web-specific imports - conditional
+import 'dart:html' as html;
+import 'package:syncfusion_flutter_xlsio/xlsio.dart' as syncfusion;
 
 class AllMaintenanceScreen extends StatefulWidget {
   final String? initialFilter;
@@ -36,6 +38,7 @@ class _AllMaintenanceScreenState extends State<AllMaintenanceScreen>
     with TickerProviderStateMixin {
   List<Map<String, dynamic>> maintenanceReports = [];
   List<Map<String, dynamic>> filteredReports = [];
+  List<Map<String, dynamic>> paginatedReports = [];
   bool isLoading = true;
   String? error;
   String selectedFilter = 'all';
@@ -43,6 +46,11 @@ class _AllMaintenanceScreenState extends State<AllMaintenanceScreen>
   late Animation<double> _fadeAnimation;
   final CacheService _cacheService = CacheService();
   bool _isLoadingFromCache = false;
+
+  // Pagination variables
+  int currentPage = 1;
+  int reportsPerPage = 20;
+  int totalPages = 1;
 
   final AdminService _adminService = AdminService(Supabase.instance.client);
 
@@ -253,17 +261,61 @@ class _AllMaintenanceScreenState extends State<AllMaintenanceScreen>
           .where((report) => report['status'] == selectedFilter)
           .toList();
     }
+    _updatePagination();
+  }
+
+  void _updatePagination() {
+    totalPages = (filteredReports.length / reportsPerPage).ceil();
+    if (totalPages == 0) totalPages = 1;
+
+    // Ensure current page is valid
+    if (currentPage > totalPages) {
+      currentPage = totalPages;
+    }
+
+    // Calculate start and end indices for current page
+    final startIndex = (currentPage - 1) * reportsPerPage;
+    final endIndex =
+        (startIndex + reportsPerPage).clamp(0, filteredReports.length);
+
+    paginatedReports = filteredReports.sublist(startIndex, endIndex);
+  }
+
+  void _goToPage(int page) {
+    if (page >= 1 && page <= totalPages) {
+      setState(() {
+        currentPage = page;
+        _updatePagination();
+      });
+    }
+  }
+
+  void _nextPage() {
+    if (currentPage < totalPages) {
+      _goToPage(currentPage + 1);
+    }
+  }
+
+  void _previousPage() {
+    if (currentPage > 1) {
+      _goToPage(currentPage - 1);
+    }
   }
 
   Future<void> _downloadMaintenanceExcel() async {
     try {
       await initializeDateFormatting('ar');
-      final excel = excel_lib.Excel.createExcel();
-      final sheet = excel['بلاغات_الصيانة'];
+      
+      // Use Syncfusion for web export
+      final workbook = syncfusion.Workbook();
+      
+      // Rename the default sheet instead of removing it
+      final sheet = workbook.worksheets[0];
+      sheet.name = 'بلاغات_الصيانة';
       final dateFormat = intl.DateFormat('dd-MM-yyyy hh:mm a');
 
       // Header row
-      sheet.appendRow([
+      final headers = [
         'اسم المشرف',
         'اسم المدرسة',
         'وصف التقرير',
@@ -273,9 +325,14 @@ class _AllMaintenanceScreenState extends State<AllMaintenanceScreen>
         'الأولوية',
         'تاريخ انشاء التقرير',
         'تاريخ اغلاق التقرير',
-      ]);
+      ];
+      
+      for (int i = 0; i < headers.length; i++) {
+        sheet.getRangeByIndex(1, i + 1).setText(headers[i]);
+      }
 
-      for (final report in filteredReports) {
+      for (int row = 0; row < filteredReports.length; row++) {
+        final report = filteredReports[row];
         final supervisorData = report['supervisors'] as Map<String, dynamic>?;
         final createdAt = report['created_at'] != null
             ? DateTime.parse(report['created_at'])
@@ -284,7 +341,7 @@ class _AllMaintenanceScreenState extends State<AllMaintenanceScreen>
             ? DateTime.parse(report['closed_at'])
             : null;
 
-        sheet.appendRow([
+        final rowData = [
           supervisorData?['username'] ?? 'غير محدد',
           report['school_name'] ?? report['title'] ?? 'غير محدد',
           report['description'] ?? '',
@@ -294,18 +351,23 @@ class _AllMaintenanceScreenState extends State<AllMaintenanceScreen>
           _translatePriority(report['priority']),
           dateFormat.format(createdAt),
           closedAt != null ? dateFormat.format(closedAt) : '',
-        ]);
+        ];
+        
+        for (int col = 0; col < rowData.length; col++) {
+          sheet.getRangeByIndex(row + 2, col + 1).setText(rowData[col].toString());
+        }
       }
 
-      final excelBytes = excel.encode();
-      if (excelBytes == null) return;
+      // Save and download
+      final List<int> bytes = workbook.saveAsStream();
+      workbook.dispose();
 
-      await FileSaver.instance.saveFile(
-        name: 'جميع_بلاغات_الصيانة',
-        bytes: Uint8List.fromList(excelBytes),
-        ext: 'xlsx',
-        mimeType: MimeType.microsoftExcel,
-      );
+      final blob = html.Blob([Uint8List.fromList(bytes)]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', 'جميع_بلاغات_الصيانة.xlsx')
+        ..click();
+      html.Url.revokeObjectUrl(url);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -409,7 +471,18 @@ class _AllMaintenanceScreenState extends State<AllMaintenanceScreen>
                         // Content
                         filteredReports.isEmpty
                             ? _buildModernEmptyView()
-                            : _buildModernMaintenanceList(),
+                            : Column(
+                                children: [
+                                  // Reports info
+                                  if (filteredReports.isNotEmpty) _buildReportsInfo(),
+                                  
+                                  // Maintenance list
+                                  _buildModernMaintenanceList(),
+                                  
+                                  // Pagination controls
+                                  if (totalPages > 1) _buildPaginationControls(),
+                                ],
+                              ),
                       ],
                     ),
                   ),
@@ -640,16 +713,164 @@ class _AllMaintenanceScreenState extends State<AllMaintenanceScreen>
     );
   }
 
+  Widget _buildReportsInfo() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final totalReports = filteredReports.length;
+    final pendingReports = filteredReports.where((r) => r['status'] == 'pending').length;
+    final inProgressReports = filteredReports.where((r) => r['status'] == 'in_progress').length;
+    final completedReports = filteredReports.where((r) => r['status'] == 'completed').length;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceVariant.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.outline.withOpacity(0.1),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'معلومات البلاغات',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildInfoCard(
+                'البلاغات الكلية',
+                totalReports,
+                Icons.list_alt_outlined,
+                const Color(0xFF6B7280),
+              ),
+              _buildInfoCard(
+                'البلاغات المعلقة',
+                pendingReports,
+                Icons.schedule_outlined,
+                const Color(0xFF6B7280),
+              ),
+              _buildInfoCard(
+                'البلاغات قيد التنفيذ',
+                inProgressReports,
+                Icons.hourglass_empty_outlined,
+                const Color(0xFF6B7280),
+              ),
+              _buildInfoCard(
+                'البلاغات مكتملة',
+                completedReports,
+                Icons.check_circle_outline,
+                const Color(0xFF10B981),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard(String title, int count, IconData icon, Color color) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Expanded(
+      child: Column(
+        children: [
+          Icon(icon, size: 36, color: color),
+          const SizedBox(height: 8),
+          Text(
+            title,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurface.withOpacity(0.7),
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            count.toString(),
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: color,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaginationControls() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          ElevatedButton.icon(
+            onPressed: currentPage > 1 ? _previousPage : null,
+            icon: const Icon(Icons.arrow_back_ios_new_rounded),
+            label: const Text('السابق'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: currentPage > 1
+                  ? colorScheme.primary
+                  : colorScheme.surfaceVariant.withOpacity(0.3),
+              foregroundColor: currentPage > 1
+                  ? Colors.white
+                  : colorScheme.onSurfaceVariant.withOpacity(0.5),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          Text(
+            '$currentPage/$totalPages',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: colorScheme.onSurface,
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: currentPage < totalPages ? _nextPage : null,
+            icon: const Icon(Icons.arrow_forward_ios_rounded),
+            label: const Text('التالي'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: currentPage < totalPages
+                  ? colorScheme.primary
+                  : colorScheme.surfaceVariant.withOpacity(0.3),
+              foregroundColor: currentPage < totalPages
+                  ? Colors.white
+                  : colorScheme.onSurfaceVariant.withOpacity(0.5),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildModernMaintenanceList() {
     final crossAxisCount = _getCrossAxisCount();
     final rows = <Widget>[];
 
-    for (int i = 0; i < filteredReports.length; i += crossAxisCount) {
+    for (int i = 0; i < paginatedReports.length; i += crossAxisCount) {
       final rowStartIndex = i;
       final rowEndIndex =
-          (i + crossAxisCount - 1).clamp(0, filteredReports.length - 1);
+          (i + crossAxisCount - 1).clamp(0, paginatedReports.length - 1);
       final reportsInRow =
-          filteredReports.sublist(rowStartIndex, rowEndIndex + 1);
+          paginatedReports.sublist(rowStartIndex, rowEndIndex + 1);
 
       rows.add(
         Padding(

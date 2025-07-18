@@ -194,6 +194,7 @@ class WeeklyReportService {
   }) async {
     // Create a fresh Excel workbook
     final excel = excel_lib.Excel.createExcel();
+    excel.delete('Sheet1');
     
     // Create our 3 main sheets FIRST - this ensures they appear at the beginning
     await _createSummarySheet(excel, reportData, weekLabel);

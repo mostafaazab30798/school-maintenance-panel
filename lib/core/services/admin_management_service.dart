@@ -577,6 +577,9 @@ class AdminManagementService {
 
         // All supervisor school assignments
         _client.from('supervisor_schools').select('supervisor_id, school_id'),
+
+        // All attendance data
+        _client.from('supervisor_attendance').select('supervisor_id'),
       ]);
 
       final admins = baseDataFutures[0] as List<Admin>;
@@ -584,6 +587,7 @@ class AdminManagementService {
       final allReports = baseDataFutures[2] as List<Map<String, dynamic>>;
       final allMaintenance = baseDataFutures[3] as List<Map<String, dynamic>>;
       final allSchools = baseDataFutures[4] as List<Map<String, dynamic>>;
+      final allAttendance = baseDataFutures[5] as List<Map<String, dynamic>>;
 
       print('🔄 Base data fetched in ${stopwatch.elapsedMilliseconds}ms');
       print(
@@ -606,7 +610,7 @@ class AdminManagementService {
 
       // Calculate supervisor stats in memory
       final supervisorsWithStats = _calculateSupervisorsWithStatsInMemory(
-          supervisorsRaw, allReports, allMaintenance, allSchools);
+          supervisorsRaw, allReports, allMaintenance, allSchools, allAttendance);
 
       // Calculate admin stats in memory
       final adminStats = _calculateAdminStatsInMemory(
@@ -672,6 +676,7 @@ class AdminManagementService {
     List<Map<String, dynamic>> allReports,
     List<Map<String, dynamic>> allMaintenance,
     List<Map<String, dynamic>> allSchools,
+    List<Map<String, dynamic>> allAttendance,
   ) {
     return supervisors.map((supervisor) {
       final supervisorId = supervisor['id'] as String;
@@ -703,6 +708,11 @@ class AdminManagementService {
           allSchools.where((s) => s['supervisor_id'] == supervisorId).toList();
       final schoolsCount = schoolsResponse.length;
 
+      // Get attendance count for this supervisor
+      final attendanceCount = allAttendance
+          .where((a) => a['supervisor_id'] == supervisorId)
+          .length;
+
       return {
         'id': supervisorId,
         'username': supervisor['username'],
@@ -719,6 +729,7 @@ class AdminManagementService {
           'late_reports': lateReports,
           'late_completed_reports': lateCompletedReports,
           'completion_rate': completionRate,
+          'attendance': attendanceCount,
         },
       };
     }).toList();

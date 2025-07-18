@@ -4,6 +4,7 @@ import 'dart:ui';
 import '../../../data/models/supervisor.dart';
 import '../super_admin/dialogs/schools_list_dialog.dart';
 import '../super_admin/dialogs/technician_management_dialog.dart';
+import '../attendance/attendance_dialog.dart';
 import '../common/esc_dismissible_dialog.dart';
 
 class SupervisorCard extends StatefulWidget {
@@ -211,9 +212,9 @@ class _SupervisorCardState extends State<SupervisorCard>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           _buildModernHeader(isDark),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 20),
                           _buildMetricsSection(isDark),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 20),
                           _buildActionSection(isDark),
                         ],
                       ),
@@ -640,6 +641,15 @@ class _SupervisorCardState extends State<SupervisorCard>
                 isDark,
                 isPrimary: false,
               ),
+              const SizedBox(height: 8),
+              _buildModernActionButton(
+                'سجل الحضور',
+                Icons.calendar_today,
+                const Color(0xFF8B5CF6),
+                () => _showAttendanceDialog(context),
+                isDark,
+                isPrimary: false,
+              ),
             ],
           );
         } else {
@@ -663,6 +673,17 @@ class _SupervisorCardState extends State<SupervisorCard>
                   Icons.build_circle_outlined,
                   const Color(0xFF059669),
                   () => context.push('/add-maintenance/${widget.supervisorId}'),
+                  isDark,
+                  isPrimary: false,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildModernActionButton(
+                  'سجل الحضور',
+                  Icons.calendar_today,
+                  const Color(0xFF8B5CF6),
+                  () => _showAttendanceDialog(context),
                   isDark,
                   isPrimary: false,
                 ),
@@ -828,5 +849,9 @@ class _SupervisorCardState extends State<SupervisorCard>
         supervisorName: widget.name,
       ),
     );
+  }
+
+  void _showAttendanceDialog(BuildContext context) {
+    AttendanceDialog.show(context, widget.supervisorId, widget.name);
   }
 }

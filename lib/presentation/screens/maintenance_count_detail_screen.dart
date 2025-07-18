@@ -1379,57 +1379,135 @@ class _MaintenanceCountDetailScreenState
             e.key.contains('pump'))
         .length;
 
-    // Add fire extinguisher expiry dates
+    // Add fire safety text answers count
     itemCount += count.textAnswers.entries
-        .where((e) => e.key.contains('fire_extinguishers_expiry'))
+        .where((e) => e.value.isNotEmpty && (
+          e.key.contains('fire_extinguishers_expiry') ||
+          e.key == 'fire_extinguishers_expiry_day' ||
+          e.key == 'fire_extinguishers_expiry_month' ||
+          e.key == 'fire_extinguishers_expiry_year'
+        ))
         .length;
 
     return itemCount;
   }
 
   int _getMechanicalItemsCount(MaintenanceCount count) {
-    final mechanicalKeys = ['water_pumps'];
-
     int itemCount = 0;
 
-    // Add water pumps count
-    count.itemCounts.forEach((key, value) {
-      if (mechanicalKeys.contains(key)) itemCount++;
-    });
+    // Handle new heater entries structure
+    final heaterEntries = count.heaterEntries;
+    if (heaterEntries.isNotEmpty) {
+      // Count individual heater entries
+      final bathroomHeaters = heaterEntries['bathroom_heaters'] as List<dynamic>?;
+      if (bathroomHeaters != null) {
+        itemCount += bathroomHeaters.length;
+      }
+      
+      final cafeteriaHeaters = heaterEntries['cafeteria_heaters'] as List<dynamic>?;
+      if (cafeteriaHeaters != null) {
+        itemCount += cafeteriaHeaters.length;
+      }
+    } else {
+      // Fallback to old structure
+      final mechanicalKeys = [
+        'bathroom_heaters',
+        'cafeteria_heaters',
+        'sinks',
+        'western_toilet',
+        'arabic_toilet',
+        'siphons',
+        'bidets',
+        'wall_exhaust_fans',
+        'central_exhaust_fans',
+        'cafeteria_exhaust_fans',
+        'wall_water_coolers',
+        'corridor_water_coolers',
+        'water_pumps'
+      ];
+
+      // Add mechanical item counts
+      count.itemCounts.forEach((key, value) {
+        if (mechanicalKeys.contains(key)) itemCount++;
+      });
+
+      // Add mechanical text answers count
+      itemCount += count.textAnswers.entries
+          .where((e) => e.value.isNotEmpty && (
+            e.key == 'water_meter_number' ||
+            e.key == 'bathroom_heaters_capacity' ||
+            e.key == 'cafeteria_heaters_capacity'
+          ))
+          .length;
+    }
 
     // Add water pumps condition
     itemCount += count.surveyAnswers.entries
         .where((e) => e.key == 'water_pumps_condition')
         .length;
 
-    // Add water meter number
-    itemCount += count.textAnswers.entries
-        .where((e) => e.key == 'water_meter_number')
-        .length;
-
     return itemCount;
   }
 
   int _getElectricalItemsCount(MaintenanceCount count) {
-    final electricalKeys = ['electrical_panels'];
+    final electricalKeys = [
+      'lamps',
+      'projector', 
+      'class_bell',
+      'speakers',
+      'microphone_system',
+      'ac_panel',
+      'power_panel',
+      'lighting_panel',
+      'main_distribution_panel',
+      'main_breaker',
+      'concealed_ac_breaker',
+      'package_ac_breaker',
+      'electrical_panels'
+    ];
 
     int itemCount = 0;
 
-    // Add electrical panels count
+    // Add electrical item counts
     count.itemCounts.forEach((key, value) {
       if (electricalKeys.contains(key)) itemCount++;
     });
 
-    // Add electricity meter number only
+    // Add electrical text answers count
     itemCount += count.textAnswers.entries
-        .where((e) => e.key == 'electricity_meter_number')
+        .where((e) => e.value.isNotEmpty && (
+          e.key == 'electricity_meter_number' ||
+          e.key == 'ac_panel_amperage' ||
+          e.key == 'power_panel_amperage' ||
+          e.key == 'main_breaker_amperage' ||
+          e.key == 'lighting_panel_amperage' ||
+          e.key == 'package_ac_breaker_amperage' ||
+          e.key == 'concealed_ac_breaker_amperage' ||
+          e.key == 'main_distribution_panel_amperage' ||
+          e.key == 'elevators_motor' ||
+          e.key == 'elevators_main_parts'
+        ))
         .length;
 
     return itemCount;
   }
 
   int _getCivilItemsCount(MaintenanceCount count) {
-    int itemCount = count.yesNoAnswers.length;
+    final civilKeys = [
+      'blackboard',
+      'internal_windows',
+      'external_windows'
+    ];
+
+    int itemCount = 0;
+
+    // Add civil item counts
+    count.itemCounts.forEach((key, value) {
+      if (civilKeys.contains(key)) itemCount++;
+    });
+
+    // Add yes/no answers count
+    itemCount += count.yesNoAnswers.length;
 
     return itemCount;
   }
@@ -1463,7 +1541,7 @@ class _MaintenanceCountDetailScreenState
       'smoke_detectors_condition': 'حالة أجهزة استشعار الدخان',
       'emergency_lights_condition': 'حالة أضواء الطوارئ',
       'fire_alarm_system_condition': 'حالة نظام إنذار الحريق',
-      'break_glasses_bells_condition': 'حالة أجراس كسر الزجاج',
+      'break_glasses_bells_condition': 'كاسر',
       'fire_suppression_system_condition': 'حالة نظام إطفاء الحريق',
 
       // Yes/No answers
@@ -1534,9 +1612,14 @@ class _MaintenanceCountDetailScreenState
     // Add fire safety alarm panel data
     items.addAll(count.fireSafetyAlarmPanelData);
 
-    // Add fire extinguisher expiry dates
+    // Add fire safety text answers
     count.textAnswers.forEach((key, value) {
-      if (key.contains('fire_extinguishers_expiry') && value.isNotEmpty) {
+      if (value.isNotEmpty && (
+        key.contains('fire_extinguishers_expiry') ||
+        key == 'fire_extinguishers_expiry_day' ||
+        key == 'fire_extinguishers_expiry_month' ||
+        key == 'fire_extinguishers_expiry_year'
+      )) {
         items[key] = value;
       }
     });
@@ -1599,23 +1682,100 @@ class _MaintenanceCountDetailScreenState
   }
 
   Map<String, dynamic> _getMechanicalItems(MaintenanceCount count) {
-    final mechanicalKeys = ['water_pumps'];
-
     Map<String, dynamic> items = {};
 
-    // Add water pumps count
-    count.itemCounts.forEach((key, value) {
-      if (mechanicalKeys.contains(key)) {
-        items[key] = value;
+    // Handle new heater entries structure
+    final heaterEntries = count.heaterEntries;
+    if (heaterEntries.isNotEmpty) {
+      // Process bathroom heaters
+      final bathroomHeaters = heaterEntries['bathroom_heaters'] as List<dynamic>?;
+      if (bathroomHeaters != null) {
+        for (int i = 0; i < bathroomHeaters.length; i++) {
+          final heater = bathroomHeaters[i];
+          if (heater is Map<String, dynamic>) {
+            final id = heater['id']?.toString() ?? '';
+            
+            if (id.isNotEmpty) {
+              final heaterKey = 'bathroom_heaters_$id';
+              final quantity = count.itemCounts[heaterKey] ?? 0;
+                          // Try to get capacity from textAnswers
+            final capKey = '${heaterKey}_capacity';
+            final capacity = count.textAnswers[capKey];
+            
+            final heaterData = <String, dynamic>{
+              'count': quantity,
+              'location': 'حمام',
+              'id': id,
+              'capacity': capacity,
+            };
+              items[heaterKey] = heaterData;
+            }
+          }
+        }
       }
-    });
+      
+      // Process cafeteria heaters
+      final cafeteriaHeaters = heaterEntries['cafeteria_heaters'] as List<dynamic>?;
+      if (cafeteriaHeaters != null) {
+        for (int i = 0; i < cafeteriaHeaters.length; i++) {
+          final heater = cafeteriaHeaters[i];
+          if (heater is Map<String, dynamic>) {
+            final id = heater['id']?.toString() ?? '';
+            
+            if (id.isNotEmpty) {
+              final heaterKey = 'cafeteria_heaters_$id';
+              final quantity = count.itemCounts[heaterKey] ?? 0;
+                          // Try to get capacity from textAnswers
+            final capKey = '${heaterKey}_capacity';
+            final capacity = count.textAnswers[capKey];
+            
+            final heaterData = <String, dynamic>{
+              'count': quantity,
+              'location': 'مقصف',
+              'id': id,
+              'capacity': capacity,
+            };
+              items[heaterKey] = heaterData;
+            }
+          }
+        }
+      }
+    } else {
+      // Fallback to old structure
+      final mechanicalKeys = [
+        'bathroom_heaters',
+        'cafeteria_heaters',
+        'sinks',
+        'western_toilet',
+        'arabic_toilet',
+        'siphons',
+        'bidets',
+        'wall_exhaust_fans',
+        'central_exhaust_fans',
+        'cafeteria_exhaust_fans',
+        'wall_water_coolers',
+        'corridor_water_coolers',
+        'water_pumps'
+      ];
 
-    // Add water meter number
-    count.textAnswers.forEach((key, value) {
-      if (key == 'water_meter_number' && value.isNotEmpty) {
-        items[key] = value;
-      }
-    });
+      // Add mechanical item counts
+      count.itemCounts.forEach((key, value) {
+        if (mechanicalKeys.contains(key)) {
+          items[key] = value;
+        }
+      });
+
+      // Add mechanical text answers
+      count.textAnswers.forEach((key, value) {
+        if (value.isNotEmpty && (
+          key == 'water_meter_number' ||
+          key == 'bathroom_heaters_capacity' ||
+          key == 'cafeteria_heaters_capacity'
+        )) {
+          items[key] = value;
+        }
+      });
+    }
 
     return items;
   }
@@ -1657,22 +1817,165 @@ class _MaintenanceCountDetailScreenState
   }
 
   Map<String, dynamic> _getElectricalItems(MaintenanceCount count) {
-    final electricalKeys = ['electrical_panels'];
-
     Map<String, dynamic> items = {};
 
+    // Combine AC Panel data
+    if (count.itemCounts.containsKey('ac_panel') ||
+        count.textAnswers.containsKey('ac_panel_amperage')) {
+      final acPanelData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('ac_panel')) {
+        acPanelData['count'] = count.itemCounts['ac_panel'];
+      }
+      if (count.textAnswers.containsKey('ac_panel_amperage') && 
+          count.textAnswers['ac_panel_amperage']!.isNotEmpty) {
+        acPanelData['amperage'] = count.textAnswers['ac_panel_amperage'];
+      }
+      
+      if (acPanelData.isNotEmpty) {
+        items['ac_panel_combined'] = acPanelData;
+      }
+    }
+
+    // Combine Power Panel data
+    if (count.itemCounts.containsKey('power_panel') ||
+        count.textAnswers.containsKey('power_panel_amperage')) {
+      final powerPanelData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('power_panel')) {
+        powerPanelData['count'] = count.itemCounts['power_panel'];
+      }
+      if (count.textAnswers.containsKey('power_panel_amperage') && 
+          count.textAnswers['power_panel_amperage']!.isNotEmpty) {
+        powerPanelData['amperage'] = count.textAnswers['power_panel_amperage'];
+      }
+      
+      if (powerPanelData.isNotEmpty) {
+        items['power_panel_combined'] = powerPanelData;
+      }
+    }
+
+    // Combine Main Breaker data
+    if (count.itemCounts.containsKey('main_breaker') ||
+        count.textAnswers.containsKey('main_breaker_amperage')) {
+      final mainBreakerData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('main_breaker')) {
+        mainBreakerData['count'] = count.itemCounts['main_breaker'];
+      }
+      if (count.textAnswers.containsKey('main_breaker_amperage') && 
+          count.textAnswers['main_breaker_amperage']!.isNotEmpty) {
+        mainBreakerData['amperage'] = count.textAnswers['main_breaker_amperage'];
+      }
+      
+      if (mainBreakerData.isNotEmpty) {
+        items['main_breaker_combined'] = mainBreakerData;
+      }
+    }
+
+    // Combine Lighting Panel data
+    if (count.itemCounts.containsKey('lighting_panel') ||
+        count.textAnswers.containsKey('lighting_panel_amperage')) {
+      final lightingPanelData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('lighting_panel')) {
+        lightingPanelData['count'] = count.itemCounts['lighting_panel'];
+      }
+      if (count.textAnswers.containsKey('lighting_panel_amperage') && 
+          count.textAnswers['lighting_panel_amperage']!.isNotEmpty) {
+        lightingPanelData['amperage'] = count.textAnswers['lighting_panel_amperage'];
+      }
+      
+      if (lightingPanelData.isNotEmpty) {
+        items['lighting_panel_combined'] = lightingPanelData;
+      }
+    }
+
+    // Combine Main Distribution Panel data
+    if (count.itemCounts.containsKey('main_distribution_panel') ||
+        count.textAnswers.containsKey('main_distribution_panel_amperage')) {
+      final mainDistPanelData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('main_distribution_panel')) {
+        mainDistPanelData['count'] = count.itemCounts['main_distribution_panel'];
+      }
+      if (count.textAnswers.containsKey('main_distribution_panel_amperage') && 
+          count.textAnswers['main_distribution_panel_amperage']!.isNotEmpty) {
+        mainDistPanelData['amperage'] = count.textAnswers['main_distribution_panel_amperage'];
+      }
+      
+      if (mainDistPanelData.isNotEmpty) {
+        items['main_distribution_panel_combined'] = mainDistPanelData;
+      }
+    }
+
+    // Combine Package AC Breaker data
+    if (count.itemCounts.containsKey('package_ac_breaker') ||
+        count.textAnswers.containsKey('package_ac_breaker_amperage')) {
+      final packageAcBreakerData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('package_ac_breaker')) {
+        packageAcBreakerData['count'] = count.itemCounts['package_ac_breaker'];
+      }
+      if (count.textAnswers.containsKey('package_ac_breaker_amperage') && 
+          count.textAnswers['package_ac_breaker_amperage']!.isNotEmpty) {
+        packageAcBreakerData['amperage'] = count.textAnswers['package_ac_breaker_amperage'];
+      }
+      
+      if (packageAcBreakerData.isNotEmpty) {
+        items['package_ac_breaker_combined'] = packageAcBreakerData;
+      }
+    }
+
+    // Combine Concealed AC Breaker data
+    if (count.itemCounts.containsKey('concealed_ac_breaker') ||
+        count.textAnswers.containsKey('concealed_ac_breaker_amperage')) {
+      final concealedAcBreakerData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('concealed_ac_breaker')) {
+        concealedAcBreakerData['count'] = count.itemCounts['concealed_ac_breaker'];
+      }
+      if (count.textAnswers.containsKey('concealed_ac_breaker_amperage') && 
+          count.textAnswers['concealed_ac_breaker_amperage']!.isNotEmpty) {
+        concealedAcBreakerData['amperage'] = count.textAnswers['concealed_ac_breaker_amperage'];
+      }
+      
+      if (concealedAcBreakerData.isNotEmpty) {
+        items['concealed_ac_breaker_combined'] = concealedAcBreakerData;
+      }
+    }
+
+    // Add simple items that don't need combination
+    final simpleElectricalKeys = [
+      'lamps',
+      'projector', 
+      'class_bell',
+      'speakers',
+      'microphone_system',
+      'electrical_panels'
+    ];
+
     count.itemCounts.forEach((key, value) {
-      if (electricalKeys.contains(key)) {
+      if (simpleElectricalKeys.contains(key)) {
         items[key] = value;
       }
     });
 
-    // Add text answers for electrical
-    count.textAnswers.forEach((key, value) {
-      if (key == 'electricity_meter_number') {
-        items[key] = value;
-      }
-    });
+    // Add electricity meter number
+    if (count.textAnswers.containsKey('electricity_meter_number') && 
+        count.textAnswers['electricity_meter_number']!.isNotEmpty) {
+      items['electricity_meter_number'] = count.textAnswers['electricity_meter_number'];
+    }
+
+    // Add elevator information
+    if (count.textAnswers.containsKey('elevators_motor') && 
+        count.textAnswers['elevators_motor']!.isNotEmpty) {
+      items['elevators_motor'] = count.textAnswers['elevators_motor'];
+    }
+    if (count.textAnswers.containsKey('elevators_main_parts') && 
+        count.textAnswers['elevators_main_parts']!.isNotEmpty) {
+      items['elevators_main_parts'] = count.textAnswers['elevators_main_parts'];
+    }
 
     return items;
   }
@@ -1710,7 +2013,20 @@ class _MaintenanceCountDetailScreenState
   }
 
   Map<String, dynamic> _getCivilItems(MaintenanceCount count) {
+    final civilKeys = [
+      'blackboard',
+      'internal_windows',
+      'external_windows'
+    ];
+
     Map<String, dynamic> items = {};
+
+    // Add civil item counts
+    count.itemCounts.forEach((key, value) {
+      if (civilKeys.contains(key)) {
+        items[key] = value;
+      }
+    });
 
     // Add yes/no answers for civil issues
     count.yesNoAnswers.forEach((key, value) {

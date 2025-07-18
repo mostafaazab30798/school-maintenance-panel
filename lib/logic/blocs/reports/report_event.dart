@@ -15,6 +15,7 @@ class FetchReports extends ReportEvent {
   final String? schoolName;
   final bool forceRefresh;
   final int? limit;
+  final int? page;
 
   const FetchReports({
     this.supervisorId,
@@ -24,9 +25,18 @@ class FetchReports extends ReportEvent {
     this.schoolName,
     this.forceRefresh = false,
     this.limit,
+    this.page,
   });
 
   @override
-  List<Object?> get props =>
-      [supervisorId, type, status, priority, schoolName, forceRefresh, limit];
+  List<Object?> get props => [
+        supervisorId,
+        type,
+        status,
+        priority,
+        schoolName,
+        forceRefresh,
+        limit,
+        page,
+      ];
 }

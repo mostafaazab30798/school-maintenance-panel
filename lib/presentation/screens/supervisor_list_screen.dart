@@ -8,8 +8,20 @@ import '../../logic/blocs/supervisors/supervisor_event.dart';
 import '../../logic/blocs/supervisors/supervisor_state.dart';
 import '../../core/services/admin_service.dart';
 import '../widgets/saudi_plate.dart';
+import '../widgets/attendance/attendance_dialog.dart';
 import 'dart:ui';
 import '../widgets/common/standard_refresh_button.dart';
+import '../widgets/supervisors_list/export_attendance_excel.dart';
+import '../../data/repositories/supervisor_attendance_repository.dart';
+import '../../data/models/supervisor_attendance.dart';
+import 'package:intl/intl.dart' as intl;
+import 'package:syncfusion_flutter_xlsio/xlsio.dart' as xlsio;
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:html' as html;
 
 class SupervisorListScreen extends StatelessWidget {
   const SupervisorListScreen({super.key});
@@ -42,6 +54,12 @@ class _SupervisorListView extends StatelessWidget {
         body: CustomScrollView(
           slivers: [
             _buildAppBar(context, isDark),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                child: _ExportAllSupervisorsAttendanceButton(),
+              ),
+            ),
             BlocBuilder<SupervisorBloc, SupervisorState>(
               builder: (context, state) => switch (state) {
                 SupervisorLoading() => _buildLoading(context, isDark),
@@ -445,6 +463,8 @@ class _SupervisorCardState extends State<_SupervisorCard>
                   _buildInfoSection(),
                   const SizedBox(height: 20),
                   _buildLicensePlate(),
+                  const SizedBox(height: 20),
+                  _buildAttendanceSection(),
                 ],
               ),
             ),
@@ -649,6 +669,146 @@ class _SupervisorCardState extends State<_SupervisorCard>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAttendanceSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF8B5CF6).withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          const Column(
+            children: [
+              Icon(Icons.calendar_today, color: Color(0xFF8B5CF6), size: 24),
+              SizedBox(height: 4),
+              Text(
+                'سجل الحضور',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF8B5CF6),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: () {
+                AttendanceDialog.show(
+                  context,
+                  widget.supervisor.id,
+                  widget.supervisor.username,
+                );
+              },
+              icon: const Icon(Icons.visibility, size: 16),
+              label: const Text('عرض السجل'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8B5CF6),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExportAllSupervisorsAttendanceButton extends StatefulWidget {
+  @override
+  State<_ExportAllSupervisorsAttendanceButton> createState() => _ExportAllSupervisorsAttendanceButtonState();
+}
+
+class _ExportAllSupervisorsAttendanceButtonState extends State<_ExportAllSupervisorsAttendanceButton> {
+  bool _isExporting = false;
+
+  Future<void> _export() async {
+    setState(() => _isExporting = true);
+    try {
+      // Fetch all supervisors
+      final supabase = Supabase.instance.client;
+      final supervisorRepo = SupervisorRepository(supabase);
+      final attendanceRepo = SupervisorAttendanceRepository(supabase);
+      final supervisors = await supervisorRepo.fetchSupervisorsForCurrentAdmin();
+      final dateFormat = intl.DateFormat('yyyy-MM-dd');
+      final timeFormat = intl.DateFormat('HH:mm');
+
+      final xlsio.Workbook workbook = xlsio.Workbook();
+      final sheet = workbook.worksheets[0];
+      // Arabic headers
+      sheet.getRangeByName('A1').setText('اسم المشرف');
+      sheet.getRangeByName('B1').setText('البريد الإلكتروني');
+      sheet.getRangeByName('C1').setText('تاريخ الحضور');
+      sheet.getRangeByName('D1').setText('وقت الحضور');
+
+      int row = 2;
+      for (final supervisor in supervisors) {
+        final attendanceList = await attendanceRepo.fetchAttendanceForSupervisor(supervisor.id);
+        for (final attendance in attendanceList) {
+          sheet.getRangeByName('A$row').setText(supervisor.username);
+          sheet.getRangeByName('B$row').setText(supervisor.email);
+          sheet.getRangeByName('C$row').setText(dateFormat.format(attendance.createdAt));
+          sheet.getRangeByName('D$row').setText(timeFormat.format(attendance.createdAt));
+          row++;
+        }
+      }
+
+      final List<int> bytes = workbook.saveAsStream();
+      workbook.dispose();
+
+      if (kIsWeb) {
+        final blob = html.Blob([Uint8List.fromList(bytes)]);
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement(href: url)
+          ..setAttribute('download', 'حضور المشرفين.xlsx')
+          ..click();
+        html.Url.revokeObjectUrl(url);
+      } else {
+        final directory = await getApplicationDocumentsDirectory();
+        final path = '${directory.path}/حضور المشرفين.xlsx';
+        final file = File(path);
+        await file.writeAsBytes(bytes, flush: true);
+        await OpenFile.open(path);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('تم تصدير حضور المشرفين بنجاح!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('حدث خطأ أثناء التصدير: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: ElevatedButton.icon(
+        icon: Icon(Icons.download),
+        label: Text(_isExporting ? 'جاري التصدير...' : 'تصدير حضور المشرفين إلى Excel'),
+        onPressed: _isExporting ? null : _export,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF3B82F6),
+          foregroundColor: Colors.white,
+        ),
       ),
     );
   }

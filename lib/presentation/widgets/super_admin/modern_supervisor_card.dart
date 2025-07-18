@@ -19,6 +19,7 @@ class ModernSupervisorCard extends StatefulWidget {
   final Function(String supervisorId, String username)? onCompletedTap;
   final Function(String supervisorId, String username)? onLateReportsTap;
   final Function(String supervisorId, String username)? onLateCompletedTap;
+  final Function(String supervisorId, String username)? onAttendanceTap;
 
   const ModernSupervisorCard({
     super.key,
@@ -29,6 +30,7 @@ class ModernSupervisorCard extends StatefulWidget {
     this.onCompletedTap,
     this.onLateReportsTap,
     this.onLateCompletedTap,
+    this.onAttendanceTap,
   });
 
   @override
@@ -119,6 +121,7 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
     final lateReports = stats['late_reports'] as int? ?? 0;
     final lateCompletedReports = stats['late_completed_reports'] as int? ?? 0;
     final completionRate = stats['completion_rate'] as double? ?? 0.0;
+    final attendanceCount = stats['attendance'] as int? ?? 0;
 
     final totalWork = totalReports + totalMaintenance;
     final completedWork = completedReports + completedMaintenance;
@@ -234,6 +237,7 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
                               totalReports,
                               totalMaintenance,
                               completedWork,
+                              attendanceCount,
                               supervisorId,
                               username,
                               isDark),
@@ -701,42 +705,66 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
       int totalReports,
       int totalMaintenance,
       int completedWork,
+      int attendanceCount,
       String supervisorId,
       String username,
       bool isDark) {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: _buildModernStatCard(
-            'البلاغات',
-            totalReports,
-            Icons.description_outlined,
-            const Color(0xFF3B82F6),
-            () => widget.onReportsTap?.call(supervisorId, username),
-            isDark,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _buildModernStatCard(
+                'البلاغات',
+                totalReports,
+                Icons.description_outlined,
+                const Color(0xFF3B82F6),
+                () => widget.onReportsTap?.call(supervisorId, username),
+                isDark,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildModernStatCard(
+                'الصيانة',
+                totalMaintenance,
+                Icons.build_outlined,
+                const Color(0xFFEF4444),
+                () => widget.onMaintenanceTap?.call(supervisorId, username),
+                isDark,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildModernStatCard(
+                'مكتمل',
+                completedWork,
+                Icons.check_circle_outlined,
+                const Color(0xFF10B981),
+                () => widget.onCompletedTap?.call(supervisorId, username),
+                isDark,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildModernStatCard(
-            'الصيانة',
-            totalMaintenance,
-            Icons.build_outlined,
-            const Color(0xFFEF4444),
-            () => widget.onMaintenanceTap?.call(supervisorId, username),
-            isDark,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildModernStatCard(
-            'مكتمل',
-            completedWork,
-            Icons.check_circle_outlined,
-            const Color(0xFF10B981),
-            () => widget.onCompletedTap?.call(supervisorId, username),
-            isDark,
-          ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildModernStatCard(
+                'الحضور',
+                attendanceCount,
+                Icons.calendar_today,
+                const Color(0xFF8B5CF6),
+                () => widget.onAttendanceTap?.call(supervisorId, username),
+                isDark,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const SizedBox.shrink(),
+            const SizedBox(width: 12),
+            const SizedBox.shrink(),
+          ],
         ),
       ],
     );
@@ -1090,17 +1118,17 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
     // Get actual school count from database
     try {
       final schoolsCount = supervisor['schools_count'] as int?;
-      if (schoolsCount != null) {
+      if (schoolsCount != null && schoolsCount > 0) {
         return schoolsCount;
       }
 
       // Fallback: check if schools data exists in supervisor object
       final schools = supervisor['schools'] as List?;
-      if (schools != null) {
+      if (schools != null && schools.isNotEmpty) {
         return schools.length;
       }
 
-      return 0;
+      return 0; // Show 0 if no schools assigned
     } catch (e) {
       return 0;
     }

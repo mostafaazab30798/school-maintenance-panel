@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -246,6 +248,7 @@ serve(async (req) => {
     });
 
     const supabase = createClient(
+      
       'https://cftjaukrygtzguqcafon.supabase.co',
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmdGphdWtyeWd0emd1cWNhZm9uIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODMyNTU3NiwiZXhwIjoyMDYzOTAxNTc2fQ.nuFdtGZhNxYAyGABC1XcaQmy2cJouf-fudaj9zPoLKA'
     );

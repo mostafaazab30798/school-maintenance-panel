@@ -20,6 +20,24 @@ class MaintenanceCountsError extends MaintenanceCountsState {
   List<Object> get props => [message];
 }
 
+class MaintenanceCountRecordsLoaded extends MaintenanceCountsState {
+  final List<MaintenanceCount> records;
+
+  const MaintenanceCountRecordsLoaded({required this.records});
+
+  @override
+  List<Object> get props => [records];
+}
+
+class DamageCountRecordsLoaded extends MaintenanceCountsState {
+  final List<DamageCount> records;
+
+  const DamageCountRecordsLoaded({required this.records});
+
+  @override
+  List<Object> get props => [records];
+}
+
 class SchoolsWithCountsLoaded extends MaintenanceCountsState {
   final List<Map<String, dynamic>> schools;
 

@@ -1,6 +1,7 @@
 import 'package:admin_panel/data/models/report_form_data.dart';
+import 'package:equatable/equatable.dart';
 
-class AddMultipleReportsState {
+class AddMultipleReportsState extends Equatable {
   final List<ReportFormData> reports;
   final bool isSubmitting;
   final bool validationFailed;
@@ -10,6 +11,9 @@ class AddMultipleReportsState {
     required this.isSubmitting,
     this.validationFailed = false,
   });
+
+  @override
+  List<Object?> get props => [reports, isSubmitting, validationFailed];
 
   factory AddMultipleReportsState.initial(String supervisorId) {
     return AddMultipleReportsState(

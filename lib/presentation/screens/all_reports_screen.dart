@@ -9,12 +9,14 @@ import '../../core/services/admin_service.dart';
 import '../widgets/dashboard/expandable_report_card.dart';
 import '../widgets/common/standard_refresh_button.dart';
 import '../widgets/common/shared_app_bar.dart';
-import 'package:excel/excel.dart' as excel_lib;
 import 'package:file_saver/file_saver.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:intl/date_symbol_data_local.dart';
 import 'dart:typed_data';
 import '../../core/services/cache_service.dart';
+// Web-specific imports - conditional
+import 'dart:html' as html;
+import 'package:syncfusion_flutter_xlsio/xlsio.dart' as syncfusion;
 
 class AllReportsScreen extends StatefulWidget {
   final String? initialFilter;
@@ -44,7 +46,7 @@ class _AllReportsScreenState extends State<AllReportsScreen>
 
   // Pagination variables
   int currentPage = 1;
-  int reportsPerPage = 50;
+  int reportsPerPage = 20; // Changed from 50 to 20
   int totalPages = 1;
 
   final CacheService _cacheService = CacheService();
@@ -357,12 +359,17 @@ class _AllReportsScreenState extends State<AllReportsScreen>
   Future<void> _downloadReportsExcel() async {
     try {
       await initializeDateFormatting('ar');
-      final excel = excel_lib.Excel.createExcel();
-      final sheet = excel['البلاغات'];
+      
+      // Use Syncfusion for web export
+      final workbook = syncfusion.Workbook();
+      
+      // Rename the default sheet instead of removing it
+      final sheet = workbook.worksheets[0];
+      sheet.name = 'البلاغات';
       final dateFormat = intl.DateFormat('dd/MM/yyyy hh:mm a');
 
       // Header row - matching reports_screen format
-      sheet.appendRow([
+      final headers = [
         'اسم المشرف',
         'اسم المدرسة',
         'وصف البلاغ',
@@ -374,9 +381,14 @@ class _AllReportsScreenState extends State<AllReportsScreen>
         'تاريخ الجدولة',
         'تاريخ اغلاق البلاغ',
         'ملاحظة الاغلاق',
-      ]);
+      ];
+      
+      for (int i = 0; i < headers.length; i++) {
+        sheet.getRangeByIndex(1, i + 1).setText(headers[i]);
+      }
 
-      for (final report in filteredReports) {
+      for (int row = 0; row < filteredReports.length; row++) {
+        final report = filteredReports[row];
         final supervisorData = report['supervisors'] as Map<String, dynamic>?;
         final createdAt = report['created_at'] != null
             ? DateTime.parse(report['created_at'])
@@ -388,7 +400,7 @@ class _AllReportsScreenState extends State<AllReportsScreen>
             ? DateTime.parse(report['closed_at'])
             : null;
 
-        sheet.appendRow([
+        final rowData = [
           supervisorData?['username'] ?? 'غير محدد',
           report['school_name'] ?? report['title'] ?? 'غير محدد',
           report['description'] ?? '',
@@ -400,18 +412,23 @@ class _AllReportsScreenState extends State<AllReportsScreen>
           dateFormat.format(scheduledDate),
           closedAt != null ? dateFormat.format(closedAt) : '',
           report['completion_note'] ?? '',
-        ]);
+        ];
+        
+        for (int col = 0; col < rowData.length; col++) {
+          sheet.getRangeByIndex(row + 2, col + 1).setText(rowData[col].toString());
+        }
       }
 
-      final excelBytes = excel.encode();
-      if (excelBytes == null) return;
+      // Save and download
+      final List<int> bytes = workbook.saveAsStream();
+      workbook.dispose();
 
-      await FileSaver.instance.saveFile(
-        name: 'جميع_البلاغات',
-        bytes: Uint8List.fromList(excelBytes),
-        ext: 'xlsx',
-        mimeType: MimeType.microsoftExcel,
-      );
+      final blob = html.Blob([Uint8List.fromList(bytes)]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', 'جميع_البلاغات.xlsx')
+        ..click();
+      html.Url.revokeObjectUrl(url);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

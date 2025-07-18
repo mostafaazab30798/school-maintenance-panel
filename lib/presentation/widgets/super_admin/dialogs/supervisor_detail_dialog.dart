@@ -10,6 +10,7 @@ import 'technician_management_dialog.dart';
 import 'school_assignment_dialog.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+
 class SupervisorDetailDialog extends StatelessWidget {
   final Map<String, dynamic> supervisor;
 
@@ -109,6 +110,8 @@ class SupervisorDetailDialog extends StatelessWidget {
 
                         // Status & Assignment Section
                         _buildStatusSection(context, supervisorData, stats),
+                        const SizedBox(height: 24),
+
                       ],
                     ),
                   ),
@@ -825,3 +828,5 @@ class SupervisorDetailDialog extends StatelessWidget {
     );
   }
 }
+
+

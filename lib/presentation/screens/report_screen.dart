@@ -5,11 +5,13 @@ import '../../../logic/blocs/reports/report_bloc.dart';
 import '../../../logic/blocs/reports/report_event.dart';
 import '../../../logic/blocs/reports/report_state.dart';
 import '../../../data/models/report.dart';
-import 'package:excel/excel.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:intl/intl.dart' as intl;
 import 'package:intl/date_symbol_data_local.dart';
 import 'dart:typed_data';
+// Web-specific imports - conditional
+import 'dart:html' as html;
+import 'package:syncfusion_flutter_xlsio/xlsio.dart' as syncfusion;
 
 class ReportScreen extends StatefulWidget {
   const ReportScreen({
@@ -138,11 +140,17 @@ class _ReportScreenState extends State<ReportScreen> {
   Future<void> _downloadReportsExcel(List<Report> reports) async {
     try {
       await initializeDateFormatting('ar');
-      final excel = Excel.createExcel();
-      final sheet = excel['البلاغات'];
+      
+      // Use Syncfusion for web export
+      final workbook = syncfusion.Workbook();
+      
+      // Rename the default sheet instead of removing it
+      final sheet = workbook.worksheets[0];
+      sheet.name = 'البلاغات';
       final dateFormat = intl.DateFormat('dd/MM/yyyy hh:mm a');
+      
       // Header row
-      sheet.appendRow([
+      final headers = [
         'اسم المشرف',
         'اسم المدرسة',
         'وصف البلاغ',
@@ -154,9 +162,15 @@ class _ReportScreenState extends State<ReportScreen> {
         'تاريخ الجدولة',
         'تاريخ اغلاق البلاغ',
         'ملاحظة الاغلاق',
-      ]);
-      for (final report in reports) {
-        sheet.appendRow([
+      ];
+      
+      for (int i = 0; i < headers.length; i++) {
+        sheet.getRangeByIndex(1, i + 1).setText(headers[i]);
+      }
+      
+      for (int row = 0; row < reports.length; row++) {
+        final report = reports[row];
+        final rowData = [
           report.supervisorName,
           report.schoolName,
           report.description,
@@ -168,16 +182,23 @@ class _ReportScreenState extends State<ReportScreen> {
           dateFormat.format(report.scheduledDate),
           report.closedAt != null ? dateFormat.format(report.closedAt!) : '',
           report.completionNote ?? '',
-        ]);
+        ];
+        
+        for (int col = 0; col < rowData.length; col++) {
+          sheet.getRangeByIndex(row + 2, col + 1).setText(rowData[col].toString());
+        }
       }
-      final excelBytes = excel.encode();
-      if (excelBytes == null) return;
-      await FileSaver.instance.saveFile(
-        name: 'جميع_البلاغات',
-        bytes: Uint8List.fromList(excelBytes),
-        ext: 'xlsx',
-        mimeType: MimeType.microsoftExcel,
-      );
+      
+      // Save and download
+      final List<int> bytes = workbook.saveAsStream();
+      workbook.dispose();
+
+      final blob = html.Blob([Uint8List.fromList(bytes)]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', 'جميع_البلاغات.xlsx')
+        ..click();
+      html.Url.revokeObjectUrl(url);
     } catch (e, stack) {
       // Print error and stack trace for debugging
       print('Excel export error: $e');

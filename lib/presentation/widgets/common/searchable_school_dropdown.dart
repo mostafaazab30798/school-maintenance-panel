@@ -1,7 +1,130 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:equatable/equatable.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/school_assignment_service.dart';
 import '../../../data/models/school.dart';
+
+// State class for the dropdown
+class SchoolDropdownState extends Equatable {
+  final List<School> schools;
+  final List<School> filteredSchools;
+  final bool isLoading;
+  final bool isDropdownOpen;
+  final String? errorMessage;
+  final String? selectedSchoolName;
+
+  const SchoolDropdownState({
+    this.schools = const [],
+    this.filteredSchools = const [],
+    this.isLoading = true,
+    this.isDropdownOpen = false,
+    this.errorMessage,
+    this.selectedSchoolName,
+  });
+
+  SchoolDropdownState copyWith({
+    List<School>? schools,
+    List<School>? filteredSchools,
+    bool? isLoading,
+    bool? isDropdownOpen,
+    String? errorMessage,
+    String? selectedSchoolName,
+  }) {
+    return SchoolDropdownState(
+      schools: schools ?? this.schools,
+      filteredSchools: filteredSchools ?? this.filteredSchools,
+      isLoading: isLoading ?? this.isLoading,
+      isDropdownOpen: isDropdownOpen ?? this.isDropdownOpen,
+      errorMessage: errorMessage ?? this.errorMessage,
+      selectedSchoolName: selectedSchoolName ?? this.selectedSchoolName,
+    );
+  }
+
+  @override
+  List<Object?> get props => [
+        schools,
+        filteredSchools,
+        isLoading,
+        isDropdownOpen,
+        errorMessage,
+        selectedSchoolName,
+      ];
+}
+
+// Cubit for managing dropdown state
+class SchoolDropdownCubit extends Cubit<SchoolDropdownState> {
+  final SchoolAssignmentService _schoolService;
+  final String supervisorId;
+
+  SchoolDropdownCubit(this._schoolService, this.supervisorId)
+      : super(const SchoolDropdownState()) {
+    _loadSchools();
+  }
+
+  Future<void> _loadSchools() async {
+    try {
+      emit(state.copyWith(isLoading: true, errorMessage: null));
+      print('🏫 Loading schools for supervisor: $supervisorId');
+      
+      final schools = await _schoolService.getSchoolsForSupervisor(supervisorId);
+      print('🏫 Loaded ${schools.length} schools: ${schools.map((s) => s.name).toList()}');
+      
+      emit(state.copyWith(
+        schools: schools,
+        filteredSchools: schools,
+        isLoading: false,
+      ));
+    } catch (e) {
+      print('🏫 Error loading schools: $e');
+      emit(state.copyWith(
+        errorMessage: 'فشل في تحميل المدارس: $e',
+        isLoading: false,
+      ));
+    }
+  }
+
+  void filterSchools(String query) {
+    final filteredQuery = query.toLowerCase().trim();
+    List<School> filtered;
+    
+    if (filteredQuery.isEmpty) {
+      filtered = state.schools;
+    } else {
+      filtered = state.schools.where((school) {
+        final nameMatch = school.name.toLowerCase().contains(filteredQuery);
+        final addressMatch = school.address?.toLowerCase().contains(filteredQuery) ?? false;
+        return nameMatch || addressMatch;
+      }).toList();
+    }
+    
+    emit(state.copyWith(filteredSchools: filtered));
+  }
+
+  void openDropdown() {
+    if (state.filteredSchools.isNotEmpty) {
+      print('🏫 Opening dropdown');
+      emit(state.copyWith(isDropdownOpen: true));
+    }
+  }
+
+  void closeDropdown() {
+    print('🏫 Closing dropdown');
+    emit(state.copyWith(isDropdownOpen: false));
+  }
+
+  void selectSchool(School school) {
+    print('🏫 School selected: ${school.name}');
+    emit(state.copyWith(
+      selectedSchoolName: school.name,
+      isDropdownOpen: false,
+    ));
+  }
+
+  void setSelectedSchoolName(String? schoolName) {
+    emit(state.copyWith(selectedSchoolName: schoolName));
+  }
+}
 
 class SearchableSchoolDropdown extends StatefulWidget {
   final String supervisorId;
@@ -22,26 +145,21 @@ class SearchableSchoolDropdown extends StatefulWidget {
   });
 
   @override
-  State<SearchableSchoolDropdown> createState() =>
-      _SearchableSchoolDropdownState();
+  State<SearchableSchoolDropdown> createState() => _SearchableSchoolDropdownState();
 }
 
 class _SearchableSchoolDropdownState extends State<SearchableSchoolDropdown> {
-  final SchoolAssignmentService _schoolService =
-      SchoolAssignmentService(Supabase.instance.client);
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-
-  List<School> _schools = [];
-  List<School> _filteredSchools = [];
-  bool _isLoading = true;
-  bool _isDropdownOpen = false;
-  String? _errorMessage;
+  late SchoolDropdownCubit _cubit;
 
   @override
   void initState() {
     super.initState();
-    _loadSchools();
+    _cubit = SchoolDropdownCubit(
+      SchoolAssignmentService(Supabase.instance.client),
+      widget.supervisorId,
+    );
     _searchController.addListener(_filterSchools);
     _focusNode.addListener(_onFocusChange);
 
@@ -49,6 +167,7 @@ class _SearchableSchoolDropdownState extends State<SearchableSchoolDropdown> {
     if (widget.selectedSchoolName != null) {
       print('🏫 Setting initial value: ${widget.selectedSchoolName}');
       _searchController.text = widget.selectedSchoolName!;
+      _cubit.setSelectedSchoolName(widget.selectedSchoolName);
     }
   }
 
@@ -56,6 +175,7 @@ class _SearchableSchoolDropdownState extends State<SearchableSchoolDropdown> {
   void dispose() {
     _searchController.dispose();
     _focusNode.dispose();
+    _cubit.close();
     super.dispose();
   }
 
@@ -65,79 +185,38 @@ class _SearchableSchoolDropdownState extends State<SearchableSchoolDropdown> {
 
     // Update controller text if the selected school changed externally
     if (widget.selectedSchoolName != oldWidget.selectedSchoolName) {
-      print(
-          '🏫 External value changed: ${oldWidget.selectedSchoolName} -> ${widget.selectedSchoolName}');
-      // Only update if the text is different to prevent cursor issues
+      print('🏫 External value changed: ${oldWidget.selectedSchoolName} -> ${widget.selectedSchoolName}');
       if (_searchController.text != (widget.selectedSchoolName ?? '')) {
-        print(
-            '🏫 Updating controller text to: ${widget.selectedSchoolName ?? ''}');
+        print('🏫 Updating controller text to: ${widget.selectedSchoolName ?? ''}');
         _searchController.text = widget.selectedSchoolName ?? '';
+        _cubit.setSelectedSchoolName(widget.selectedSchoolName);
       }
     }
 
     // Reload schools if supervisor changed
     if (widget.supervisorId != oldWidget.supervisorId) {
-      _loadSchools();
-    }
-  }
-
-  Future<void> _loadSchools() async {
-    try {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = null;
-      });
-
-      print('🏫 Loading schools for supervisor: ${widget.supervisorId}');
-      final schools =
-          await _schoolService.getSchoolsForSupervisor(widget.supervisorId);
-      print(
-          '🏫 Loaded ${schools.length} schools: ${schools.map((s) => s.name).toList()}');
-      setState(() {
-        _schools = schools;
-        _filteredSchools = schools;
-        _isLoading = false;
-      });
-    } catch (e) {
-      print('🏫 Error loading schools: $e');
-      setState(() {
-        _errorMessage = 'فشل في تحميل المدارس: $e';
-        _isLoading = false;
-      });
+      _cubit.close();
+      _cubit = SchoolDropdownCubit(
+        SchoolAssignmentService(Supabase.instance.client),
+        widget.supervisorId,
+      );
     }
   }
 
   void _filterSchools() {
-    final query = _searchController.text.toLowerCase().trim();
-    setState(() {
-      if (query.isEmpty) {
-        _filteredSchools = _schools;
-      } else {
-        _filteredSchools = _schools.where((school) {
-          final nameMatch = school.name.toLowerCase().contains(query);
-          final addressMatch =
-              school.address?.toLowerCase().contains(query) ?? false;
-          return nameMatch || addressMatch;
-        }).toList();
-      }
-    });
+    _cubit.filterSchools(_searchController.text);
   }
 
   void _onFocusChange() {
-    // Only close the dropdown if focus is lost AND user isn't interacting with dropdown
-    if (_focusNode.hasFocus && _filteredSchools.isNotEmpty) {
+    if (_focusNode.hasFocus && _cubit.state.filteredSchools.isNotEmpty) {
       print('🏫 Focus gained - opening dropdown');
-      setState(() {
-        _isDropdownOpen = true;
-      });
+      _cubit.openDropdown();
     } else if (!_focusNode.hasFocus) {
-      // Add a small delay before closing to allow for option selection
-      Future.delayed(const Duration(milliseconds: 150), () {
+      // Add a delay before closing to allow for option selection
+      Future.delayed(const Duration(milliseconds: 300), () {
         if (mounted && !_focusNode.hasFocus) {
           print('🏫 Focus lost - closing dropdown');
-          setState(() {
-            _isDropdownOpen = false;
-          });
+          _cubit.closeDropdown();
         }
       });
     }
@@ -146,9 +225,12 @@ class _SearchableSchoolDropdownState extends State<SearchableSchoolDropdown> {
   void _selectSchool(School school) {
     print('🏫 School selected: ${school.name}');
     _searchController.text = school.name;
-    _focusNode.unfocus();
-    setState(() {
-      _isDropdownOpen = false;
+    _cubit.selectSchool(school);
+    // Delay unfocus to prevent immediate dropdown closure
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        _focusNode.unfocus();
+      }
     });
     print('🏫 Calling onSchoolSelected with: ${school.name}');
     widget.onSchoolSelected(school.name);
@@ -157,223 +239,229 @@ class _SearchableSchoolDropdownState extends State<SearchableSchoolDropdown> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    print('🏫 Building SearchableSchoolDropdown - dropdown open: ${_cubit.state.isDropdownOpen}, schools: ${_cubit.state.filteredSchools.length}');
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-            border: Border.all(
-              color: widget.errorText != null
-                  ? const Color(0xFFEF4444)
-                  : isDark
-                      ? const Color(0xFF475569)
-                      : const Color(0xFFE2E8F0),
-              width: 1,
-            ),
-          ),
-          child: Stack(
+    return BlocProvider.value(
+      value: _cubit,
+      child: BlocBuilder<SchoolDropdownCubit, SchoolDropdownState>(
+        builder: (context, state) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextFormField(
-                controller: _searchController,
-                focusNode: _focusNode,
-                enabled: widget.enabled,
-                textDirection: TextDirection.rtl,
-                decoration: InputDecoration(
-                  hintText: widget.hintText ?? 'ابحث واختر المدرسة...',
-                  hintStyle: TextStyle(
-                    color: isDark
-                        ? const Color(0xFF94A3B8)
-                        : const Color(0xFF64748B),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                  border: Border.all(
+                    color: widget.errorText != null
+                        ? const Color(0xFFEF4444)
+                        : isDark
+                            ? const Color(0xFF475569)
+                            : const Color(0xFFE2E8F0),
+                    width: 1,
                   ),
-                  prefixIcon: Icon(
-                    Icons.school_rounded,
-                    color: isDark
-                        ? const Color(0xFF94A3B8)
-                        : const Color(0xFF64748B),
-                    size: 16,
-                  ),
-                  suffixIcon: _isLoading
-                      ? const Padding(
-                          padding: EdgeInsets.all(12),
-                          child: SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        )
-                      : Icon(
-                          _isDropdownOpen
-                              ? Icons.keyboard_arrow_up
-                              : Icons.keyboard_arrow_down,
+                ),
+                child: Stack(
+                  children: [
+                    TextFormField(
+                      controller: _searchController,
+                      focusNode: _focusNode,
+                      enabled: widget.enabled,
+                      textDirection: TextDirection.rtl,
+                      decoration: InputDecoration(
+                        hintText: widget.hintText ?? 'ابحث واختر المدرسة...',
+                        hintStyle: TextStyle(
                           color: isDark
                               ? const Color(0xFF94A3B8)
                               : const Color(0xFF64748B),
                         ),
-                  border: InputBorder.none,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        prefixIcon: Icon(
+                          Icons.school_rounded,
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF64748B),
+                          size: 16,
+                        ),
+                        suffixIcon: state.isLoading
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              )
+                            : Icon(
+                                state.isDropdownOpen
+                                    ? Icons.keyboard_arrow_up
+                                    : Icons.keyboard_arrow_down,
+                                color: isDark
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF64748B),
+                              ),
+                        border: InputBorder.none,
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
+                      style: TextStyle(
+                        color: isDark ? Colors.white : const Color(0xFF1E293B),
+                        fontSize: 14,
+                      ),
+                      onTap: () {
+                        print('🏫 TextFormField tapped. Dropdown open: ${state.isDropdownOpen}, Schools: ${state.filteredSchools.length}');
+                        if (!state.isDropdownOpen && state.filteredSchools.isNotEmpty) {
+                          print('🏫 Opening dropdown');
+                          _cubit.openDropdown();
+                        }
+                      },
+                    ),
+                  ],
                 ),
-                style: TextStyle(
-                  color: isDark ? Colors.white : const Color(0xFF1E293B),
-                  fontSize: 14,
-                ),
-                onTap: () {
-                  print(
-                      '🏫 TextFormField tapped. Dropdown open: $_isDropdownOpen, Schools: ${_filteredSchools.length}');
-                  if (!_isDropdownOpen && _filteredSchools.isNotEmpty) {
-                    print('🏫 Opening dropdown');
-                    setState(() {
-                      _isDropdownOpen = true;
-                    });
-                  }
-                },
               ),
+
+              // Error message
+              if (widget.errorText != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  widget.errorText!,
+                  style: const TextStyle(
+                    color: Color(0xFFEF4444),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+
+              // Loading error message
+              if (state.errorMessage != null) ...[
+                const SizedBox(height: 4),
+                Text(
+                  state.errorMessage!,
+                  style: const TextStyle(
+                    color: Color(0xFFEF4444),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+
+              // Dropdown list
+              if (state.isDropdownOpen && state.filteredSchools.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                    border: Border.all(
+                      color:
+                          isDark ? const Color(0xFF475569) : const Color(0xFFE2E8F0),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: state.filteredSchools.length,
+                      itemBuilder: (context, index) {
+                        final school = state.filteredSchools[index];
+                        return _buildSchoolOption(school, isDark);
+                      },
+                    ),
+                  ),
+                ),
+              ],
+
+              // Empty state when no schools match search
+              if (state.isDropdownOpen &&
+                  state.filteredSchools.isEmpty &&
+                  _searchController.text.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                    border: Border.all(
+                      color:
+                          isDark ? const Color(0xFF475569) : const Color(0xFFE2E8F0),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.search_off,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'لا توجد مدارس تطابق البحث',
+                        style: TextStyle(
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF64748B),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              // Empty state when supervisor has no schools
+              if (state.schools.isEmpty && !state.isLoading && state.errorMessage == null) ...[
+                const SizedBox(height: 4),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                    border: Border.all(
+                      color:
+                          isDark ? const Color(0xFF475569) : const Color(0xFFE2E8F0),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.school_outlined,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'لا توجد مدارس مُعيّنة لهذا المشرف',
+                        style: TextStyle(
+                          color: isDark
+                              ? const Color(0xFF94A3B8)
+                              : const Color(0xFF64748B),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
-          ),
-        ),
-
-        // Error message
-        if (widget.errorText != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            widget.errorText!,
-            style: const TextStyle(
-              color: Color(0xFFEF4444),
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-
-        // Loading error message
-        if (_errorMessage != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            _errorMessage!,
-            style: const TextStyle(
-              color: Color(0xFFEF4444),
-              fontSize: 12,
-            ),
-          ),
-        ],
-
-        // Dropdown list
-        if (_isDropdownOpen && _filteredSchools.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Container(
-            constraints: const BoxConstraints(maxHeight: 200),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: isDark ? const Color(0xFF1E293B) : Colors.white,
-              border: Border.all(
-                color:
-                    isDark ? const Color(0xFF475569) : const Color(0xFFE2E8F0),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: _filteredSchools.length,
-                itemBuilder: (context, index) {
-                  final school = _filteredSchools[index];
-                  return _buildSchoolOption(school, isDark);
-                },
-              ),
-            ),
-          ),
-        ],
-
-        // Empty state when no schools match search
-        if (_isDropdownOpen &&
-            _filteredSchools.isEmpty &&
-            _searchController.text.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: isDark ? const Color(0xFF1E293B) : Colors.white,
-              border: Border.all(
-                color:
-                    isDark ? const Color(0xFF475569) : const Color(0xFFE2E8F0),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.search_off,
-                  color: isDark
-                      ? const Color(0xFF94A3B8)
-                      : const Color(0xFF64748B),
-                  size: 16,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'لا توجد مدارس تطابق البحث',
-                  style: TextStyle(
-                    color: isDark
-                        ? const Color(0xFF94A3B8)
-                        : const Color(0xFF64748B),
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-
-        // Empty state when supervisor has no schools
-        if (_schools.isEmpty && !_isLoading && _errorMessage == null) ...[
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              color: isDark ? const Color(0xFF1E293B) : Colors.white,
-              border: Border.all(
-                color:
-                    isDark ? const Color(0xFF475569) : const Color(0xFFE2E8F0),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.school_outlined,
-                  color: isDark
-                      ? const Color(0xFF94A3B8)
-                      : const Color(0xFF64748B),
-                  size: 16,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'لا توجد مدارس مُعيّنة لهذا المشرف',
-                  style: TextStyle(
-                    color: isDark
-                        ? const Color(0xFF94A3B8)
-                        : const Color(0xFF64748B),
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ],
+          );
+        },
+      ),
     );
   }
 
   Widget _buildSchoolOption(School school, bool isDark) {
+    print('🏫 Building school option: ${school.name}');
     return InkWell(
       onTap: () {
         print('🏫 School option tapped: ${school.name}');

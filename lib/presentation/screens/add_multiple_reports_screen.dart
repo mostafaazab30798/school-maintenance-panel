@@ -629,7 +629,8 @@ class _ModernReportCardState extends State<_ModernReportCard> {
       AddMultipleReportsCubit cubit, dynamic data, bool isDark) {
     return BlocBuilder<AddMultipleReportsCubit, AddMultipleReportsState>(
       buildWhen: (previous, current) =>
-          previous.validationFailed != current.validationFailed,
+          previous.validationFailed != current.validationFailed ||
+          previous.reports != current.reports,
       builder: (context, state) {
         return SearchableSchoolDropdown(
           supervisorId: data.supervisorId ?? '',
@@ -640,6 +641,7 @@ class _ModernReportCardState extends State<_ModernReportCard> {
               ? 'اسم المدرسة مطلوب'
               : null,
           onSchoolSelected: (schoolName) {
+            print('🏫 Screen: onSchoolSelected called with: $schoolName');
             cubit.updateSchoolName(widget.index, schoolName);
           },
         );

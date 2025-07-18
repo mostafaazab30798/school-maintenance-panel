@@ -19,13 +19,24 @@ import 'core/constants/app_themes.dart';
 import 'core/routes/app_router.dart';
 import 'core/services/admin_service.dart';
 import 'core/services/admin_management_service.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await dotenv.load(fileName: ".env"); // Load environment variables
+  } catch (e) {
+    throw Exception('Error loading .env file: $e'); // Print error if any
+  }
+
+  final String baseUrl = dotenv.env['SUPBASE_URL'] ?? 'default_url';
+  final String apiKey = dotenv.env['SUPBASE_ANONKEY'] ?? 'default_key';
+  
   await Supabase.initialize(
-    url: 'https://cftjaukrygtzguqcafon.supabase.co',
-    anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNmdGphdWtyeWd0emd1cWNhZm9uIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDgzMjU1NzYsImV4cCI6MjA2MzkwMTU3Nn0.28pIhi_qCDK3SIjCiJa0VuieFx0byoMK-wdmhb4G75c',
+    url: baseUrl,
+    anonKey: apiKey,
   );
   runApp(const MyApp());
 }

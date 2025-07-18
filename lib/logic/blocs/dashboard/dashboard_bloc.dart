@@ -146,12 +146,16 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
 
       // Get inventory counts
       final maintenanceCountSummary =
-          await maintenanceCountRepository.getDashboardSummary();
+          await maintenanceCountRepository.getDashboardSummary(
+        supervisorIds: supervisorIds,
+      );
       final schoolsWithCounts =
           maintenanceCountSummary['schools_with_counts'] ?? 0;
 
       final damageCountSummary =
-          await damageCountRepository.getDashboardSummary();
+          await damageCountRepository.getDashboardSummary(
+        supervisorIds: supervisorIds,
+      );
       final schoolsWithDamage = damageCountSummary['schools_with_damage'] ?? 0;
 
       // Get schools count and schools with achievements

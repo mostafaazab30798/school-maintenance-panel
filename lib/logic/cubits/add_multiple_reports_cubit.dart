@@ -24,8 +24,10 @@ class AddMultipleReportsCubit extends Cubit<AddMultipleReportsState> {
   }
 
   void updateSchoolName(int index, String value) {
+    print('🏫 Cubit: updateSchoolName called with index: $index, value: $value');
     final updated = List<ReportFormData>.from(state.reports);
     updated[index].schoolName = value;
+    print('🏫 Cubit: Updated school name to: ${updated[index].schoolName}');
     emit(state.copyWith(reports: updated));
   }
 

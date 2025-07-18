@@ -44,13 +44,65 @@ class DamageCountRepository {
     }
   }
 
+  /// Fetch all damage count records with detailed data (for listing)
+  Future<List<DamageCount>> getAllDamageCountRecords({
+    List<String>? supervisorIds,
+    String? schoolId,
+    String? status,
+    int limit = 50,
+  }) async {
+    try {
+      print('🔍 DEBUG: Starting getAllDamageCountRecords with supervisorIds: $supervisorIds');
+
+      var query = _client.from('damage_counts').select('''
+        id,
+        school_id,
+        school_name,
+        supervisor_id,
+        status,
+        item_counts,
+        section_photos,
+        created_at,
+        updated_at
+      ''');
+
+      // Apply filters
+      if (supervisorIds != null && supervisorIds.isNotEmpty) {
+        query = query.inFilter('supervisor_id', supervisorIds);
+        print('🔍 DEBUG: Applied supervisor filter for IDs: $supervisorIds');
+      }
+
+      if (schoolId != null) {
+        query = query.eq('school_id', schoolId);
+      }
+
+      if (status != null) {
+        query = query.eq('status', status);
+      }
+
+      // Apply order and limit
+      final response = await query
+          .order('created_at', ascending: false)
+          .limit(limit);
+
+      print('🔍 DEBUG: Query executed. Response length: ${response?.length ?? 'null'}');
+
+      return response
+          .map<DamageCount>((data) => DamageCount.fromMap(data))
+          .toList();
+    } catch (e) {
+      print('⚠️ WARNING: Failed to fetch damage count records: $e');
+      return [];
+    }
+  }
+
   /// Get schools that have damage counts
   Future<List<Map<String, dynamic>>> getSchoolsWithDamageCounts({
-    String? supervisorId,
+    List<String>? supervisorIds,
   }) async {
     try {
       print(
-          '🔍 DEBUG: Starting getSchoolsWithDamageCounts with supervisorId: $supervisorId');
+          '🔍 DEBUG: Starting getSchoolsWithDamageCounts with supervisorIds: $supervisorIds');
 
       // RULE: Supabase query pattern is: from() -> select() -> where/eq/filter -> order()
       // Never apply filters before select() - it causes NoSuchMethodError
@@ -65,9 +117,9 @@ class DamageCountRepository {
       print('🔍 DEBUG: Initial query created');
 
       // Apply supervisor filter after select
-      if (supervisorId != null) {
-        query = query.eq('supervisor_id', supervisorId);
-        print('🔍 DEBUG: Applied supervisor filter: $supervisorId');
+      if (supervisorIds != null && supervisorIds.isNotEmpty) {
+        query = query.inFilter('supervisor_id', supervisorIds);
+        print('🔍 DEBUG: Applied supervisor filter for IDs: $supervisorIds');
       } else {
         print('🔍 DEBUG: No supervisor filter applied (super admin)');
       }
@@ -83,14 +135,16 @@ class DamageCountRepository {
             debugResponse.map((r) => r['supervisor_id']).toSet();
         print('🔍 DEBUG: Available supervisor IDs: $supervisorIds');
 
-        // Check if any records match our supervisor
-        final matchingRecords = debugResponse
-            .where((r) => r['supervisor_id'].toString() == supervisorId)
-            .toList();
-        print(
-            '🔍 DEBUG: Records matching supervisor $supervisorId: ${matchingRecords.length}');
-        if (matchingRecords.isNotEmpty) {
-          print('🔍 DEBUG: Matching record details: ${matchingRecords.first}');
+        // Check if any records match our supervisors
+        if (supervisorIds != null && supervisorIds.isNotEmpty) {
+          final matchingRecords = debugResponse
+              .where((r) => supervisorIds.contains(r['supervisor_id'].toString()))
+              .toList();
+          print(
+              '🔍 DEBUG: Records matching supervisors $supervisorIds: ${matchingRecords.length}');
+          if (matchingRecords.isNotEmpty) {
+            print('🔍 DEBUG: Matching record details: ${matchingRecords.first}');
+          }
         }
       }
 
@@ -166,20 +220,47 @@ class DamageCountRepository {
 
       print('🔍 DEBUG: Processed school data: $schoolData');
 
-      // Only return schools that actually have damage
-      final filteredSchools = schoolData.values
-          .where((school) => school['has_damage'] as bool)
-          .toList();
+      // Return ALL schools, not just those with damage
+      final allSchools = schoolData.values.toList();
 
       print(
-          '🔍 DEBUG: Filtered schools with damage: ${filteredSchools.length}');
-      print('🔍 DEBUG: Final result: $filteredSchools');
+          '🔍 DEBUG: All schools (including those without damage): ${allSchools.length}');
+      print('🔍 DEBUG: Final result: $allSchools');
 
-      return filteredSchools;
+      return allSchools;
     } catch (e) {
       // Return empty list instead of throwing exception for better UX
       print('❌ ERROR: Failed to fetch schools with damage counts: $e');
       print('❌ ERROR: Stack trace: ${StackTrace.current}');
+      return [];
+    }
+  }
+
+  /// Get all damage count details for a specific school (without supervisor filtering)
+  /// This is useful for super admins or debugging purposes
+  Future<List<DamageCount>> getAllDamageCountsForSchool({
+    required String schoolId,
+  }) async {
+    try {
+      print('🔍 DEBUG: Getting ALL damage counts for school: $schoolId');
+
+      final response = await _client
+          .from('damage_counts')
+          .select('*')
+          .eq('school_id', schoolId)
+          .order('created_at', ascending: false);
+
+      print('🔍 DEBUG: Found ${response?.length ?? 0} total damage count records for school $schoolId');
+
+      if (response == null || response.isEmpty) {
+        return [];
+      }
+
+      return response
+          .map<DamageCount>((data) => DamageCount.fromMap(data))
+          .toList();
+    } catch (e) {
+      print('❌ ERROR: Failed to fetch all damage counts for school $schoolId: $e');
       return [];
     }
   }
@@ -203,10 +284,36 @@ class DamageCountRepository {
         print('🔍 DEBUG: Applied supervisor_id filter: $supervisorId');
       }
 
-      final response = await query.single();
-      print('🔍 DEBUG: Single query response: $response');
+      // Get all records for this school and return the most recent one
+      final response = await query.order('created_at', ascending: false);
+      print('🔍 DEBUG: Query response length: ${response?.length ?? 0}');
 
-      final damageCount = DamageCount.fromMap(response);
+      if (response == null || response.isEmpty) {
+        print('🔍 DEBUG: No damage count records found for school: $schoolId');
+        
+        // Let's also check if there are any records at all in the table
+        try {
+          final allRecords = await _client.from('damage_counts').select('school_id, school_name, supervisor_id').limit(5);
+          print('🔍 DEBUG: Sample records in damage_counts table: $allRecords');
+        } catch (e) {
+          print('🔍 DEBUG: Could not fetch sample records: $e');
+        }
+        
+        return null;
+      }
+
+      // Log all found records for debugging
+      print('🔍 DEBUG: Found ${response.length} damage count records for school $schoolId:');
+      for (int i = 0; i < response.length; i++) {
+        final record = response[i];
+        print('🔍 DEBUG: Record $i - ID: ${record['id']}, Supervisor: ${record['supervisor_id']}, Status: ${record['status']}, Created: ${record['created_at']}');
+      }
+
+      // Return the most recent record (first in the ordered list)
+      final mostRecentRecord = response.first;
+      print('🔍 DEBUG: Most recent record: $mostRecentRecord');
+
+      final damageCount = DamageCount.fromMap(mostRecentRecord);
       print('🔍 DEBUG: Created DamageCount object: ${damageCount.id}');
 
       return damageCount;
@@ -232,12 +339,12 @@ class DamageCountRepository {
   }
 
   /// Get summary statistics for dashboard
-  Future<Map<String, int>> getDashboardSummary({String? supervisorId}) async {
+  Future<Map<String, int>> getDashboardSummary({List<String>? supervisorIds}) async {
     try {
       var query = _client.from('damage_counts').select('*');
 
-      if (supervisorId != null) {
-        query = query.eq('supervisor_id', supervisorId);
+      if (supervisorIds != null && supervisorIds.isNotEmpty) {
+        query = query.inFilter('supervisor_id', supervisorIds);
       }
 
       final response = await query;

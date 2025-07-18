@@ -286,6 +286,61 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
         if (value.containsKey('condition')) {
           parts.add('الحالة: ${value['condition']}');
         }
+      } else if (entry.key == 'fire_extinguishers_combined') {
+        if (value.containsKey('count')) {
+          parts.add('العدد: ${value['count']}');
+        }
+        if (value.containsKey('expiry_date')) {
+          parts.add('تاريخ الانتهاء: ${value['expiry_date']}');
+        }
+      } else if (entry.key == 'ac_panel_combined' || 
+                 entry.key == 'power_panel_combined' ||
+                 entry.key == 'main_breaker_combined' ||
+                 entry.key == 'lighting_panel_combined' ||
+                 entry.key == 'main_distribution_panel_combined' ||
+                 entry.key == 'package_ac_breaker_combined' ||
+                 entry.key == 'concealed_ac_breaker_combined') {
+        if (value.containsKey('count')) {
+          parts.add('العدد: ${value['count']}');
+        }
+        if (value.containsKey('amperage')) {
+          parts.add('الأمبير: ${value['amperage']}');
+        }
+      } else if (entry.key == 'bathroom_heaters_combined' ||
+                 entry.key == 'cafeteria_heaters_combined') {
+        if (value.containsKey('count')) {
+          parts.add('العدد: ${value['count']}');
+        }
+        if (value.containsKey('capacity')) {
+          parts.add('السعة: ${value['capacity']}');
+        }
+      } else if (entry.key.startsWith('bathroom_heaters_') ||
+                 entry.key.startsWith('cafeteria_heaters_')) {
+        if (value.containsKey('count')) {
+          parts.add('العدد: ${value['count']}');
+        }
+        if (value.containsKey('location')) {
+          parts.add('الموقع: ${value['location']}');
+        }
+        if (value.containsKey('id')) {
+          // Try to get capacity from textAnswers
+          final heaterId = value['id'] as String? ?? '';
+          final location = value['location'] as String? ?? '';
+          String? capacity;
+          
+          // Look for capacity in textAnswers
+          final capKey = '${entry.key}_capacity';
+          final capValue = count.textAnswers[capKey];
+          if (capValue != null && capValue.isNotEmpty) {
+            capacity = capValue;
+          }
+          
+          if (capacity != null && capacity.isNotEmpty) {
+            parts.add('السعة: $capacity لتر');
+          } else {
+            parts.add('الرقم: $heaterId');
+          }
+        }
       } else {
         // Handle other combined items (pumps, fire boxes)
         if (value.containsKey('count')) {
@@ -307,10 +362,6 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
 
     // Get note for this item
     final note = _getItemNote(entry.key);
-
-    // Special handling for fire extinguisher
-    final isFireExtinguisher = entry.key == 'fire_extinguishers';
-    final fireExtinguisherExpiryDate = _getFireExtinguisherExpiryDate();
 
     return Container(
       decoration: BoxDecoration(
@@ -403,54 +454,15 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color:
-                    isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
-                height: 1.2,
+                color: isDark ? Colors.white : const Color(0xFF1F2937),
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-
-            // Fire extinguisher expiry date
-            if (isFireExtinguisher &&
-                fireExtinguisherExpiryDate.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF59E0B).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: const Color(0xFFF59E0B).withOpacity(0.3),
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.schedule_rounded,
-                      size: 12,
-                      color: const Color(0xFFF59E0B),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'انتهاء: $fireExtinguisherExpiryDate',
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFFF59E0B),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-
-            // Note if exists
             if (note.isNotEmpty) ...[
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: const Color(0xFF10B981).withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -797,9 +809,32 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       items['fire_boxes_combined'] = fireBoxesData;
     }
 
-    // Keep fire extinguishers as is (already has expiry date handling)
-    if (count.itemCounts.containsKey('fire_extinguishers')) {
-      items['fire_extinguishers'] = count.itemCounts['fire_extinguishers'];
+    // Combine fire extinguishers with expiry dates
+    if (count.itemCounts.containsKey('fire_extinguishers') ||
+        count.textAnswers.containsKey('fire_extinguishers_expiry_day') ||
+        count.textAnswers.containsKey('fire_extinguishers_expiry_month') ||
+        count.textAnswers.containsKey('fire_extinguishers_expiry_year')) {
+      final fireExtinguishersData = <String, dynamic>{};
+
+      if (count.itemCounts.containsKey('fire_extinguishers')) {
+        fireExtinguishersData['count'] = count.itemCounts['fire_extinguishers'];
+      }
+
+      // Combine expiry date parts
+      final day = count.textAnswers['fire_extinguishers_expiry_day'] ?? '';
+      final month = count.textAnswers['fire_extinguishers_expiry_month'] ?? '';
+      final year = count.textAnswers['fire_extinguishers_expiry_year'] ?? '';
+      
+      if (day.isNotEmpty || month.isNotEmpty || year.isNotEmpty) {
+        final expiryDate = [day, month, year].where((part) => part.isNotEmpty).join('/');
+        if (expiryDate.isNotEmpty) {
+          fireExtinguishersData['expiry_date'] = expiryDate;
+        }
+      }
+
+      if (fireExtinguishersData.isNotEmpty) {
+        items['fire_extinguishers_combined'] = fireExtinguishersData;
+      }
     }
 
     // Combine diesel pump with its condition
@@ -931,20 +966,120 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
   }
 
   Map<String, dynamic> _getMechanicalItems() {
-    final mechanicalKeys = ['water_pumps'];
-
     Map<String, dynamic> items = {};
+
+    // Handle new heater entries structure
+    final heaterEntries = count.heaterEntries;
+    print('UI - Heater entries: $heaterEntries'); // Debug
+    if (heaterEntries.isNotEmpty) {
+      // Process bathroom heaters
+      final bathroomHeaters = heaterEntries['bathroom_heaters'] as List<dynamic>?;
+      if (bathroomHeaters != null) {
+        for (int i = 0; i < bathroomHeaters.length; i++) {
+          final heater = bathroomHeaters[i];
+          if (heater is Map<String, dynamic>) {
+            final id = heater['id']?.toString() ?? '';
+            
+            if (id.isNotEmpty) {
+              final heaterKey = 'bathroom_heaters_$id';
+              final quantity = count.itemCounts[heaterKey] ?? 0;
+              final heaterData = <String, dynamic>{
+                'count': quantity,
+                'location': 'حمام',
+                'id': id,
+              };
+              items[heaterKey] = heaterData;
+            }
+          }
+        }
+      }
+      
+      // Process cafeteria heaters
+      final cafeteriaHeaters = heaterEntries['cafeteria_heaters'] as List<dynamic>?;
+      if (cafeteriaHeaters != null) {
+        for (int i = 0; i < cafeteriaHeaters.length; i++) {
+          final heater = cafeteriaHeaters[i];
+          if (heater is Map<String, dynamic>) {
+            final id = heater['id']?.toString() ?? '';
+            
+            if (id.isNotEmpty) {
+              final heaterKey = 'cafeteria_heaters_$id';
+              final quantity = count.itemCounts[heaterKey] ?? 0;
+              final heaterData = <String, dynamic>{
+                'count': quantity,
+                'location': 'مقصف',
+                'id': id,
+              };
+              items[heaterKey] = heaterData;
+            }
+          }
+        }
+      }
+    } else {
+      // Fallback to old structure
+      // Combine Bathroom Heaters data
+      if (count.itemCounts.containsKey('bathroom_heaters') ||
+          count.textAnswers.containsKey('bathroom_heaters_capacity')) {
+        final bathroomHeatersData = <String, dynamic>{};
+        
+        if (count.itemCounts.containsKey('bathroom_heaters')) {
+          bathroomHeatersData['count'] = count.itemCounts['bathroom_heaters'];
+        }
+        if (count.textAnswers.containsKey('bathroom_heaters_capacity') && 
+            count.textAnswers['bathroom_heaters_capacity']!.isNotEmpty) {
+          bathroomHeatersData['capacity'] = count.textAnswers['bathroom_heaters_capacity'];
+        }
+        
+        if (bathroomHeatersData.isNotEmpty) {
+          items['bathroom_heaters_combined'] = bathroomHeatersData;
+        }
+      }
+
+      // Combine Cafeteria Heaters data
+      if (count.itemCounts.containsKey('cafeteria_heaters') ||
+          count.textAnswers.containsKey('cafeteria_heaters_capacity')) {
+        final cafeteriaHeatersData = <String, dynamic>{};
+        
+        if (count.itemCounts.containsKey('cafeteria_heaters')) {
+          cafeteriaHeatersData['count'] = count.itemCounts['cafeteria_heaters'];
+        }
+        if (count.textAnswers.containsKey('cafeteria_heaters_capacity') && 
+            count.textAnswers['cafeteria_heaters_capacity']!.isNotEmpty) {
+          cafeteriaHeatersData['capacity'] = count.textAnswers['cafeteria_heaters_capacity'];
+        }
+        
+        if (cafeteriaHeatersData.isNotEmpty) {
+          items['cafeteria_heaters_combined'] = cafeteriaHeatersData;
+        }
+      }
+    }
+
+    // Add simple mechanical items that don't need combination
+    final simpleMechanicalKeys = [
+      'sinks',
+      'western_toilet',
+      'arabic_toilet',
+      'siphons',
+      'bidets',
+      'wall_exhaust_fans',
+      'central_exhaust_fans',
+      'cafeteria_exhaust_fans',
+      'wall_water_coolers',
+      'corridor_water_coolers',
+      'water_pumps'
+    ];
+
     count.itemCounts.forEach((key, value) {
-      if (mechanicalKeys.contains(key)) {
+      if (simpleMechanicalKeys.contains(key)) {
         items[key] = value;
       }
     });
 
-    count.textAnswers.forEach((key, value) {
-      if (key == 'water_meter_number' && value.isNotEmpty) {
-        items[key] = value;
-      }
-    });
+    // Add water meter number
+    if (count.textAnswers.containsKey('water_meter_number') && 
+        count.textAnswers['water_meter_number']!.isNotEmpty) {
+      items['water_meter_number'] = count.textAnswers['water_meter_number'];
+    }
 
     return items;
   }
@@ -984,20 +1119,165 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
   }
 
   Map<String, dynamic> _getElectricalItems() {
-    final electricalKeys = ['electrical_panels'];
-
     Map<String, dynamic> items = {};
+
+    // Combine AC Panel data
+    if (count.itemCounts.containsKey('ac_panel') ||
+        count.textAnswers.containsKey('ac_panel_amperage')) {
+      final acPanelData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('ac_panel')) {
+        acPanelData['count'] = count.itemCounts['ac_panel'];
+      }
+      if (count.textAnswers.containsKey('ac_panel_amperage') && 
+          count.textAnswers['ac_panel_amperage']!.isNotEmpty) {
+        acPanelData['amperage'] = count.textAnswers['ac_panel_amperage'];
+      }
+      
+      if (acPanelData.isNotEmpty) {
+        items['ac_panel_combined'] = acPanelData;
+      }
+    }
+
+    // Combine Power Panel data
+    if (count.itemCounts.containsKey('power_panel') ||
+        count.textAnswers.containsKey('power_panel_amperage')) {
+      final powerPanelData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('power_panel')) {
+        powerPanelData['count'] = count.itemCounts['power_panel'];
+      }
+      if (count.textAnswers.containsKey('power_panel_amperage') && 
+          count.textAnswers['power_panel_amperage']!.isNotEmpty) {
+        powerPanelData['amperage'] = count.textAnswers['power_panel_amperage'];
+      }
+      
+      if (powerPanelData.isNotEmpty) {
+        items['power_panel_combined'] = powerPanelData;
+      }
+    }
+
+    // Combine Main Breaker data
+    if (count.itemCounts.containsKey('main_breaker') ||
+        count.textAnswers.containsKey('main_breaker_amperage')) {
+      final mainBreakerData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('main_breaker')) {
+        mainBreakerData['count'] = count.itemCounts['main_breaker'];
+      }
+      if (count.textAnswers.containsKey('main_breaker_amperage') && 
+          count.textAnswers['main_breaker_amperage']!.isNotEmpty) {
+        mainBreakerData['amperage'] = count.textAnswers['main_breaker_amperage'];
+      }
+      
+      if (mainBreakerData.isNotEmpty) {
+        items['main_breaker_combined'] = mainBreakerData;
+      }
+    }
+
+    // Combine Lighting Panel data
+    if (count.itemCounts.containsKey('lighting_panel') ||
+        count.textAnswers.containsKey('lighting_panel_amperage')) {
+      final lightingPanelData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('lighting_panel')) {
+        lightingPanelData['count'] = count.itemCounts['lighting_panel'];
+      }
+      if (count.textAnswers.containsKey('lighting_panel_amperage') && 
+          count.textAnswers['lighting_panel_amperage']!.isNotEmpty) {
+        lightingPanelData['amperage'] = count.textAnswers['lighting_panel_amperage'];
+      }
+      
+      if (lightingPanelData.isNotEmpty) {
+        items['lighting_panel_combined'] = lightingPanelData;
+      }
+    }
+
+    // Combine Main Distribution Panel data
+    if (count.itemCounts.containsKey('main_distribution_panel') ||
+        count.textAnswers.containsKey('main_distribution_panel_amperage')) {
+      final mainDistPanelData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('main_distribution_panel')) {
+        mainDistPanelData['count'] = count.itemCounts['main_distribution_panel'];
+      }
+      if (count.textAnswers.containsKey('main_distribution_panel_amperage') && 
+          count.textAnswers['main_distribution_panel_amperage']!.isNotEmpty) {
+        mainDistPanelData['amperage'] = count.textAnswers['main_distribution_panel_amperage'];
+      }
+      
+      if (mainDistPanelData.isNotEmpty) {
+        items['main_distribution_panel_combined'] = mainDistPanelData;
+      }
+    }
+
+    // Combine Package AC Breaker data
+    if (count.itemCounts.containsKey('package_ac_breaker') ||
+        count.textAnswers.containsKey('package_ac_breaker_amperage')) {
+      final packageAcBreakerData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('package_ac_breaker')) {
+        packageAcBreakerData['count'] = count.itemCounts['package_ac_breaker'];
+      }
+      if (count.textAnswers.containsKey('package_ac_breaker_amperage') && 
+          count.textAnswers['package_ac_breaker_amperage']!.isNotEmpty) {
+        packageAcBreakerData['amperage'] = count.textAnswers['package_ac_breaker_amperage'];
+      }
+      
+      if (packageAcBreakerData.isNotEmpty) {
+        items['package_ac_breaker_combined'] = packageAcBreakerData;
+      }
+    }
+
+    // Combine Concealed AC Breaker data
+    if (count.itemCounts.containsKey('concealed_ac_breaker') ||
+        count.textAnswers.containsKey('concealed_ac_breaker_amperage')) {
+      final concealedAcBreakerData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('concealed_ac_breaker')) {
+        concealedAcBreakerData['count'] = count.itemCounts['concealed_ac_breaker'];
+      }
+      if (count.textAnswers.containsKey('concealed_ac_breaker_amperage') && 
+          count.textAnswers['concealed_ac_breaker_amperage']!.isNotEmpty) {
+        concealedAcBreakerData['amperage'] = count.textAnswers['concealed_ac_breaker_amperage'];
+      }
+      
+      if (concealedAcBreakerData.isNotEmpty) {
+        items['concealed_ac_breaker_combined'] = concealedAcBreakerData;
+      }
+    }
+
+    // Add simple items that don't need combination
+    final simpleElectricalKeys = [
+      'lamps',
+      'projector', 
+      'class_bell',
+      'speakers',
+      'microphone_system',
+      'electrical_panels'
+    ];
+
     count.itemCounts.forEach((key, value) {
-      if (electricalKeys.contains(key)) {
+      if (simpleElectricalKeys.contains(key)) {
         items[key] = value;
       }
     });
 
-    count.textAnswers.forEach((key, value) {
-      if (key == 'electricity_meter_number' && value.isNotEmpty) {
-        items[key] = value;
-      }
-    });
+    // Add electricity meter number
+    if (count.textAnswers.containsKey('electricity_meter_number') && 
+        count.textAnswers['electricity_meter_number']!.isNotEmpty) {
+      items['electricity_meter_number'] = count.textAnswers['electricity_meter_number'];
+    }
+
+    // Add elevator information
+    if (count.textAnswers.containsKey('elevators_motor') && 
+        count.textAnswers['elevators_motor']!.isNotEmpty) {
+      items['elevators_motor'] = count.textAnswers['elevators_motor'];
+    }
+    if (count.textAnswers.containsKey('elevators_main_parts') && 
+        count.textAnswers['elevators_main_parts']!.isNotEmpty) {
+      items['elevators_main_parts'] = count.textAnswers['elevators_main_parts'];
+    }
 
     return items;
   }
@@ -1033,10 +1313,26 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
   }
 
   Map<String, dynamic> _getCivilItems() {
+    final civilKeys = [
+      'blackboard',
+      'internal_windows',
+      'external_windows'
+    ];
+
     Map<String, dynamic> items = {};
+    
+    // Add civil item counts
+    count.itemCounts.forEach((key, value) {
+      if (civilKeys.contains(key)) {
+        items[key] = value;
+      }
+    });
+    
+    // Add yes/no answers for civil issues
     count.yesNoAnswers.forEach((key, value) {
       items[key] = value;
     });
+
     return items;
   }
 
@@ -1179,6 +1475,88 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       case 'electrical_panels':
       case 'electrical_panels_condition':
         return Icons.electrical_services_rounded;
+      
+      // Electrical items
+      case 'lamps':
+        return Icons.lightbulb_rounded;
+      case 'projector':
+        return Icons.video_camera_back_rounded;
+      case 'class_bell':
+        return Icons.notifications_active_rounded;
+      case 'speakers':
+        return Icons.speaker_rounded;
+      case 'microphone_system':
+        return Icons.mic_rounded;
+      case 'ac_panel':
+        return Icons.ac_unit_rounded;
+      case 'power_panel':
+        return Icons.power_rounded;
+      case 'lighting_panel':
+        return Icons.light_mode_rounded;
+      case 'main_distribution_panel':
+        return Icons.dashboard_rounded;
+      case 'main_breaker':
+        return Icons.power_settings_new_rounded;
+      case 'concealed_ac_breaker':
+      case 'package_ac_breaker':
+        return Icons.ac_unit_rounded;
+      
+      // Combined electrical items
+      case 'ac_panel_combined':
+        return Icons.ac_unit_rounded;
+      case 'power_panel_combined':
+        return Icons.power_rounded;
+      case 'main_breaker_combined':
+        return Icons.power_settings_new_rounded;
+      case 'lighting_panel_combined':
+        return Icons.light_mode_rounded;
+      case 'main_distribution_panel_combined':
+        return Icons.dashboard_rounded;
+      case 'package_ac_breaker_combined':
+        return Icons.ac_unit_rounded;
+      case 'concealed_ac_breaker_combined':
+        return Icons.ac_unit_rounded;
+
+      // Mechanical items
+      case 'bathroom_heaters':
+      case 'cafeteria_heaters':
+        return Icons.hot_tub_rounded;
+      case 'sinks':
+        return Icons.wash_rounded;
+      case 'western_toilet':
+      case 'arabic_toilet':
+        return Icons.wc_rounded;
+      case 'siphons':
+        return Icons.water_drop_rounded;
+      case 'bidets':
+        return Icons.shower_rounded;
+      case 'wall_exhaust_fans':
+      case 'central_exhaust_fans':
+      case 'cafeteria_exhaust_fans':
+        return Icons.air_rounded;
+      case 'wall_water_coolers':
+      case 'corridor_water_coolers':
+        return Icons.local_drink_rounded;
+      
+      // Combined mechanical items
+      case 'bathroom_heaters_combined':
+        return Icons.hot_tub_rounded;
+      case 'cafeteria_heaters_combined':
+        return Icons.hot_tub_rounded;
+      
+      // Individual heater entries
+      case var heaterKey when heaterKey.startsWith('bathroom_heaters_'):
+        return Icons.hot_tub_rounded;
+      case var heaterKey when heaterKey.startsWith('cafeteria_heaters_'):
+        return Icons.hot_tub_rounded;
+
+      // Civil items
+      case 'blackboard':
+        return Icons.edit_rounded;
+      case 'internal_windows':
+      case 'external_windows':
+        return Icons.window_rounded;
+      
       case 'fire_alarm_system':
       case 'fire_alarm_system_condition':
         return Icons.alarm_rounded;
@@ -1205,6 +1583,39 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
         return Icons.water_drop_rounded;
       case 'electricity_meter_number':
         return Icons.electric_bolt_rounded;
+      
+      // Electrical amperage values
+      case 'ac_panel_amperage':
+        return Icons.ac_unit_rounded;
+      case 'power_panel_amperage':
+        return Icons.power_rounded;
+      case 'main_breaker_amperage':
+        return Icons.power_settings_new_rounded;
+      case 'lighting_panel_amperage':
+        return Icons.light_mode_rounded;
+      case 'package_ac_breaker_amperage':
+      case 'concealed_ac_breaker_amperage':
+        return Icons.ac_unit_rounded;
+      case 'main_distribution_panel_amperage':
+        return Icons.dashboard_rounded;
+      
+      // Mechanical capacities
+      case 'bathroom_heaters_capacity':
+      case 'cafeteria_heaters_capacity':
+        return Icons.hot_tub_rounded;
+      
+      // Elevator information
+      case 'elevators_motor':
+      case 'elevators_main_parts':
+        return Icons.elevator_rounded;
+      
+      // Fire safety expiry dates
+      case 'fire_extinguishers_expiry_day':
+      case 'fire_extinguishers_expiry_month':
+      case 'fire_extinguishers_expiry_year':
+        return Icons.calendar_today_rounded;
+      
+      // Civil items
       case 'wall_cracks':
         return Icons.broken_image_rounded;
       case 'has_elevators':
@@ -1225,6 +1636,14 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
   }
 
   String _translateItemName(String key) {
+    // Handle dynamic heater entries
+    if (key.startsWith('bathroom_heaters_')) {
+      return 'سخان حمام';
+    }
+    if (key.startsWith('cafeteria_heaters_')) {
+      return 'سخان مقصف';
+    }
+    
     const translations = {
       // Item counts
       'fire_boxes': 'صناديق الحريق',
@@ -1238,6 +1657,59 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       'auxiliary_pump_combined': 'المضخة المساعدة',
       'electrical_panels': 'اللوحات الكهربائية',
       'fire_extinguishers': 'طفايات الحريق',
+
+      // Electrical items
+      'lamps': 'لمبات',
+      'projector': 'بروجيكتور',
+      'class_bell': 'جرس الفصول',
+      'speakers': 'السماعات',
+      'microphone_system': 'نظام الميكوفون',
+      'ac_panel': 'لوحة تكييف',
+      'power_panel': 'لوحة باور',
+      'lighting_panel': 'لوحة انارة',
+      'main_distribution_panel': 'لوحة توزيع رئيسية',
+      'main_breaker': 'القاطع الرئيسي',
+      'concealed_ac_breaker': 'قاطع تكييف كونسيلد',
+      'package_ac_breaker': 'قاطع تكييف باكدج',
+
+      // Combined electrical items
+      'ac_panel_combined': 'لوحة تكييف',
+      'power_panel_combined': 'لوحة باور',
+      'main_breaker_combined': 'القاطع الرئيسي',
+      'lighting_panel_combined': 'لوحة انارة',
+      'main_distribution_panel_combined': 'لوحة توزيع رئيسية',
+      'package_ac_breaker_combined': 'قاطع تكييف باكدج',
+      'concealed_ac_breaker_combined': 'قاطع تكييف كونسيلد',
+
+      // Mechanical items
+      'bathroom_heaters': 'سخانات حمام',
+      'cafeteria_heaters': 'سخانات مقصف',
+      'sinks': 'مغاسل',
+      'western_toilet': 'كرسي افرنجي',
+      'arabic_toilet': 'كرسي عربي',
+      'siphons': 'سيفونات',
+      'bidets': 'شطافات',
+      'wall_exhaust_fans': 'مراوح شفط جدارية',
+      'central_exhaust_fans': 'مراوح شفط مركزية',
+      'cafeteria_exhaust_fans': 'مراوح شفط مقصف',
+      'wall_water_coolers': 'برادات مياة جدارية',
+      'corridor_water_coolers': 'برادات مياة للممرات',
+
+      // Combined mechanical items
+      'bathroom_heaters_combined': 'سخانات حمام',
+      'cafeteria_heaters_combined': 'سخانات مقصف',
+      
+      // Individual heater entries
+      'bathroom_heater_': 'سخان حمام',
+      'cafeteria_heater_': 'سخان مقصف',
+
+      // Civil items
+      'blackboard': 'سبورة',
+      'internal_windows': 'نوافذ داخلية',
+      'external_windows': 'نوافذ خارجية',
+
+      // Combined safety items
+      'fire_extinguishers_combined': 'طفايات الحريق',
 
       // Survey answers
       'emergency_exits': 'مخارج الطوارئ',
@@ -1253,7 +1725,7 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       'smoke_detectors_condition': 'حالة أجهزة استشعار الدخان',
       'emergency_lights_condition': 'حالة أضواء الطوارئ',
       'fire_alarm_system_condition': 'حالة نظام إنذار الحريق',
-      'break_glasses_bells_condition': 'حالة أجراس كسر الزجاج',
+      'break_glasses_bells_condition': 'كاسر',
       'fire_suppression_system_condition': 'حالة نظام إطفاء الحريق',
 
       // Yes/No answers
@@ -1272,6 +1744,23 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       'fire_extinguishers_expiry_year': 'سنة انتهاء صلاحية طفايات الحريق',
       'fire_extinguishers_expiry_month': 'شهر انتهاء صلاحية طفايات الحريق',
       'fire_extinguishers_expiry_date': 'تاريخ انتهاء طفايات الحريق',
+
+      // Electrical amperage values
+      'ac_panel_amperage': 'أمبير لوحة التكييف',
+      'power_panel_amperage': 'أمبير لوحة الباور',
+      'main_breaker_amperage': 'أمبير القاطع الرئيسي',
+      'lighting_panel_amperage': 'أمبير لوحة الإنارة',
+      'package_ac_breaker_amperage': 'أمبير قاطع التكييف الباكدج',
+      'concealed_ac_breaker_amperage': 'أمبير قاطع التكييف الكونسيلد',
+      'main_distribution_panel_amperage': 'أمبير لوحة التوزيع الرئيسية',
+
+      // Mechanical capacities
+      'bathroom_heaters_capacity': 'سعة سخانات الحمام',
+      'cafeteria_heaters_capacity': 'سعة سخانات المقصف',
+
+      // Elevator information
+      'elevators_motor': 'محرك المصاعد',
+      'elevators_main_parts': 'الأجزاء الرئيسية للمصاعد',
 
       // Fire safety alarm panel
       'alarm_panel_type': 'نوع لوحة الإنذار',

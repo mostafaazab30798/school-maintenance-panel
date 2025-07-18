@@ -178,6 +178,29 @@ class DamageCount extends Equatable {
       'split_ac': 'سبليت',
       'window_ac': 'شباك',
       'package_ac': 'باكدج',
+
+      // New items from items.md - Civil Works (using actual database keys)
+      'site_tile_damage': 'هبوط او تلف بلاط الموقع العام',
+      'external_facade_paint': 'دهانات الواجهات الخارجية',
+      'internal_wall_ceiling_paint': 'دهانات الحوائط والاسقف الداخلية',
+      'external_plastering': 'اللياسة الخارجية',
+      'internal_wall_ceiling_plastering': 'لياسة الحوائط والاسقف الداخلية',
+      'internal_marble_damage': 'هبوط او تلف رخام الارضيات والحوائط الداخلية',
+      'internal_tile_damage': 'هبوط او تلف بلاط الارضيات والحوائط الداخلية',
+      'main_building_roof_insulation': 'عزل سطج المبنى الرئيسي',
+      'internal_windows': 'النوافذ الداخلية',
+      'external_windows': 'النوافذ الخارجية',
+      'metal_slats_suspended_ceiling': 'شرائح معدنية ( اسقف مستعارة )',
+      'suspended_ceiling_grids': 'تربيعات (اسقف مستعارة)',
+      'underground_tanks': 'الخزانات الارضية',
+
+      // New items from items.md - Mechanical Works (using actual database keys)
+      'feeding_pipes': 'مواسير التغذية',
+      'external_drainage_pipes': 'مواسير الصرف الخارجية',
+
+      // New items from items.md - Fire Safety Works (using actual database keys)
+      'fire_extinguishing_networks': 'شبكات الحريق والاطفاء',
+      'thermal_wires_alarm_networks': 'اسلاك حرارية لشبكات الانذار',
     };
 
     return itemNames[itemKey] ?? itemKey;

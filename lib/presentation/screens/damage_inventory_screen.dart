@@ -27,8 +27,15 @@ class DamageInventoryScreen extends StatelessWidget {
   }
 }
 
-class DamageInventoryView extends StatelessWidget {
+class DamageInventoryView extends StatefulWidget {
   const DamageInventoryView({super.key});
+
+  @override
+  State<DamageInventoryView> createState() => _DamageInventoryViewState();
+}
+
+class _DamageInventoryViewState extends State<DamageInventoryView> {
+  bool _isExporting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -47,14 +54,23 @@ class DamageInventoryView extends StatelessWidget {
           builder: (context, state) {
             if (state is SchoolsWithDamageLoaded && state.schools.isNotEmpty) {
               return FloatingActionButton.extended(
-                onPressed: () => _exportToExcel(context, state.schools),
-                backgroundColor: const Color(0xFFEF4444),
+                onPressed: _isExporting ? null : () => _exportToExcel(context, state.schools),
+                backgroundColor: _isExporting ? Colors.grey : const Color(0xFFEF4444),
                 foregroundColor: Colors.white,
                 elevation: 4,
-                icon: const Icon(Icons.file_download_rounded, size: 20),
-                label: const Text(
-                  'تصدير Excel',
-                  style: TextStyle(
+                icon: _isExporting 
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Icon(Icons.file_download_rounded, size: 20),
+                label: Text(
+                  _isExporting ? 'جاري التصدير...' : 'تصدير Excel',
+                  style: const TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -295,6 +311,12 @@ class DamageInventoryView extends StatelessWidget {
 
   Future<void> _exportToExcel(
       BuildContext context, List<Map<String, dynamic>> schools) async {
+    if (_isExporting) return; // Prevent multiple simultaneous exports
+    
+    setState(() {
+      _isExporting = true;
+    });
+    
     try {
       // Show loading dialog
       showDialog(
@@ -317,6 +339,9 @@ class DamageInventoryView extends StatelessWidget {
         ),
       );
 
+      // Add a small delay to ensure UI updates
+      await Future.delayed(const Duration(milliseconds: 100));
+
       // Create Excel export service with both repositories
       final maintenanceRepository =
           MaintenanceCountRepository(Supabase.instance.client);
@@ -326,8 +351,23 @@ class DamageInventoryView extends StatelessWidget {
         damageRepository: damageRepository,
       );
 
-      // Export damage counts to Excel
-      await excelService.exportAllDamageCounts();
+      // Export damage counts to Excel with retry mechanism
+      int retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          await excelService.exportAllDamageCounts();
+          break; // Success, exit retry loop
+        } catch (e) {
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            throw e; // Re-throw if all retries failed
+          }
+          // Wait before retry
+          await Future.delayed(Duration(milliseconds: 500 * retryCount));
+        }
+      }
 
       // Close loading dialog
       if (context.mounted) {
@@ -364,6 +404,12 @@ class DamageInventoryView extends StatelessWidget {
             ),
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExporting = false;
+        });
       }
     }
   }

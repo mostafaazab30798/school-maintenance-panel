@@ -11,6 +11,36 @@ class LoadSchoolsWithCounts extends MaintenanceCountsEvent {
   const LoadSchoolsWithCounts();
 }
 
+class LoadMaintenanceCountRecords extends MaintenanceCountsEvent {
+  final String? supervisorId;
+  final String? schoolId;
+  final String? status;
+
+  const LoadMaintenanceCountRecords({
+    this.supervisorId,
+    this.schoolId,
+    this.status,
+  });
+
+  @override
+  List<Object> get props => [supervisorId ?? '', schoolId ?? '', status ?? ''];
+}
+
+class LoadDamageCountRecords extends MaintenanceCountsEvent {
+  final String? supervisorId;
+  final String? schoolId;
+  final String? status;
+
+  const LoadDamageCountRecords({
+    this.supervisorId,
+    this.schoolId,
+    this.status,
+  });
+
+  @override
+  List<Object> get props => [supervisorId ?? '', schoolId ?? '', status ?? ''];
+}
+
 class LoadSchoolsWithDamage extends MaintenanceCountsEvent {
   const LoadSchoolsWithDamage();
 }

@@ -1,97 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/constants/app_fonts.dart';
-import '../../core/services/admin_service.dart';
-import '../../core/services/school_assignment_service.dart';
+import '../../logic/blocs/schools/schools_bloc.dart';
 import '../../data/models/school.dart';
-import '../../data/models/supervisor.dart';
-import '../../data/repositories/supervisor_repository.dart';
 import '../widgets/common/common_widgets.dart';
 
-class SchoolsListScreen extends StatefulWidget {
+class SchoolsListScreen extends StatelessWidget {
   const SchoolsListScreen({super.key});
 
   @override
-  State<SchoolsListScreen> createState() => _SchoolsListScreenState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => SchoolsBloc()..add(const SchoolsStarted()),
+      child: const _SchoolsListScreenContent(),
+    );
+  }
 }
 
-class _SchoolsListScreenState extends State<SchoolsListScreen> {
-  late final AdminService _adminService;
-  late final SchoolAssignmentService _schoolService;
-  late final SupervisorRepository _supervisorRepository;
-
-  List<School> _schools = [];
-  List<Supervisor> _supervisors = [];
-  bool _isLoading = true;
-  String? _error;
-  String _searchQuery = '';
-
-  @override
-  void initState() {
-    super.initState();
-    final supabase = Supabase.instance.client;
-    _adminService = AdminService(supabase);
-    _schoolService = SchoolAssignmentService(supabase);
-    _supervisorRepository = SupervisorRepository(supabase);
-    _loadSchools();
-  }
-
-  Future<void> _loadSchools() async {
-    try {
-      setState(() {
-        _isLoading = true;
-        _error = null;
-      });
-
-      // Get current admin info
-      final currentAdmin = await _adminService.getCurrentAdmin();
-      if (currentAdmin == null) {
-        throw Exception('لا يمكن العثور على بيانات المدير');
-      }
-
-      // Get supervisors under this admin
-      _supervisors = await _supervisorRepository.fetchSupervisors(
-          adminId: currentAdmin.id);
-
-      // Get all schools for these supervisors
-      List<School> allSchools = [];
-      for (final supervisor in _supervisors) {
-        final supervisorSchools =
-            await _schoolService.getSchoolsForSupervisor(supervisor.id);
-        allSchools.addAll(supervisorSchools);
-      }
-
-      // Remove duplicates based on school ID
-      final uniqueSchools = <String, School>{};
-      for (final school in allSchools) {
-        uniqueSchools[school.id] = school;
-      }
-
-      setState(() {
-        _schools = uniqueSchools.values.toList();
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
-    }
-  }
-
-  List<School> get _filteredSchools {
-    if (_searchQuery.isEmpty) return _schools;
-
-    return _schools.where((school) {
-      final name = school.name.toLowerCase();
-      final address = school.address?.toLowerCase() ?? '';
-      final query = _searchQuery.toLowerCase();
-
-      return name.contains(query) || address.contains(query);
-    }).toList();
-  }
+class _SchoolsListScreenContent extends StatelessWidget {
+  const _SchoolsListScreenContent();
 
   @override
   Widget build(BuildContext context) {
@@ -115,7 +43,7 @@ class _SchoolsListScreenState extends State<SchoolsListScreen> {
           actions: [
             IconButton(
               icon: const Icon(Icons.refresh_rounded),
-              onPressed: _loadSchools,
+              onPressed: () => context.read<SchoolsBloc>().add(const SchoolsRefreshed()),
               tooltip: 'تحديث',
             ),
           ],
@@ -155,38 +83,44 @@ class _SchoolsListScreenState extends State<SchoolsListScreen> {
                     ),
                   ],
                 ),
-                child: TextField(
-                  onChanged: (value) {
-                    setState(() {
-                      _searchQuery = value;
-                    });
+                child: BlocBuilder<SchoolsBloc, SchoolsState>(
+                  builder: (context, state) {
+                    return TextField(
+                      onChanged: (value) {
+                        context.read<SchoolsBloc>().add(SchoolsSearchChanged(value));
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'البحث في المدارس...',
+                        hintStyle: TextStyle(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white.withOpacity(0.6)
+                              : Colors.grey.withOpacity(0.6),
+                        ),
+                        prefixIcon: Icon(
+                          Icons.search_rounded,
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white.withOpacity(0.6)
+                              : Colors.grey.withOpacity(0.6),
+                        ),
+                        border: InputBorder.none,
+                      ),
+                      style: TextStyle(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white
+                            : Colors.black,
+                      ),
+                    );
                   },
-                  decoration: InputDecoration(
-                    hintText: 'البحث في المدارس...',
-                    hintStyle: TextStyle(
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.white.withOpacity(0.6)
-                          : Colors.grey.withOpacity(0.6),
-                    ),
-                    prefixIcon: Icon(
-                      Icons.search_rounded,
-                      color: Theme.of(context).brightness == Brightness.dark
-                          ? Colors.white.withOpacity(0.6)
-                          : Colors.grey.withOpacity(0.6),
-                    ),
-                    border: InputBorder.none,
-                  ),
-                  style: TextStyle(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? Colors.white
-                        : Colors.black,
-                  ),
                 ),
               ),
 
               // Schools List
               Expanded(
-                child: _buildContent(),
+                child: BlocBuilder<SchoolsBloc, SchoolsState>(
+                  builder: (context, state) {
+                    return _buildContent(context, state);
+                  },
+                ),
               ),
             ],
           ),
@@ -195,8 +129,8 @@ class _SchoolsListScreenState extends State<SchoolsListScreen> {
     );
   }
 
-  Widget _buildContent() {
-    if (_isLoading) {
+  Widget _buildContent(BuildContext context, SchoolsState state) {
+    if (state is SchoolsLoading) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -220,7 +154,7 @@ class _SchoolsListScreenState extends State<SchoolsListScreen> {
       );
     }
 
-    if (_error != null) {
+    if (state is SchoolsError) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -245,7 +179,7 @@ class _SchoolsListScreenState extends State<SchoolsListScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              _error!,
+              state.message,
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 14,
@@ -256,7 +190,9 @@ class _SchoolsListScreenState extends State<SchoolsListScreen> {
             ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: _loadSchools,
+              onPressed: () {
+                context.read<SchoolsBloc>().add(const SchoolsRefreshed());
+              },
               child: const Text('إعادة المحاولة'),
             ),
           ],
@@ -264,61 +200,65 @@ class _SchoolsListScreenState extends State<SchoolsListScreen> {
       );
     }
 
-    final filteredSchools = _filteredSchools;
+    if (state is SchoolsLoaded) {
+      final filteredSchools = state.filteredSchools;
 
-    if (filteredSchools.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.school_outlined,
-              size: 64,
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? Colors.white.withOpacity(0.3)
-                  : Colors.grey.withOpacity(0.3),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              _searchQuery.isEmpty
-                  ? 'لا توجد مدارس'
-                  : 'لا توجد مدارس تطابق البحث',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
+      if (filteredSchools.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.school_outlined,
+                size: 64,
                 color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white.withOpacity(0.7)
-                    : Colors.grey.withOpacity(0.7),
+                    ? Colors.white.withOpacity(0.3)
+                    : Colors.grey.withOpacity(0.3),
               ),
-            ),
-            if (_searchQuery.isNotEmpty) ...[
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
               Text(
-                'جرب البحث بكلمات مختلفة',
+                state.searchQuery.isEmpty
+                    ? 'لا توجد مدارس'
+                    : 'لا توجد مدارس تطابق البحث',
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
                   color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white.withOpacity(0.5)
-                      : Colors.grey.withOpacity(0.5),
+                      ? Colors.white.withOpacity(0.7)
+                      : Colors.grey.withOpacity(0.7),
                 ),
               ),
+              if (state.searchQuery.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'جرب البحث بكلمات مختلفة',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white.withOpacity(0.5)
+                        : Colors.grey.withOpacity(0.5),
+                  ),
+                ),
+              ],
             ],
-          ],
-        ),
+          ),
+        );
+      }
+
+      return ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        itemCount: filteredSchools.length,
+        itemBuilder: (context, index) {
+          final school = filteredSchools[index];
+          return _buildSchoolCard(context, school);
+        },
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemCount: filteredSchools.length,
-      itemBuilder: (context, index) {
-        final school = filteredSchools[index];
-        return _buildSchoolCard(school);
-      },
-    );
+    return const SizedBox.shrink();
   }
 
-  Widget _buildSchoolCard(School school) {
+  Widget _buildSchoolCard(BuildContext context, School school) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(

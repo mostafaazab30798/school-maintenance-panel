@@ -16,7 +16,26 @@ class MaintenanceCountRepository {
   }) async {
     try {
       // RULE: For complex queries with range/order, apply filters after select but before range/order
-      var query = _client.from('maintenance_counts').select('*');
+      var query = _client.from('maintenance_counts').select('''
+        id,
+        school_id,
+        school_name,
+        supervisor_id,
+        status,
+        item_counts,
+        text_answers,
+        yes_no_answers,
+        yes_no_with_counts,
+        survey_answers,
+        maintenance_notes,
+        fire_safety_alarm_panel_data,
+        fire_safety_condition_only_data,
+        fire_safety_expiry_dates,
+        section_photos,
+        heater_entries,
+        created_at,
+        updated_at
+      ''');
 
       // Apply filters first
       if (supervisorId != null) {
@@ -44,9 +63,88 @@ class MaintenanceCountRepository {
     }
   }
 
+  /// Fetch all maintenance count records with detailed data (for listing)
+  Future<List<MaintenanceCount>> getAllMaintenanceCountRecords({
+    List<String>? supervisorIds,
+    String? schoolId,
+    String? status,
+    int limit = 50,
+  }) async {
+    try {
+      print('🔍 DEBUG: Starting getAllMaintenanceCountRecords');
+      print('🔍 DEBUG: supervisorIds: $supervisorIds');
+      print('🔍 DEBUG: schoolId: $schoolId');
+      print('🔍 DEBUG: status: $status');
+      print('🔍 DEBUG: limit: $limit');
+
+      var query = _client.from('maintenance_counts').select('''
+        id,
+        school_id,
+        school_name,
+        supervisor_id,
+        status,
+        item_counts,
+        text_answers,
+        yes_no_answers,
+        yes_no_with_counts,
+        survey_answers,
+        maintenance_notes,
+        fire_safety_alarm_panel_data,
+        fire_safety_condition_only_data,
+        fire_safety_expiry_dates,
+        section_photos,
+        heater_entries,
+        created_at,
+        updated_at
+      ''');
+
+      // Apply filters
+      if (supervisorIds != null && supervisorIds.isNotEmpty) {
+        query = query.inFilter('supervisor_id', supervisorIds);
+        print('🔍 DEBUG: Applied supervisor filter for IDs: $supervisorIds');
+      }
+
+      if (schoolId != null) {
+        query = query.eq('school_id', schoolId);
+        print('🔍 DEBUG: Applied school filter: $schoolId');
+      }
+
+      if (status != null) {
+        query = query.eq('status', status);
+        print('🔍 DEBUG: Applied status filter: $status');
+      }
+
+      print('🔍 DEBUG: Executing query...');
+      
+      // Apply order and limit
+      final response = await query
+          .order('created_at', ascending: false)
+          .limit(limit);
+
+      print('🔍 DEBUG: Query executed successfully');
+      print('🔍 DEBUG: Response type: ${response.runtimeType}');
+      print('🔍 DEBUG: Response length: ${response?.length ?? 'null'}');
+      
+      if (response != null && response.isNotEmpty) {
+        print('🔍 DEBUG: First record: ${response.first}');
+      }
+
+      final result = response
+          .map<MaintenanceCount>((data) => MaintenanceCount.fromMap(data))
+          .toList();
+
+      print('🔍 DEBUG: Parsed ${result.length} MaintenanceCount objects');
+      return result;
+    } catch (e, stackTrace) {
+      print('❌ ERROR: Failed to fetch maintenance count records: $e');
+      print('❌ ERROR: Stack trace: $stackTrace');
+      return [];
+    }
+  }
+
   /// Get schools that have maintenance counts
   Future<List<Map<String, dynamic>>> getSchoolsWithMaintenanceCounts({
-    String? supervisorId,
+    List<String>? supervisorIds,
   }) async {
     try {
       // RULE: Supabase query pattern is: from() -> select() -> where/eq/filter -> order()
@@ -58,8 +156,8 @@ class MaintenanceCountRepository {
           ''');
 
       // Apply supervisor filter after select
-      if (supervisorId != null) {
-        query = query.eq('supervisor_id', supervisorId);
+      if (supervisorIds != null && supervisorIds.isNotEmpty) {
+        query = query.inFilter('supervisor_id', supervisorIds);
       }
 
       // Finally apply ordering
@@ -157,15 +255,15 @@ class MaintenanceCountRepository {
   }
 
   /// Get summary statistics for dashboard
-  Future<Map<String, int>> getDashboardSummary({String? supervisorId}) async {
+  Future<Map<String, int>> getDashboardSummary({List<String>? supervisorIds}) async {
     try {
       // RULE: Supabase query pattern is: from() -> select() -> where/eq/filter -> order()
       // Never apply filters before select() - it causes NoSuchMethodError
       var query = _client.from('maintenance_counts').select(
           'status, school_id, yes_no_answers, fire_safety_condition_only_data, survey_answers');
 
-      if (supervisorId != null) {
-        query = query.eq('supervisor_id', supervisorId);
+      if (supervisorIds != null && supervisorIds.isNotEmpty) {
+        query = query.inFilter('supervisor_id', supervisorIds);
       }
 
       final response = await query;
@@ -219,8 +317,7 @@ class MaintenanceCountRepository {
         'draft_counts': totalCounts - submittedCounts,
       };
     } catch (e) {
-      // Return default values instead of throwing exception
-      print('Warning: Failed to fetch dashboard summary: $e');
+      print('⚠️ WARNING: Failed to get dashboard summary: $e');
       return {
         'total_maintenance_counts': 0,
         'schools_with_counts': 0,

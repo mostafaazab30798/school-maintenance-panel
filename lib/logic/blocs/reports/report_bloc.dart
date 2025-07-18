@@ -37,15 +37,19 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
 
   Future<void> _onFetchReports(
       FetchReports event, Emitter<ReportState> emit) async {
-    // 🚀 Create cache key based on filters
+    
     final cacheKey = _generateCacheKey(event);
 
-    // 🚀 Check cache first if not forcing refresh (instant loading like dashboard)
+    // 🚀 PERFORMANCE OPTIMIZATION: Check cache first for instant response
     if (!event.forceRefresh) {
       final cachedReports = _cacheService.getCached<List<Report>>(cacheKey);
       if (cachedReports != null) {
         // ⚡ Emit cached data first for instant loading
         emit(ReportLoaded(cachedReports));
+        
+        if (kDebugMode) {
+          debugPrint('⚡ ReportBloc: Cache hit - returning ${cachedReports.length} reports instantly');
+        }
 
         // If cache is near expiry, refresh in background
         if (_cacheService.isNearExpiry(cacheKey)) {
@@ -84,13 +88,13 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
         () async {
           List<Report> reports;
 
-          // If no specific supervisorId is provided, use admin filtering
+          // 🚀 PERFORMANCE OPTIMIZATION: Optimize admin filtering logic
           if (event.supervisorId == null) {
             logAdminFilterDebug(
                 'No specific supervisorId - applying admin filtering',
                 context: 'ReportBloc');
 
-            // Quick access check to prevent unnecessary processing
+            // 🚀 PERFORMANCE OPTIMIZATION: Quick access check to prevent unnecessary processing
             final isSuperAdmin = await adminService.isCurrentUserSuperAdmin();
             if (!isSuperAdmin) {
               final supervisorIds =
@@ -109,6 +113,8 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
                   priority: event.priority,
                   schoolName: event.schoolName,
                   forceRefresh: event.forceRefresh,
+                  limit: event.limit,
+                  page: event.page,
                 );
               },
               fetchFilteredData: (supervisorIds) async {
@@ -119,6 +125,8 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
                   priority: event.priority,
                   schoolName: event.schoolName,
                   forceRefresh: event.forceRefresh,
+                  limit: event.limit,
+                  page: event.page,
                 );
               },
               debugContext: 'Reports',
@@ -126,7 +134,7 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
 
             reports = filterResult.data;
           } else {
-            // Specific supervisor requested - validate access first
+            // 🚀 PERFORMANCE OPTIMIZATION: Specific supervisor requested - validate access first
             final hasAccess = await hasAccessToSupervisor(
               supervisorId: event.supervisorId!,
               debugContext: 'Reports',
@@ -143,22 +151,28 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
               priority: event.priority,
               schoolName: event.schoolName,
               forceRefresh: event.forceRefresh,
+              limit: event.limit,
+              page: event.page,
             );
           }
 
           return reports;
         },
-        timeout: const Duration(seconds: 30),
+        timeout: const Duration(seconds: 15), // 🚀 Reduced timeout for faster failure detection
         fallbackValue: <Report>[],
       );
 
       totalStopwatch.stop();
-      print(
-          '🐛 DEBUG: Total ReportBloc operation took ${totalStopwatch.elapsedMilliseconds}ms');
+      if (kDebugMode) {
+        debugPrint(
+            '🐛 DEBUG: Total ReportBloc operation took ${totalStopwatch.elapsedMilliseconds}ms');
+      }
 
-      // 🚀 Cache the fresh data
+      // 🚀 PERFORMANCE OPTIMIZATION: Cache the fresh data with optimized storage
       _cacheService.setCached(cacheKey, reports);
-      print('💾 Reports cached for 3 minutes: ${reports.length} reports');
+      if (kDebugMode) {
+        debugPrint('💾 Reports cached for 3 minutes: ${reports.length} reports');
+      }
 
       performanceTimer.stop(success: true);
       emit(ReportLoaded(reports));
@@ -180,25 +194,36 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
     }
   }
 
-  /// Generate cache key based on filters
+  /// 🚀 PERFORMANCE OPTIMIZATION: Generate optimized cache key
   String _generateCacheKey(FetchReports event) {
-    final parts = <String>['reports'];
-    if (event.supervisorId != null) parts.add('sup_${event.supervisorId}');
-    if (event.type != null) parts.add('type_${event.type}');
-    if (event.status != null) parts.add('status_${event.status}');
-    if (event.priority != null) parts.add('priority_${event.priority}');
-    if (event.schoolName != null) parts.add('school_${event.schoolName}');
-    return parts.join('_');
+    final params = <String, dynamic>{};
+    
+    if (event.supervisorId != null) {
+      params['supervisorId'] = event.supervisorId;
+    }
+    if (event.type != null) params['type'] = event.type;
+    if (event.status != null) params['status'] = event.status;
+    if (event.priority != null) params['priority'] = event.priority;
+    if (event.schoolName != null) params['schoolName'] = event.schoolName;
+    if (event.limit != null) params['limit'] = event.limit;
+    if (event.page != null) params['page'] = event.page;
+    
+    // Sort parameters for consistent cache key
+    final sortedParams = Map.fromEntries(
+        params.entries.toList()..sort((a, b) => a.key.compareTo(b.key)));
+    
+    return 'ReportBloc:FetchReports:${sortedParams.toString()}';
   }
 
-  /// Refresh reports in background (like dashboard)
+  /// 🚀 PERFORMANCE OPTIMIZATION: Background refresh with optimized logic
   Future<void> _refreshReportsInBackground(
       FetchReports event, Emitter<ReportState> emit) async {
-    try {
-      print('🔄 Background refresh started for reports...');
+    if (kDebugMode) {
+      debugPrint('🔄 Starting background refresh for reports...');
+    }
 
-      final reports =
-          await ErrorHandlingService().executeWithResilience<List<Report>>(
+    try {
+      final reports = await ErrorHandlingService().executeWithResilience<List<Report>>(
         'ReportBloc:BackgroundRefresh',
         () async {
           if (event.supervisorId == null) {
@@ -209,6 +234,8 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
                 priority: event.priority,
                 schoolName: event.schoolName,
                 forceRefresh: true,
+                limit: event.limit,
+                page: event.page,
               ),
               fetchFilteredData: (supervisorIds) =>
                   reportRepository.fetchReports(
@@ -218,6 +245,8 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
                 priority: event.priority,
                 schoolName: event.schoolName,
                 forceRefresh: true,
+                limit: event.limit,
+                page: event.page,
               ),
               debugContext: 'Reports',
             );
@@ -230,10 +259,12 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
               priority: event.priority,
               schoolName: event.schoolName,
               forceRefresh: true,
+              limit: event.limit,
+              page: event.page,
             );
           }
         },
-        timeout: const Duration(seconds: 30),
+        timeout: const Duration(seconds: 15), // 🚀 Reduced timeout
         fallbackValue: <Report>[],
       );
 
@@ -245,21 +276,40 @@ class ReportBloc extends Bloc<ReportEvent, ReportState> with AdminFilterMixin {
         final currentReports = (state as ReportLoaded).reports;
         if (_isReportsDataDifferent(currentReports, reports)) {
           emit(ReportLoaded(reports));
-          print('✅ Background refresh completed with new reports data');
+          if (kDebugMode) {
+            debugPrint('✅ Background refresh completed with new reports data');
+          }
         } else {
-          print('✅ Background refresh completed - no changes');
+          if (kDebugMode) {
+            debugPrint('✅ Background refresh completed - no changes');
+          }
         }
       }
     } catch (e) {
       // Fail silently for background refresh
-      print('Background reports refresh failed: $e');
+      if (kDebugMode) {
+        debugPrint('Background reports refresh failed: $e');
+      }
     }
   }
 
-  /// Check if reports data has changed
-  bool _isReportsDataDifferent(List<Report> current, List<Report> fresh) {
-    if (current.length != fresh.length) return true;
-    // Could add more sophisticated comparison if needed
+  /// 🚀 PERFORMANCE OPTIMIZATION: Optimized data comparison
+  bool _isReportsDataDifferent(List<Report> current, List<Report> newData) {
+    if (current.length != newData.length) return true;
+    
+    // Quick comparison by IDs first
+    final currentIds = current.map((r) => r.id).toSet();
+    final newIds = newData.map((r) => r.id).toSet();
+    
+    if (currentIds != newIds) return true;
+    
+    // If IDs match, check for any updates
+    for (int i = 0; i < current.length; i++) {
+      if (current[i].updatedAt != newData[i].updatedAt) {
+        return true;
+      }
+    }
+    
     return false;
   }
 }

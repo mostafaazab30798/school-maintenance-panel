@@ -71,11 +71,15 @@ class MaintenanceViewBloc
         final filterResult = await applyAdminFilter<MaintenanceReport>(
           fetchAllData: () => maintenanceRepository.fetchMaintenanceReports(
             status: event.status,
+            limit: event.limit,
+            page: event.page,
           ),
           fetchFilteredData: (supervisorIds) =>
               maintenanceRepository.fetchMaintenanceReports(
             supervisorIds: supervisorIds,
             status: event.status,
+            limit: event.limit,
+            page: event.page,
           ),
           debugContext: 'Maintenance',
         );
@@ -106,6 +110,8 @@ class MaintenanceViewBloc
         reports = await maintenanceRepository.fetchMaintenanceReports(
           supervisorId: event.supervisorId,
           status: event.status,
+          limit: event.limit,
+          page: event.page,
         );
       }
 
@@ -130,6 +136,8 @@ class MaintenanceViewBloc
     final parts = <String>['maintenance'];
     if (event.supervisorId != null) parts.add('sup_${event.supervisorId}');
     if (event.status != null) parts.add('status_${event.status}');
+    if (event.page != null) parts.add('page_${event.page}');
+    if (event.limit != null) parts.add('limit_${event.limit}');
     return parts.join('_');
   }
 
@@ -145,11 +153,15 @@ class MaintenanceViewBloc
         final filterResult = await applyAdminFilter<MaintenanceReport>(
           fetchAllData: () => maintenanceRepository.fetchMaintenanceReports(
             status: event.status,
+            limit: event.limit,
+            page: event.page,
           ),
           fetchFilteredData: (supervisorIds) =>
               maintenanceRepository.fetchMaintenanceReports(
             supervisorIds: supervisorIds,
             status: event.status,
+            limit: event.limit,
+            page: event.page,
           ),
           debugContext: 'Maintenance',
         );
@@ -158,6 +170,8 @@ class MaintenanceViewBloc
         reports = await maintenanceRepository.fetchMaintenanceReports(
           supervisorId: event.supervisorId,
           status: event.status,
+          limit: event.limit,
+          page: event.page,
         );
       }
 

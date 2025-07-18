@@ -6,6 +6,8 @@ import '../../data/repositories/maintenance_count_repository.dart';
 import '../../data/repositories/damage_count_repository.dart';
 import '../../core/services/admin_service.dart';
 import '../../core/services/excel_export_service.dart';
+import '../../data/models/maintenance_count.dart';
+import '../../data/models/damage_count.dart';
 import '../widgets/common/shared_app_bar.dart';
 import '../widgets/common/error_widget.dart';
 import '../widgets/common/school_chip.dart';
@@ -21,7 +23,7 @@ class CountInventoryScreen extends StatelessWidget {
         repository: MaintenanceCountRepository(Supabase.instance.client),
         damageRepository: DamageCountRepository(Supabase.instance.client),
         adminService: AdminService(Supabase.instance.client),
-      )..add(const LoadSchoolsWithCounts()),
+      )..add(const LoadMaintenanceCountRecords()),
       child: const CountInventoryView(),
     );
   }
@@ -45,9 +47,9 @@ class CountInventoryView extends StatelessWidget {
         floatingActionButton:
             BlocBuilder<MaintenanceCountsBloc, MaintenanceCountsState>(
           builder: (context, state) {
-            if (state is SchoolsWithCountsLoaded && state.schools.isNotEmpty) {
+            if (state is MaintenanceCountRecordsLoaded && state.records.isNotEmpty) {
               return FloatingActionButton.extended(
-                onPressed: () => _exportToExcel(context, state.schools),
+                onPressed: () => _exportToExcel(context, state.records),
                 backgroundColor: const Color(0xFF10B981),
                 foregroundColor: Colors.white,
                 elevation: 4,
@@ -76,19 +78,19 @@ class CountInventoryView extends StatelessWidget {
                   message: state.message,
                   onRetry: () => context
                       .read<MaintenanceCountsBloc>()
-                      .add(const LoadSchoolsWithCounts()),
+                      .add(const LoadMaintenanceCountRecords()),
                 ),
               );
             }
 
-            if (state is SchoolsWithCountsLoaded) {
-              final schools = state.schools;
+            if (state is MaintenanceCountRecordsLoaded) {
+              final records = state.records;
 
-              if (schools.isEmpty) {
+              if (records.isEmpty) {
                 return _buildEmptyState(context);
               }
 
-              return _buildSchoolsList(context, schools);
+              return _buildMaintenanceCountsList(context, records);
             }
 
             return _buildEmptyState(context);
@@ -129,7 +131,7 @@ class CountInventoryView extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Text(
-            'جاري تحميل حصر الاعداد...',
+            'جاري تحميل سجلات حصر الاعداد...',
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w500,
@@ -208,7 +210,7 @@ class CountInventoryView extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Text(
-              'لا توجد مدارس بحصر صيانة',
+              'لا توجد سجلات حصر صيانة',
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
@@ -217,7 +219,7 @@ class CountInventoryView extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              'لم يتم العثور على أي مدارس تحتوي على حصر صيانة حتى الآن',
+              'لم يتم العثور على أي سجلات حصر صيانة حتى الآن',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 15,
@@ -231,8 +233,8 @@ class CountInventoryView extends StatelessWidget {
     );
   }
 
-  Widget _buildSchoolsList(
-      BuildContext context, List<Map<String, dynamic>> schools) {
+  Widget _buildMaintenanceCountsList(
+      BuildContext context, List<MaintenanceCount> records) {
     return RefreshIndicator(
       onRefresh: () async {
         context
@@ -253,10 +255,10 @@ class CountInventoryView extends StatelessWidget {
               ),
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
-                  final school = schools[index];
-                  return _buildSchoolChip(context, school);
+                  final record = records[index];
+                  return _buildMaintenanceCountChip(context, record);
                 },
-                childCount: schools.length,
+                childCount: records.length,
               ),
             ),
           ),
@@ -265,37 +267,135 @@ class CountInventoryView extends StatelessWidget {
     );
   }
 
-  Widget _buildSchoolChip(BuildContext context, Map<String, dynamic> school) {
-    final schoolName = school['school_name'] as String;
-    final address = school['address'] as String? ?? '';
-    final maintenanceCount = school['maintenance_count'] as int;
+  Widget _buildMaintenanceCountChip(BuildContext context, MaintenanceCount record) {
+    final schoolName = record.schoolName;
+    final status = record.status;
+    final createdAt = record.createdAt;
+    final hasDamage = record.hasDamageData;
 
-    return SchoolChip(
-      schoolName: schoolName,
-      address: address,
-      count: maintenanceCount,
-      primaryColor: const Color(0xFF10B981),
-      icon: Icons.inventory_outlined,
-      countLabel: 'عدد',
-      onTap: () => _showMaintenanceCountDetails(context, school),
+    return Card(
+      margin: const EdgeInsets.all(8.0),
+      child: InkWell(
+        onTap: () => _showMaintenanceCountDetails(context, record),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                const Color(0xFF10B981).withOpacity(0.1),
+                const Color(0xFF059669).withOpacity(0.05),
+              ],
+            ),
+            border: Border.all(
+              color: const Color(0xFF10B981).withOpacity(0.2),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.inventory_outlined,
+                    color: const Color(0xFF10B981),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      schoolName,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1F2937),
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  // Container(
+                  //   padding: const EdgeInsets.symmetric(
+                  //     horizontal: 8,
+                  //     vertical: 4,
+                  //   ),
+                  //   decoration: BoxDecoration(
+                  //     color: status == 'submitted'
+                  //         ? const Color(0xFF10B981)
+                  //         : const Color(0xFFF59E0B),
+                  //     borderRadius: BorderRadius.circular(12),
+                  //   ),
+                  //   child: Text(
+                  //     status == 'submitted' ? 'تم الإرسال' : 'مسودة',
+                  //     style: const TextStyle(
+                  //       fontSize: 12,
+                  //       fontWeight: FontWeight.w500,
+                  //       color: Colors.white,
+                  //     ),
+                  //   ),
+                  // ),
+                  if (hasDamage) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Text(
+                        'يوجد توالف',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'تاريخ الإنشاء: ${_formatDate(createdAt)}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Color(0xFF6B7280),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   void _showMaintenanceCountDetails(
-      BuildContext context, Map<String, dynamic> school) {
+      BuildContext context, MaintenanceCount record) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => MaintenanceCountDetailScreen(
-          schoolId: school['school_id'] as String,
-          schoolName: school['school_name'] as String,
+          schoolId: record.schoolId,
+          schoolName: record.schoolName,
         ),
       ),
     );
   }
 
   Future<void> _exportToExcel(
-      BuildContext context, List<Map<String, dynamic>> schools) async {
+      BuildContext context, List<MaintenanceCount> records) async {
     try {
       // Show loading dialog
       showDialog(
@@ -361,5 +461,9 @@ class CountInventoryView extends StatelessWidget {
         );
       }
     }
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
   }
 }
