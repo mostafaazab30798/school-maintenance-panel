@@ -101,3 +101,69 @@ class TechnicianRemoved extends SupervisorEvent {
   @override
   List<Object?> get props => [supervisorId, technicianName];
 }
+
+/// Event to update supervisor data
+class SupervisorUpdated extends SupervisorEvent {
+  final String id;
+  final String username;
+  final String? email; // Optional since it's read-only
+  final String phone;
+  final String iqamaId;
+  final String plateNumbers;
+  final String plateEnglishLetters;
+  final String plateArabicLetters;
+  final String workId;
+
+  const SupervisorUpdated({
+    required this.id,
+    required this.username,
+    this.email, // Optional since it's read-only
+    required this.phone,
+    required this.iqamaId,
+    required this.plateNumbers,
+    required this.plateEnglishLetters,
+    required this.plateArabicLetters,
+    required this.workId,
+  });
+
+  @override
+  List<Object?> get props => [
+        id,
+        username,
+        email,
+        phone,
+        iqamaId,
+        plateNumbers,
+        plateEnglishLetters,
+        plateArabicLetters,
+        workId,
+      ];
+}
+
+/// Event to remove a school from supervisor
+class SchoolRemovedFromSupervisor extends SupervisorEvent {
+  final String supervisorId;
+  final String schoolId;
+
+  const SchoolRemovedFromSupervisor({
+    required this.supervisorId,
+    required this.schoolId,
+  });
+
+  @override
+  List<Object?> get props => [supervisorId, schoolId];
+}
+
+/// Event to remove multiple schools from supervisor
+class SchoolsRemovedFromSupervisor extends SupervisorEvent {
+  final String supervisorId;
+  final List<String> schoolIds;
+
+  const SchoolsRemovedFromSupervisor({
+    required this.supervisorId,
+    required this.schoolIds,
+  });
+
+  @override
+  List<Object?> get props => [supervisorId, schoolIds];
+}

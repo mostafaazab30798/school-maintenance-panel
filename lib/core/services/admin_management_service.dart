@@ -173,7 +173,7 @@ class AdminManagementService {
       String adminId) async {
     final response = await _client
         .from('supervisors')
-        .select('id, username, email')
+        .select('id, username, email, work_id')
         .eq('admin_id', adminId);
 
     return List<Map<String, dynamic>>.from(response);
@@ -183,7 +183,7 @@ class AdminManagementService {
   Future<List<Map<String, dynamic>>> getUnassignedSupervisors() async {
     final response = await _client
         .from('supervisors')
-        .select('id, username, email, technicians_detailed')
+        .select('id, username, email, technicians_detailed, work_id')
         .filter('admin_id', 'is', null);
 
     return List<Map<String, dynamic>>.from(response);
@@ -353,7 +353,7 @@ class AdminManagementService {
     // Get all supervisors
     final supervisorsResponse = await _client
         .from('supervisors')
-        .select('id, username, email, admin_id, technicians_detailed')
+        .select('id, username, email, admin_id, technicians_detailed, work_id')
         .order('created_at', ascending: false);
 
     List<Map<String, dynamic>> supervisorsWithStats = [];
@@ -371,6 +371,7 @@ class AdminManagementService {
         'email': supervisor['email'],
         'admin_id': supervisor['admin_id'],
         'technicians_detailed': supervisor['technicians_detailed'] ?? [],
+        'work_id': supervisor['work_id'] ?? '',
         'schools_count': schoolsCount,
         'stats': stats,
       });
@@ -563,7 +564,7 @@ class AdminManagementService {
         _client
             .from('supervisors')
             .select(
-                'id, username, email, admin_id, technicians, technicians_detailed')
+                'id, username, email, admin_id, technicians, technicians_detailed, work_id')
             .order('created_at', ascending: false),
 
         // All reports and maintenance data (we'll process these in memory)
@@ -608,6 +609,7 @@ class AdminManagementService {
                 'admin_id': s['admin_id'],
                 'technicians': s['technicians'] ?? [],
                 'technicians_detailed': s['technicians_detailed'] ?? [],
+                'work_id': s['work_id'] ?? '',
               })
           .toList();
 
@@ -738,6 +740,7 @@ class AdminManagementService {
         'admin_id': supervisor['admin_id'],
         'technicians_detailed': supervisor['technicians_detailed'] ??
             [], // Include detailed technicians field
+        'work_id': supervisor['work_id'] ?? '',
         'schools_count': schoolsCount,
         'stats': {
           'reports': supervisorReports.length,

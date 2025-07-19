@@ -10,12 +10,15 @@ import '../../../data/models/supervisor.dart';
 import '../../../logic/blocs/super_admin/super_admin_bloc.dart';
 import '../../../logic/blocs/super_admin/super_admin_event.dart';
 import '../../../core/services/bloc_manager.dart';
+import '../../../core/services/admin_service.dart';
 import '../common/esc_dismissible_dialog.dart';
 import '../attendance/attendance_dialog.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'export_attendance_excel.dart';
 import '../../../data/repositories/supervisor_attendance_repository.dart';
+import '../../../data/repositories/supervisor_repository.dart';
 import '../../../data/models/supervisor_attendance.dart';
+import '../../../logic/blocs/supervisors/supervisor_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupervisorsListContent extends StatefulWidget {
@@ -53,8 +56,11 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
         final username =
             (supervisor['username'] as String? ?? '').toLowerCase();
         final email = (supervisor['email'] as String? ?? '').toLowerCase();
+        final workId = (supervisor['work_id'] as String? ?? '').toLowerCase();
         final query = _searchQuery.toLowerCase();
-        return username.contains(query) || email.contains(query);
+        return username.contains(query) || 
+               email.contains(query) || 
+               workId.contains(query);
       }).toList();
     }
 
@@ -332,7 +338,7 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                     });
                   },
                   decoration: InputDecoration(
-                    hintText: 'البحث بالاسم أو البريد الإلكتروني...',
+                    hintText: 'البحث بالاسم أو البريد الإلكتروني أو رقم العمل...',
                     prefixIcon: const Icon(Icons.search, size: 20),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -925,6 +931,7 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
     final stats = supervisor['stats'] as Map<String, dynamic>;
     final username = supervisor['username'] as String? ?? 'غير محدد';
     final email = supervisor['email'] as String? ?? '';
+    final workId = supervisor['work_id'] as String? ?? '';
     final supervisorId = supervisor['id'] as String? ?? '';
     final adminId = supervisor['admin_id'] as String?;
 
@@ -1048,6 +1055,33 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                            if (workId.isNotEmpty) ...[
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.badge_outlined,
+                                    size: 10,
+                                    color: isDark
+                                        ? const Color(0xFF94A3B8)
+                                        : const Color(0xFF64748B),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'رقم العمل: $workId',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: isDark
+                                          ? const Color(0xFF94A3B8)
+                                          : const Color(0xFF64748B),
+                                      height: 1.2,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
                               ),
                             ],
                             const SizedBox(height: 4),
@@ -1510,9 +1544,15 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
 
     showDialog(
       context: context,
-      builder: (dialogContext) => SchoolsListDialog(
-        supervisorId: supervisorId,
-        supervisorName: username,
+      builder: (dialogContext) => BlocProvider(
+        create: (context) => SupervisorBloc(
+          SupervisorRepository(Supabase.instance.client),
+          AdminService(Supabase.instance.client),
+        ),
+        child: SchoolsListDialog(
+          supervisorId: supervisorId,
+          supervisorName: username,
+        ),
       ),
     );
   }

@@ -1,10 +1,12 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:uuid/uuid.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../data/models/supervisor.dart';
 import '../../../data/repositories/supervisor_repository.dart';
 import '../../../core/services/admin_service.dart';
 import '../../../core/services/bloc_manager.dart';
 import '../../../core/services/cache_invalidation_service.dart';
+import '../../../core/services/school_assignment_service.dart';
 import '../../../core/mixins/admin_filter_mixin.dart';
 import '../super_admin/super_admin_event.dart';
 import '../super_admin/super_admin_state.dart';
@@ -29,7 +31,12 @@ class SupervisorBloc extends Bloc<SupervisorEvent, SupervisorState>
     on<SupervisorTechniciansUpdated>(_onTechniciansUpdated);
     on<TechnicianAdded>(_onTechnicianAdded);
     on<TechnicianRemoved>(_onTechnicianRemoved);
+    on<SupervisorUpdated>(_onSupervisorUpdated);
+    on<SchoolRemovedFromSupervisor>(_onSchoolRemovedFromSupervisor);
+    on<SchoolsRemovedFromSupervisor>(_onSchoolsRemovedFromSupervisor);
   }
+
+
 
   Future<void> _onSupervisorsStarted(
       SupervisorsStarted event, Emitter<SupervisorState> emit) async {
@@ -126,6 +133,57 @@ class SupervisorBloc extends Bloc<SupervisorEvent, SupervisorState>
       emit(SupervisorLoaded(supervisors));
     } catch (e) {
       emit(SupervisorError(e.toString()));
+    }
+  }
+
+  Future<void> _onSupervisorUpdated(
+      SupervisorUpdated event, Emitter<SupervisorState> emit) async {
+    emit(SupervisorUpdating(supervisorId: event.id));
+    try {
+      // Update the supervisor in the repository
+      final updates = {
+        'username': event.username,
+        'phone': event.phone,
+        'iqama_id': event.iqamaId,
+        'plate_numbers': event.plateNumbers,
+        'plate_english_letters': event.plateEnglishLetters,
+        'plate_arabic_letters': event.plateArabicLetters,
+        'work_id': event.workId,
+      };
+      
+      // Only update email if provided (for backward compatibility)
+      if (event.email != null) {
+        updates['email'] = event.email!;
+      }
+      
+      await supervisorRepository.updateSupervisor(event.id, updates);
+
+      // 🚀 Critical Fix: Clear all supervisor-related caches
+      CacheInvalidationService.invalidateSupervisorCaches();
+
+      // Reload supervisors to reflect changes
+      final isSuperAdmin = await this.isSuperAdmin();
+      List<Supervisor> supervisors;
+
+      if (isSuperAdmin) {
+        supervisors = await supervisorRepository.fetchSupervisors();
+      } else {
+        supervisors =
+            await supervisorRepository.fetchSupervisorsForCurrentAdmin();
+      }
+
+      emit(SupervisorLoaded(supervisors));
+
+      // Also refresh SuperAdminBloc to update all UI screens
+      try {
+        final superAdminBloc = BlocManager().getSuperAdminBloc();
+        superAdminBloc.add(LoadSuperAdminData(forceRefresh: true));
+        print('SupervisorBloc: Triggered SuperAdminBloc refresh after updating supervisor');
+      } catch (e) {
+        print('SupervisorBloc: Failed to refresh SuperAdminBloc: $e');
+      }
+    } catch (e) {
+      emit(SupervisorError('Failed to update supervisor: $e'));
     }
   }
 
@@ -261,6 +319,104 @@ class SupervisorBloc extends Bloc<SupervisorEvent, SupervisorState>
       }
     } catch (e) {
       emit(SupervisorError('Failed to remove technician: $e'));
+    }
+  }
+
+  Future<void> _onSchoolRemovedFromSupervisor(
+    SchoolRemovedFromSupervisor event,
+    Emitter<SupervisorState> emit,
+  ) async {
+    print('🔍 DEBUG: _onSchoolRemovedFromSupervisor called');
+    print('🔍 DEBUG: supervisorId: ${event.supervisorId}');
+    print('🔍 DEBUG: schoolId: ${event.schoolId}');
+    
+    emit(SupervisorSchoolRemoving(
+      supervisorId: event.supervisorId,
+      schoolId: event.schoolId,
+    ));
+
+    try {
+      // Import the school assignment service
+      final schoolService = SchoolAssignmentService(Supabase.instance.client);
+      
+      // Remove the school assignment
+      await schoolService.removeSchoolFromSupervisor(
+        event.supervisorId,
+        event.schoolId,
+      );
+
+      // 🚀 Critical Fix: Clear all supervisor-related caches
+      CacheInvalidationService.invalidateSupervisorCaches();
+      print('SupervisorBloc: Caches invalidated after removing school');
+
+      // Add a small delay to ensure database changes are committed
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Reload supervisors to reflect changes
+      add(const SupervisorsStarted());
+
+      // Also refresh SuperAdminBloc to update all UI screens
+      try {
+        final superAdminBloc = BlocManager().getSuperAdminBloc();
+        superAdminBloc.add(LoadSuperAdminData(forceRefresh: true));
+        print(
+            'SupervisorBloc: Triggered SuperAdminBloc refresh after removing school');
+
+        // Give the SuperAdminBloc time to process the refresh
+        await Future.delayed(const Duration(milliseconds: 200));
+        print('SupervisorBloc: Remove school refresh completed');
+      } catch (e) {
+        print('SupervisorBloc: Failed to refresh SuperAdminBloc: $e');
+      }
+    } catch (e) {
+      emit(SupervisorError('Failed to remove school: $e'));
+    }
+  }
+
+  Future<void> _onSchoolsRemovedFromSupervisor(
+    SchoolsRemovedFromSupervisor event,
+    Emitter<SupervisorState> emit,
+  ) async {
+    emit(SupervisorSchoolsRemoving(
+      supervisorId: event.supervisorId,
+      schoolIds: event.schoolIds,
+    ));
+
+    try {
+      // Import the school assignment service
+      final schoolService = SchoolAssignmentService(Supabase.instance.client);
+      
+      // Remove the school assignments
+      await schoolService.removeSchoolsFromSupervisor(
+        event.supervisorId,
+        event.schoolIds,
+      );
+
+      // 🚀 Critical Fix: Clear all supervisor-related caches
+      CacheInvalidationService.invalidateSupervisorCaches();
+      print('SupervisorBloc: Caches invalidated after removing schools');
+
+      // Add a small delay to ensure database changes are committed
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Reload supervisors to reflect changes
+      add(const SupervisorsStarted());
+
+      // Also refresh SuperAdminBloc to update all UI screens
+      try {
+        final superAdminBloc = BlocManager().getSuperAdminBloc();
+        superAdminBloc.add(LoadSuperAdminData(forceRefresh: true));
+        print(
+            'SupervisorBloc: Triggered SuperAdminBloc refresh after removing schools');
+
+        // Give the SuperAdminBloc time to process the refresh
+        await Future.delayed(const Duration(milliseconds: 200));
+        print('SupervisorBloc: Remove schools refresh completed');
+      } catch (e) {
+        print('SupervisorBloc: Failed to refresh SuperAdminBloc: $e');
+      }
+    } catch (e) {
+      emit(SupervisorError('Failed to remove schools: $e'));
     }
   }
 }

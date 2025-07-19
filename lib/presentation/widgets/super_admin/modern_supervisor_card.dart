@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dialogs/technician_management_dialog.dart';
 import 'dialogs/schools_list_dialog.dart';
+import 'dialogs/edit_supervisor_dialog.dart';
 import '../../../data/models/supervisor.dart';
+import '../../../data/repositories/supervisor_repository.dart';
 import '../../../logic/blocs/supervisors/supervisor_bloc.dart';
 import '../../../logic/blocs/supervisors/supervisor_event.dart';
 import '../../../logic/blocs/super_admin/super_admin_bloc.dart';
 import '../../../logic/blocs/super_admin/super_admin_event.dart';
 import '../../../logic/blocs/super_admin/super_admin_state.dart';
+import '../../../core/services/admin_service.dart';
 import '../../../core/services/bloc_manager.dart';
 import '../../widgets/common/esc_dismissible_dialog.dart';
 
@@ -311,6 +315,7 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
 
   Widget _buildModernHeader(BuildContext context, String username, String email,
       String? adminId, bool isDark, Map<String, dynamic> supervisor) {
+    final workId = supervisor['work_id'] as String? ?? '';
     return Row(
       children: [
         // Modern Avatar with Status Ring
@@ -478,6 +483,33 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
+                ),
+              ],
+              if (workId.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.badge_outlined,
+                      size: 12,
+                      color: isDark
+                          ? const Color(0xFF94A3B8)
+                          : const Color(0xFF64748B),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'رقم العمل: $workId',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isDark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
               ],
               const SizedBox(height: 6),
@@ -761,9 +793,16 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
               ),
             ),
             const SizedBox(width: 12),
-            const SizedBox.shrink(),
-            const SizedBox(width: 12),
-            const SizedBox.shrink(),
+            Expanded(
+              child: _buildModernStatCard(
+                'تعديل',
+                0,
+                Icons.edit_outlined,
+                const Color(0xFF10B981),
+                () => _openEditSupervisor(context, widget.supervisor),
+                isDark,
+              ),
+            ),
           ],
         ),
       ],
@@ -1134,13 +1173,65 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
     }
   }
 
+  void _openEditSupervisor(BuildContext context, Map<String, dynamic> supervisor) async {
+    final supervisorId = supervisor['id'] as String? ?? '';
+
+    if (supervisorId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('خطأ: لا يمكن العثور على معرف المشرف'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final response = await Supabase.instance.client
+          .from('supervisors')
+          .select('*')
+          .eq('id', supervisorId)
+          .single();
+
+      final supervisorData = Supervisor.fromMap(response);
+
+      if (context.mounted) {
+        context.showEscDismissibleDialog(
+          barrierDismissible: false,
+          builder: (dialogContext) => BlocProvider(
+            create: (context) => SupervisorBloc(
+              SupervisorRepository(Supabase.instance.client),
+              AdminService(Supabase.instance.client),
+            ),
+            child: EditSupervisorDialog(supervisor: supervisorData),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ في تحميل بيانات المشرف: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void _openSchoolsList(BuildContext context, Map<String, dynamic> supervisor) {
     // Open read-only schools list with search functionality
     context.showEscDismissibleDialog(
       barrierDismissible: true,
-      builder: (dialogContext) => SchoolsListDialog(
-        supervisorId: supervisor['id'] as String? ?? '',
-        supervisorName: supervisor['username'] as String? ?? 'غير محدد',
+      builder: (dialogContext) => BlocProvider(
+        create: (context) => SupervisorBloc(
+          SupervisorRepository(Supabase.instance.client),
+          AdminService(Supabase.instance.client),
+        ),
+        child: SchoolsListDialog(
+          supervisorId: supervisor['id'] as String? ?? '',
+          supervisorName: supervisor['username'] as String? ?? 'غير محدد',
+        ),
       ),
     );
   }

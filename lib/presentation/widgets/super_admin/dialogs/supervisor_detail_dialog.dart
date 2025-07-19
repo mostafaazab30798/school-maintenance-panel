@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../data/models/supervisor.dart';
+import '../../../../data/repositories/supervisor_repository.dart';
 import '../../../../logic/blocs/super_admin/super_admin_bloc.dart';
 import '../../../../logic/blocs/super_admin/super_admin_event.dart';
+import '../../../../logic/blocs/supervisors/supervisor_bloc.dart';
+import '../../../../core/services/admin_service.dart';
 import '../../../../core/services/bloc_manager.dart';
 import '../../saudi_plate.dart';
 import '../../common/esc_dismissible_dialog.dart';
 import 'technician_management_dialog.dart';
 import 'school_assignment_dialog.dart';
+import 'edit_supervisor_dialog.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 
@@ -631,6 +635,21 @@ class SupervisorDetailDialog extends StatelessWidget {
       ),
       child: Column(
         children: [
+          // Edit Supervisor Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _openEditSupervisor(context),
+              icon: const Icon(Icons.edit_outlined, size: 16),
+              label: const Text('تعديل البيانات', style: TextStyle(fontSize: 12)),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                backgroundColor: const Color(0xFF10B981),
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           // School Assignment Button
           SizedBox(
             width: double.infinity,
@@ -733,6 +752,53 @@ class SupervisorDetailDialog extends StatelessWidget {
                 }
               },
             ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ في تحميل بيانات المشرف: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _openEditSupervisor(BuildContext context) async {
+    final supervisorId = supervisor['id'] as String? ?? '';
+
+    if (supervisorId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('خطأ: لا يمكن العثور على معرف المشرف'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final response = await Supabase.instance.client
+          .from('supervisors')
+          .select('*')
+          .eq('id', supervisorId)
+          .single();
+
+      final supervisorData = Supervisor.fromMap(response);
+
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Close the detail dialog first
+        context.showEscDismissibleDialog(
+          barrierDismissible: false,
+          builder: (dialogContext) => BlocProvider(
+            create: (context) => SupervisorBloc(
+              SupervisorRepository(Supabase.instance.client),
+              AdminService(Supabase.instance.client),
+            ),
+            child: EditSupervisorDialog(supervisor: supervisorData),
           ),
         );
       }

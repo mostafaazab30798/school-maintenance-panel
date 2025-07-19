@@ -329,7 +329,13 @@ class _TeamManagementDialogState extends State<TeamManagementDialog>
   }
 
   Widget _buildStatsCards(BuildContext context, bool isDark) {
-    final totalSupervisors = widget.allSupervisors.length;
+    // Calculate available supervisors (excluding those assigned to other admins)
+    final availableSupervisors = widget.allSupervisors.where((supervisor) {
+      final adminId = supervisor['admin_id'];
+      return adminId == null || adminId == widget.admin.id;
+    }).toList();
+    
+    final totalSupervisors = availableSupervisors.length;
     final currentlyAssigned = originallyAssigned.length;
     final selectedCount = selectedSupervisors.length;
     final changes = (selectedSupervisors.difference(originallyAssigned).length +
@@ -492,10 +498,20 @@ class _TeamManagementDialogState extends State<TeamManagementDialog>
 
   Widget _buildModernSupervisorsList(BuildContext context, bool isDark) {
     final filteredSupervisors = widget.allSupervisors.where((supervisor) {
+      // First, filter out supervisors assigned to other admins
+      final adminId = supervisor['admin_id'];
+      if (adminId != null && adminId != widget.admin.id) {
+        return false; // Exclude supervisors assigned to other admins
+      }
+      
+      // Then apply search filter
       final username = supervisor['username']?.toString().toLowerCase() ?? '';
       final fullName = supervisor['full_name']?.toString().toLowerCase() ?? '';
+      final workId = supervisor['work_id']?.toString().toLowerCase() ?? '';
       final query = searchQuery.toLowerCase();
-      return username.contains(query) || fullName.contains(query);
+      return username.contains(query) || 
+             fullName.contains(query) || 
+             workId.contains(query);
     }).toList();
 
     if (filteredSupervisors.isEmpty) {
@@ -549,7 +565,7 @@ class _TeamManagementDialogState extends State<TeamManagementDialog>
             ),
             const SizedBox(height: 20),
             Text(
-              searchQuery.isEmpty ? 'لا يوجد مشرفين' : 'لا توجد نتائج للبحث',
+              searchQuery.isEmpty ? 'لا يوجد مشرفين متاحين' : 'لا توجد نتائج للبحث',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -559,7 +575,7 @@ class _TeamManagementDialogState extends State<TeamManagementDialog>
             const SizedBox(height: 8),
             Text(
               searchQuery.isEmpty
-                  ? 'لم يتم العثور على أي مشرفين في النظام'
+                  ? 'جميع المشرفين مُعيّنين لمسؤولين آخرين أو لا يوجد مشرفين في النظام'
                   : 'جرب البحث بكلمات مختلفة',
               style: TextStyle(
                 fontSize: 14,

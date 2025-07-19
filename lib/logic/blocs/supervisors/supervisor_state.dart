@@ -51,3 +51,38 @@ class SupervisorTechnicianUpdating extends SupervisorState {
   @override
   List<Object?> get props => [supervisorId, operation];
 }
+
+class SupervisorUpdating extends SupervisorState {
+  final String supervisorId;
+
+  const SupervisorUpdating({required this.supervisorId});
+
+  @override
+  List<Object?> get props => [supervisorId];
+}
+
+class SupervisorSchoolRemoving extends SupervisorState {
+  final String supervisorId;
+  final String schoolId;
+
+  const SupervisorSchoolRemoving({
+    required this.supervisorId,
+    required this.schoolId,
+  });
+
+  @override
+  List<Object?> get props => [supervisorId, schoolId];
+}
+
+class SupervisorSchoolsRemoving extends SupervisorState {
+  final String supervisorId;
+  final List<String> schoolIds;
+
+  const SupervisorSchoolsRemoving({
+    required this.supervisorId,
+    required this.schoolIds,
+  });
+
+  @override
+  List<Object?> get props => [supervisorId, schoolIds];
+}

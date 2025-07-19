@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:ui';
 import '../../../data/models/supervisor.dart';
+import '../../../data/repositories/supervisor_repository.dart';
+import '../../../core/services/admin_service.dart';
+import '../../../logic/blocs/supervisors/supervisor_bloc.dart';
 import '../super_admin/dialogs/schools_list_dialog.dart';
 import '../super_admin/dialogs/technician_management_dialog.dart';
 import '../attendance/attendance_dialog.dart';
@@ -844,9 +849,15 @@ class _SupervisorCardState extends State<SupervisorCard>
     // Super admins get the assignment dialog with Excel upload
     context.showEscDismissibleDialog(
       barrierDismissible: true,
-      builder: (dialogContext) => SchoolsListDialog(
-        supervisorId: widget.supervisorId,
-        supervisorName: widget.name,
+      builder: (dialogContext) => BlocProvider(
+        create: (context) => SupervisorBloc(
+          SupervisorRepository(Supabase.instance.client),
+          AdminService(Supabase.instance.client),
+        ),
+        child: SchoolsListDialog(
+          supervisorId: widget.supervisorId,
+          supervisorName: widget.name,
+        ),
       ),
     );
   }

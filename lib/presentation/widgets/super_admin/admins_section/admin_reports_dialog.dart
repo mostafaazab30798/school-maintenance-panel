@@ -435,8 +435,9 @@ class _AdminReportsDialogState extends State<AdminReportsDialog>
     var filteredSupervisors =
         widget.adminSupervisorsWithStats.where((supervisor) {
       final username = supervisor['username']?.toString().toLowerCase() ?? '';
+      final workId = supervisor['work_id']?.toString().toLowerCase() ?? '';
       final query = searchQuery.toLowerCase();
-      return username.contains(query);
+      return username.contains(query) || workId.contains(query);
     }).toList();
 
     // Sort supervisors

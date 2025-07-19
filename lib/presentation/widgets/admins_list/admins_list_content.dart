@@ -110,154 +110,152 @@ class _AdminsListContentState extends State<AdminsListContent> {
   Widget build(BuildContext context) {
     final filteredAdmins = _filteredAndSortedAdmins;
 
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? const Color(0xFF1E293B)
-                : Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF1E293B)
+                  : Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? const Color(0xFF475569)
+                          : const Color(0xFFE2E8F0),
+                    ),
                     color: Theme.of(context).brightness == Brightness.dark
-                        ? const Color(0xFF475569)
-                        : const Color(0xFFE2E8F0),
+                        ? const Color(0xFF334155)
+                        : const Color(0xFFF8FAFC),
                   ),
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? const Color(0xFF334155)
-                      : const Color(0xFFF8FAFC),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  onChanged: (value) {
-                    setState(() {
-                      _searchQuery = value;
-                    });
-                  },
-                  decoration: const InputDecoration(
-                    hintText: 'البحث بالاسم أو البريد الإلكتروني...',
-                    prefixIcon: Icon(Icons.search_rounded),
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildFilterChip(
-                      'الأداء',
-                      _performanceFilter,
-                      {
-                        'all': 'الكل',
-                        'high': 'عالي (80%+)',
-                        'low': 'منخفض (<50%)',
-                      },
-                      (value) => setState(() => _performanceFilter = value),
-                      const Color(0xFF10B981),
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value;
+                      });
+                    },
+                    decoration: const InputDecoration(
+                      hintText: 'البحث بالاسم أو البريد الإلكتروني...',
+                      prefixIcon: Icon(Icons.search_rounded),
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     ),
-                    const SizedBox(width: 12),
-                    
-                    _buildFilterChip(
-                      'التعيين',
-                      _assignmentFilter,
-                      {
-                        'all': 'الكل',
-                        'assigned': 'لديه مشرفين',
-                        'unassigned': 'بدون مشرفين',
-                      },
-                      (value) => setState(() => _assignmentFilter = value),
-                      const Color(0xFF3B82F6),
-                    ),
-                    const SizedBox(width: 12),
-                    
-                    _buildSortChip(),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              Text(
-                'عرض ${filteredAdmins.length} من ${widget.admins.length} مسؤول',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? const Color(0xFF94A3B8)
-                      : const Color(0xFF64748B),
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const Spacer(),
-              if (_searchQuery.isNotEmpty || _performanceFilter != 'all' || _assignmentFilter != 'all')
-                TextButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _searchQuery = '';
-                      _performanceFilter = 'all';
-                      _assignmentFilter = 'all';
-                      _searchController.clear();
-                    });
-                  },
-                  icon: const Icon(Icons.clear_all, size: 16),
-                  label: const Text('مسح الفلاتر'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF64748B),
-                    textStyle: const TextStyle(fontSize: 12),
                   ),
                 ),
-            ],
+                const SizedBox(height: 16),
+                
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _buildFilterChip(
+                        'الأداء',
+                        _performanceFilter,
+                        {
+                          'all': 'الكل',
+                          'high': 'عالي (80%+)',
+                          'low': 'منخفض (<50%)',
+                        },
+                        (value) => setState(() => _performanceFilter = value),
+                        const Color(0xFF10B981),
+                      ),
+                      const SizedBox(width: 12),
+                      
+                      _buildFilterChip(
+                        'التعيين',
+                        _assignmentFilter,
+                        {
+                          'all': 'الكل',
+                          'assigned': 'لديه مشرفين',
+                          'unassigned': 'بدون مشرفين',
+                        },
+                        (value) => setState(() => _assignmentFilter = value),
+                        const Color(0xFF3B82F6),
+                      ),
+                      const SizedBox(width: 12),
+                      
+                      _buildSortChip(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
 
-        Expanded(
-          child: filteredAdmins.isEmpty
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Row(
+              children: [
+                Text(
+                  'عرض ${filteredAdmins.length} من ${widget.admins.length} مسؤول',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF94A3B8)
+                        : const Color(0xFF64748B),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const Spacer(),
+                if (_searchQuery.isNotEmpty || _performanceFilter != 'all' || _assignmentFilter != 'all')
+                  TextButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _searchQuery = '';
+                        _performanceFilter = 'all';
+                        _assignmentFilter = 'all';
+                        _searchController.clear();
+                      });
+                    },
+                    icon: const Icon(Icons.clear_all, size: 16),
+                    label: const Text('مسح الفلاتر'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF64748B),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          filteredAdmins.isEmpty
               ? _buildEmptyState()
               : Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: SingleChildScrollView(
-                    child: Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: filteredAdmins.map((admin) {
-                        final stats = widget.adminStats[admin.id] ?? <String, dynamic>{};
-                        return buildModernAdminPerformanceCard(
-                          context,
-                          admin,
-                          stats,
-                          widget.allSupervisors,
-                          widget.supervisorsWithStats,
-                          onTeamManagement: _showTeamManagementDialog,
-                          onShowReports: _showAdminReports,
-                          onShowMaintenance: _showAdminMaintenance,
-                        );
-                      }).toList(),
-                    ),
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: filteredAdmins.map((admin) {
+                      final stats = widget.adminStats[admin.id] ?? <String, dynamic>{};
+                      return buildModernAdminPerformanceCard(
+                        context,
+                        admin,
+                        stats,
+                        widget.allSupervisors,
+                        widget.supervisorsWithStats,
+                        onTeamManagement: _showTeamManagementDialog,
+                        onShowReports: _showAdminReports,
+                        onShowMaintenance: _showAdminMaintenance,
+                      );
+                    }).toList(),
                   ),
                 ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 

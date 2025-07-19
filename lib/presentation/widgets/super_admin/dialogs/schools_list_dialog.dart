@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../core/services/school_assignment_service.dart';
+import '../../../../core/services/admin_service.dart';
 import '../../../../data/models/school.dart';
-import '../../common/esc_dismissible_dialog.dart';
+import '../../../../data/repositories/supervisor_repository.dart';
+import '../../../../logic/blocs/supervisors/supervisor_bloc.dart';
+import '../../../../logic/blocs/supervisors/supervisor_event.dart';
+import '../../../../logic/blocs/supervisors/supervisor_state.dart';
 
 // Simple Cubit for managing schools list state
 class SchoolsListCubit extends Cubit<SchoolsListState> {
@@ -43,6 +47,20 @@ class SchoolsListCubit extends Cubit<SchoolsListState> {
       }).toList();
       
       emit(currentState.copyWith(filteredSchools: filteredSchools));
+    }
+  }
+
+  void removeSchool(String schoolId) {
+    if (state is SchoolsListLoaded) {
+      final currentState = state as SchoolsListLoaded;
+      final updatedSchools = currentState.schools.where((school) => school.id != schoolId).toList();
+      final updatedFilteredSchools = currentState.filteredSchools.where((school) => school.id != schoolId).toList();
+      
+      emit(currentState.copyWith(
+        schools: updatedSchools,
+        filteredSchools: updatedFilteredSchools,
+        totalSchools: updatedSchools.length,
+      ));
     }
   }
 }
@@ -90,11 +108,13 @@ class SchoolsListError extends SchoolsListState {
 class SchoolsListDialog extends StatefulWidget {
   final String supervisorId;
   final String supervisorName;
+  final SupervisorBloc? supervisorBloc; // Optional bloc from parent
 
   const SchoolsListDialog({
     super.key,
     required this.supervisorId,
     required this.supervisorName,
+    this.supervisorBloc, // Allow parent to provide bloc
   });
 
   @override
@@ -124,8 +144,21 @@ class _SchoolsListDialogState extends State<SchoolsListDialog> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return BlocProvider(
-      create: (context) => SchoolsListCubit(SchoolAssignmentService(Supabase.instance.client)),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider(
+          create: (context) => SchoolsListCubit(SchoolAssignmentService(Supabase.instance.client)),
+        ),
+        if (widget.supervisorBloc != null)
+          BlocProvider.value(value: widget.supervisorBloc!)
+        else
+          BlocProvider(
+            create: (context) => SupervisorBloc(
+              SupervisorRepository(Supabase.instance.client),
+              AdminService(Supabase.instance.client),
+            ),
+          ),
+      ],
       child: BlocBuilder<SchoolsListCubit, SchoolsListState>(
         builder: (context, state) {
           // Trigger initial load if we're in initial state
@@ -595,6 +628,36 @@ class _SchoolsListDialogState extends State<SchoolsListDialog> {
               ],
             ),
           ),
+          const SizedBox(width: 12),
+          BlocBuilder<SupervisorBloc, SupervisorState>(
+            builder: (context, supervisorState) {
+              final isRemoving = supervisorState is SupervisorSchoolRemoving &&
+                  supervisorState.supervisorId == widget.supervisorId &&
+                  supervisorState.schoolId == school.id;
+              
+              return IconButton(
+                onPressed: isRemoving ? null : () {
+                  print('🔍 DEBUG: Remove button clicked for school: ${school.name}');
+                  _showRemoveSchoolDialog(context, school);
+                },
+                icon: isRemoving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
+                        ),
+                      )
+                    : Icon(
+                        Icons.remove_circle_outline,
+                        color: Colors.red[400],
+                        size: 24,
+                      ),
+                tooltip: 'إزالة المدرسة',
+              );
+            },
+          ),
         ],
       ),
     );
@@ -624,6 +687,88 @@ class _SchoolsListDialogState extends State<SchoolsListDialog> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showRemoveSchoolDialog(BuildContext context, School school) {
+    print('🔍 DEBUG: _showRemoveSchoolDialog called for school: ${school.name}');
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        title: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.orange[600],
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'تأكيد الإزالة',
+              style: TextStyle(
+                color: isDark ? Colors.white : const Color(0xFF1E293B),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'هل أنت متأكد من إزالة المدرسة "${school.name}" من المشرف "${widget.supervisorName}"؟\n\nلا يمكن التراجع عن هذا الإجراء.',
+          style: TextStyle(
+            color: isDark ? Colors.white70 : const Color(0xFF64748B),
+            fontSize: 14,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text(
+              'إلغاء',
+              style: TextStyle(
+                color: Color(0xFF64748B),
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _removeSchool(context, school);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red[600],
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('إزالة'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _removeSchool(BuildContext context, School school) {
+    print('🔍 DEBUG: _removeSchool called for school: ${school.name}');
+    print('🔍 DEBUG: supervisorId: ${widget.supervisorId}');
+    print('🔍 DEBUG: schoolId: ${school.id}');
+    
+    // Remove from local state immediately for better UX
+    context.read<SchoolsListCubit>().removeSchool(school.id);
+    
+    // Trigger the bloc event to remove from database
+    context.read<SupervisorBloc>().add(SchoolRemovedFromSupervisor(
+      supervisorId: widget.supervisorId,
+      schoolId: school.id,
+    ));
+
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('تم إزالة المدرسة "${school.name}" بنجاح'),
+        backgroundColor: const Color(0xFF10B981),
+        duration: const Duration(seconds: 3),
       ),
     );
   }

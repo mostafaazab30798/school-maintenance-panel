@@ -201,6 +201,34 @@ class SchoolAssignmentService {
     }
   }
 
+  /// Remove a school assignment from a supervisor
+  Future<void> removeSchoolFromSupervisor(String supervisorId, String schoolId) async {
+    try {
+      await _client
+          .from('supervisor_schools')
+          .delete()
+          .eq('supervisor_id', supervisorId)
+          .eq('school_id', schoolId);
+    } catch (e) {
+      throw Exception('فشل في إزالة المدرسة من المشرف: $e');
+    }
+  }
+
+  /// Remove multiple school assignments from a supervisor
+  Future<void> removeSchoolsFromSupervisor(String supervisorId, List<String> schoolIds) async {
+    try {
+      if (schoolIds.isEmpty) return;
+      
+      await _client
+          .from('supervisor_schools')
+          .delete()
+          .eq('supervisor_id', supervisorId)
+          .inFilter('school_id', schoolIds);
+    } catch (e) {
+      throw Exception('فشل في إزالة المدارس من المشرف: $e');
+    }
+  }
+
   /// Get statistics for school assignments
   Future<Map<String, dynamic>> getSchoolAssignmentStats() async {
     try {
