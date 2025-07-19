@@ -43,6 +43,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   Future<void> _onLoadDashboardData(
       LoadDashboardData event, Emitter<DashboardState> emit) async {
     try {
+      print('🚀 Starting optimized dashboard data fetch...');
       emit(DashboardLoading());
 
       // Check if current user is admin
@@ -54,10 +55,13 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       }
 
       // Get current admin's supervisor IDs
+      print('🔍 Getting supervisor IDs...');
       final supervisorIds = await adminService.getCurrentAdminSupervisorIds();
+      print('📊 Found ${supervisorIds.length} supervisor IDs: $supervisorIds');
 
       // If no supervisors assigned to this admin, return empty data
       if (supervisorIds.isEmpty) {
+        print('⚠️ No supervisors found, returning empty data');
         final emptyData = DashboardLoaded(
           pendingReports: 0,
           routineReports: 0,
@@ -84,21 +88,35 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       }
 
       // Get supervisors
+      print('🔍 Fetching supervisors...');
       final allSupervisors = await supervisorRepository.fetchSupervisors();
+      print('📊 Found ${allSupervisors.length} total supervisors');
+      
       final rawSupervisors = allSupervisors
           .where((supervisor) => supervisorIds.contains(supervisor.id))
           .toList();
+      print('📊 Filtered to ${rawSupervisors.length} supervisors for current admin');
 
       // Enrich supervisors with school counts
       final supervisors = <Supervisor>[];
+      
+      // Get schools count for all supervisors at once (more efficient)
+      print('🔍 Getting schools counts...');
+      Map<String, int> schoolsCounts = {};
+      try {
+        schoolsCounts = await supervisorRepository.getSupervisorsSchoolsCount(
+          rawSupervisors.map((s) => s.id).toList(),
+        );
+        print('📊 Schools counts: $schoolsCounts');
+      } catch (e) {
+        print('❌ Error getting schools counts: $e');
+        // Fallback: set all counts to 0
+        schoolsCounts = {for (final s in rawSupervisors) s.id: 0};
+      }
+      
       for (final supervisor in rawSupervisors) {
-        // Get school count for this supervisor
-        final schoolsResponse = await Supabase.instance.client
-            .from('supervisor_schools')
-            .select('school_id')
-            .eq('supervisor_id', supervisor.id);
-
-        final schoolCount = schoolsResponse.length;
+        final schoolCount = schoolsCounts[supervisor.id] ?? 0;
+        print('📊 Supervisor ${supervisor.id} has $schoolCount schools');
 
         // Create enriched supervisor with school count
         final enrichedSupervisor = supervisor.copyWith(
@@ -162,7 +180,11 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       int totalSchools = 0;
       int schoolsWithAchievements = 0;
 
-      // Get all school IDs for this admin's supervisors
+      // Get total schools count for all supervisors using accurate count method
+      final totalSchoolsCounts = await supervisorRepository.getSupervisorsSchoolsCount(supervisorIds);
+      totalSchools = totalSchoolsCounts.values.fold(0, (sum, count) => sum + count);
+
+      // Get all school IDs for this admin's supervisors (for achievements calculation)
       Set<String> adminSchoolIds = {};
       for (final supervisorId in supervisorIds) {
         final schoolsResponse = await Supabase.instance.client
@@ -176,8 +198,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           }
         }
       }
-
-      totalSchools = adminSchoolIds.length;
 
       // Calculate schools with achievements (schools that have achievement photos)
       if (adminSchoolIds.isNotEmpty) {

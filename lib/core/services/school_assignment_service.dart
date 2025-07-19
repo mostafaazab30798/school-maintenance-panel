@@ -17,13 +17,56 @@ class SchoolAssignmentService {
 
   /// Get schools assigned to a supervisor
   Future<List<School>> getSchoolsForSupervisor(String supervisorId) async {
-    final response = await _client
-        .from('schools')
-        .select('*, supervisor_schools!inner(*)')
-        .eq('supervisor_schools.supervisor_id', supervisorId)
-        .order('name');
-
-    return (response as List).map((data) => School.fromMap(data)).toList();
+    try {
+      // First, get the count to see if we need pagination
+      final countResponse = await _client
+          .from('supervisor_schools')
+          .select('school_id')
+          .eq('supervisor_id', supervisorId);
+      
+      final totalCount = countResponse.length;
+      print('🏫 DEBUG: Total schools for supervisor $supervisorId: $totalCount');
+      
+      List<School> allSchools = [];
+      
+      if (totalCount > 1000) {
+        // Use pagination for large datasets
+        print('🏫 DEBUG: Large dataset detected, using pagination');
+        int offset = 0;
+        const int pageSize = 1000;
+        
+        while (offset < totalCount) {
+          final response = await _client
+              .from('schools')
+              .select('*, supervisor_schools!inner(*)')
+              .eq('supervisor_schools.supervisor_id', supervisorId)
+              .range(offset, offset + pageSize - 1)
+              .order('name');
+          
+          final schools = (response as List).map((data) => School.fromMap(data)).toList();
+          allSchools.addAll(schools);
+          
+          print('🏫 DEBUG: Fetched ${schools.length} schools (offset: $offset)');
+          offset += pageSize;
+        }
+      } else {
+        // Use regular query for smaller datasets
+        final response = await _client
+            .from('schools')
+            .select('*, supervisor_schools!inner(*)')
+            .eq('supervisor_schools.supervisor_id', supervisorId)
+            .order('name');
+        
+        allSchools = (response as List).map((data) => School.fromMap(data)).toList();
+        print('🏫 DEBUG: Fetched ${allSchools.length} schools in single query');
+      }
+      
+      print('🏫 DEBUG: Total schools returned: ${allSchools.length}');
+      return allSchools;
+    } catch (e) {
+      print('🏫 ERROR: Failed to fetch schools for supervisor $supervisorId: $e');
+      rethrow;
+    }
   }
 
   /// Process Excel file and assign schools to supervisor

@@ -289,4 +289,54 @@ class SupervisorRepository {
           supervisorId, currentTechnicians);
     }
   }
+
+  /// Get accurate schools count for a supervisor (handles large datasets)
+  Future<int> getSupervisorSchoolsCount(String supervisorId) async {
+    try {
+      // Use a count query to get the exact number without fetching all records
+      final response = await _client
+          .from('supervisor_schools')
+          .select('*')
+          .eq('supervisor_id', supervisorId)
+          .count(CountOption.exact);
+      
+      // Extract count from response with null safety
+      final count = response.count;
+      return count ?? 0;
+    } catch (e) {
+      print('Error getting schools count for supervisor $supervisorId: $e');
+      return 0;
+    }
+  }
+
+  /// Get accurate schools count for multiple supervisors (handles large datasets)
+  Future<Map<String, int>> getSupervisorsSchoolsCount(List<String> supervisorIds) async {
+    try {
+      if (supervisorIds.isEmpty) return {};
+      
+      // Use individual count queries for each supervisor to avoid query limits
+      final Map<String, int> counts = {};
+      
+      for (final supervisorId in supervisorIds) {
+        try {
+          final response = await _client
+              .from('supervisor_schools')
+              .select('*')
+              .eq('supervisor_id', supervisorId)
+              .count(CountOption.exact);
+          
+          final count = response.count;
+          counts[supervisorId] = count ?? 0;
+        } catch (e) {
+          print('Error getting schools count for supervisor $supervisorId: $e');
+          counts[supervisorId] = 0;
+        }
+      }
+      
+      return counts;
+    } catch (e) {
+      print('Error getting schools count for supervisors: $e');
+      return {for (final id in supervisorIds) id: 0};
+    }
+  }
 }

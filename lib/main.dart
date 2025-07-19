@@ -30,9 +30,16 @@ void main() async {
   } catch (e) {
     throw Exception('Error loading .env file: $e'); // Print error if any
   }
-
-  final String baseUrl = dotenv.env['SUPBASE_URL'] ?? 'default_url';
+final String baseUrl = dotenv.env['SUPBASE_URL'] ?? 'default_url';
   final String apiKey = dotenv.env['SUPBASE_ANONKEY'] ?? 'default_key';
+ // ✅ Load env vars injected during build
+  // const String baseUrl = String.fromEnvironment('SUPBASE_URL');
+  // const String apiKey = String.fromEnvironment('SUPBASE_ANONKEY');
+
+  // ✅ Optional: debug log to verify values
+  // print("Supabase URL: $baseUrl");
+  // print("Anon Key (partial): ${apiKey.substring(0, 5)}...");
+
   
   await Supabase.initialize(
     url: baseUrl,
