@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/models/admin.dart';
+import '../../data/repositories/supervisor_repository.dart';
 import 'dart:convert';
 
 class AdminManagementService {
@@ -362,11 +363,7 @@ class AdminManagementService {
       final stats = await getSupervisorStats(supervisorId);
 
       // Get school count for this supervisor
-      final schoolsResponse = await _client
-          .from('supervisor_schools')
-          .select('id')
-          .eq('supervisor_id', supervisorId);
-      final schoolsCount = schoolsResponse.length;
+      final schoolsCount = await SupervisorRepository(_client).getSupervisorSchoolsCount(supervisorId);
 
       supervisorsWithStats.add({
         'id': supervisorId,
@@ -576,7 +573,7 @@ class AdminManagementService {
         _client.from('maintenance_reports').select('id, status, supervisor_id'),
 
         // All supervisor school assignments
-        _client.from('supervisor_schools').select('supervisor_id, school_id'),
+        _client.from('supervisor_schools').select('supervisor_id, school_id').limit(100000), // Increased limit for large datasets
 
         // All attendance data
         _client.from('supervisor_attendance').select('supervisor_id'),
@@ -592,6 +589,12 @@ class AdminManagementService {
       print('🔄 Base data fetched in ${stopwatch.elapsedMilliseconds}ms');
       print(
           '📊 Data summary: ${admins.length} admins, ${supervisorsRaw.length} supervisors, ${allReports.length} reports, ${allMaintenance.length} maintenance, ${allSchools.length} schools');
+
+      // Debug the schools data structure
+      print('🏫 DEBUG: Sample school assignments:');
+      for (int i = 0; i < (allSchools.length > 5 ? 5 : allSchools.length); i++) {
+        print('🏫 DEBUG: School assignment $i: ${allSchools[i]}');
+      }
 
       // Step 2: Process all statistics in memory (much faster than separate DB calls)
       print('🔄 Processing statistics in memory...');
@@ -609,7 +612,7 @@ class AdminManagementService {
           .toList();
 
       // Calculate supervisor stats in memory
-      final supervisorsWithStats = _calculateSupervisorsWithStatsInMemory(
+      final supervisorsWithStats = await _calculateSupervisorsWithStatsInMemory(
           supervisorsRaw, allReports, allMaintenance, allSchools, allAttendance);
 
       // Calculate admin stats in memory
@@ -671,14 +674,14 @@ class AdminManagementService {
   }
 
   /// Calculate supervisor statistics in memory (eliminates N+1 queries)
-  List<Map<String, dynamic>> _calculateSupervisorsWithStatsInMemory(
+  Future<List<Map<String, dynamic>>> _calculateSupervisorsWithStatsInMemory(
     List<Map<String, dynamic>> supervisors,
     List<Map<String, dynamic>> allReports,
     List<Map<String, dynamic>> allMaintenance,
     List<Map<String, dynamic>> allSchools,
     List<Map<String, dynamic>> allAttendance,
-  ) {
-    return supervisors.map((supervisor) {
+  ) async {
+    final futures = supervisors.map((supervisor) async {
       final supervisorId = supervisor['id'] as String;
 
       // Filter reports for this supervisor
@@ -703,11 +706,26 @@ class AdminManagementService {
       final completedWork = completedReports + completedMaintenance;
       final completionRate = totalWork > 0 ? (completedWork / totalWork) : 0.0;
 
-      // Get school count for this supervisor
-      final schoolsResponse =
-          allSchools.where((s) => s['supervisor_id'] == supervisorId).toList();
-      final schoolsCount = schoolsResponse.length;
+      // Get school count for this supervisor using direct count query
+      int schoolsCount;
+      try {
+        final directCountResponse = await _client
+            .from('supervisor_schools')
+            .select('school_id')
+            .eq('supervisor_id', supervisorId);
+        schoolsCount = directCountResponse.length;
+      } catch (e) {
+        // Fallback to filtered data if direct query fails
+        final schoolsResponse =
+            allSchools.where((s) => s['supervisor_id'] == supervisorId).toList();
+        schoolsCount = schoolsResponse.length;
+        print('🏫 DEBUG: Fallback to filtered data for supervisor $supervisorId: $schoolsCount');
+      }
 
+      // Debug logging for schools count
+      print('🏫 DEBUG: Processing supervisor ${supervisor['username']} (ID: $supervisorId)');
+      print('🏫 DEBUG: Found $schoolsCount schools for supervisor');
+      
       // Get attendance count for this supervisor
       final attendanceCount = allAttendance
           .where((a) => a['supervisor_id'] == supervisorId)
@@ -733,6 +751,8 @@ class AdminManagementService {
         },
       };
     }).toList();
+    
+    return Future.wait(futures);
   }
 
   /// Calculate admin statistics in memory (eliminates N+1 queries)
