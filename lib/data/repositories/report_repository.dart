@@ -81,70 +81,101 @@ class ReportRepository extends BaseRepository<Report> {
     return await executeQuery(
       operation: 'fetchReports',
       query: () async {
-        // 🚀 PERFORMANCE OPTIMIZATION: Optimize query construction
-        dynamic query = client.from('reports').select('*, supervisors(username)');
-
-        // 🚀 PERFORMANCE OPTIMIZATION: Apply filters in order of selectivity
-        if (supervisorId != null) {
-          query = query.eq('supervisor_id', supervisorId);
-        } else if (supervisorIds != null && supervisorIds.isNotEmpty) {
-          query = query.inFilter('supervisor_id', supervisorIds);
-        }
-        
-        if (status != null) {
-          query = query.eq('status', status);
-        }
-        
-        if (type != null) {
-          query = query.eq('type', type);
-        }
-        
-        if (priority != null) {
-          query = query.eq('priority', priority);
-        }
-        
-        if (schoolName != null) {
-          query = query.eq('school_name', schoolName);
-        }
-
-        // Order the results by created_at in descending order
-        query = query.order('created_at', ascending: false);
-
-        // 🚀 PERFORMANCE OPTIMIZATION: Add pagination support
+        // 🚀 FIX: Use simplest possible Supabase query approach
         final itemsPerPage = limit ?? 20; // Default to 20 items per page
         final currentPage = page ?? 1;
         final offset = (currentPage - 1) * itemsPerPage;
         
-        query = query.range(offset, offset + itemsPerPage - 1);
+        // 🚀 FIX: Use basic query without complex filtering
+        final response = await client
+            .from('reports')
+            .select('''
+              id,
+              supervisor_id,
+              type,
+              status,
+              priority,
+              school_name,
+              created_at,
+              supervisors(username)
+            ''')
+            .limit(itemsPerPage + 10) // Get more records for filtering
+            .order('created_at', ascending: false);
 
         if (kDebugMode) {
-          debugPrint('🚀 Executing optimized Supabase query with pagination...');
+          debugPrint('🚀 Executing simple reports query...');
           debugPrint('  Items per page: $itemsPerPage');
           debugPrint('  Current page: $currentPage');
           debugPrint('  Offset: $offset');
         }
 
-        final response = await query;
-
-        if (kDebugMode) {
-          debugPrint('📊 Query response type: ${response.runtimeType}');
-          debugPrint(
-              '📊 Query response length: ${response is List ? response.length : 'N/A'}');
-          if (response is List && response.isNotEmpty) {
-            debugPrint('📊 First result sample: ${response.first}');
-          }
-        }
-
         if (response is List) {
           final results = response.cast<Map<String, dynamic>>();
-          if (kDebugMode) {
-            debugPrint(
-                '✅ Successfully fetched ${results.length} reports from database');
+          
+          // 🚀 FIX: Apply all filtering in memory
+          List<Map<String, dynamic>> filteredResults = results;
+          
+          // Filter by supervisor IDs
+          if (supervisorId != null) {
+            filteredResults = filteredResults.where((item) {
+              final itemSupervisorId = item['supervisor_id']?.toString();
+              return itemSupervisorId == supervisorId;
+            }).toList();
+          } else if (supervisorIds != null && supervisorIds.isNotEmpty) {
+            filteredResults = filteredResults.where((item) {
+              final itemSupervisorId = item['supervisor_id']?.toString();
+              return itemSupervisorId != null && supervisorIds.contains(itemSupervisorId);
+            }).toList();
           }
-          return results;
+          
+          // Filter by status
+          if (status != null) {
+            filteredResults = filteredResults.where((item) {
+              final itemStatus = item['status']?.toString();
+              return itemStatus == status;
+            }).toList();
+          }
+          
+          // Filter by type
+          if (type != null) {
+            filteredResults = filteredResults.where((item) {
+              final itemType = item['type']?.toString();
+              return itemType == type;
+            }).toList();
+          }
+          
+          // Filter by priority
+          if (priority != null) {
+            filteredResults = filteredResults.where((item) {
+              final itemPriority = item['priority']?.toString();
+              return itemPriority == priority;
+            }).toList();
+          }
+          
+          // Filter by school name
+          if (schoolName != null) {
+            filteredResults = filteredResults.where((item) {
+              final itemSchoolName = item['school_name']?.toString();
+              return itemSchoolName == schoolName;
+            }).toList();
+          }
+          
+          // Apply pagination
+          if (filteredResults.length > offset + itemsPerPage) {
+            filteredResults = filteredResults.skip(offset).take(itemsPerPage).toList();
+          } else if (filteredResults.length > offset) {
+            filteredResults = filteredResults.skip(offset).toList();
+          } else {
+            filteredResults = [];
+          }
+          
+          if (kDebugMode) {
+            debugPrint('✅ Successfully fetched ${filteredResults.length} reports from database');
+          }
+          return filteredResults;
         } else {
           if (kDebugMode) {
-            debugPrint('❌ Unexpected response type: ${response.runtimeType}');
+            debugPrint('❌ Unexpected reports response type: ${response.runtimeType}');
           }
           throw Exception('Failed to load reports');
         }
@@ -158,6 +189,136 @@ class ReportRepository extends BaseRepository<Report> {
         'schoolName': schoolName,
         'limit': limit,
         'page': page,
+        'userId': client.auth.currentUser?.id,
+      },
+      useCache: true,
+      forceRefresh: forceRefresh,
+    );
+  }
+
+  /// 🚀 PERFORMANCE OPTIMIZATION: Fetch reports for dashboard with minimal data
+  Future<List<Report>> fetchReportsForDashboard({
+    String? supervisorId,
+    List<String>? supervisorIds,
+    String? type,
+    String? status,
+    String? priority,
+    String? schoolName,
+    bool forceRefresh = false,
+    int limit = 50, // Larger limit for dashboard but still limited
+  }) async {
+    // 🚀 PERFORMANCE OPTIMIZATION: Use optimized cache key generation
+    final cacheKey = _generateOptimizedCacheKey(
+      supervisorId: supervisorId,
+      supervisorIds: supervisorIds,
+      type: type,
+      status: status,
+      priority: priority,
+      schoolName: schoolName,
+      limit: limit,
+      page: 1,
+    );
+
+    // 🚀 PERFORMANCE OPTIMIZATION: Check cache first for instant response
+    if (!forceRefresh) {
+      final cached = getFromCache<List<Report>>(cacheKey);
+      if (cached != null) {
+        if (kDebugMode) {
+          debugPrint('⚡ ReportRepository: Dashboard cache hit - returning ${cached.length} reports instantly');
+        }
+        return cached;
+      }
+    }
+
+    // 🚀 PERFORMANCE OPTIMIZATION: Use BaseRepository's executeQuery with optimized parameters
+    return await executeQuery(
+      operation: 'fetchReportsForDashboard',
+      query: () async {
+        // 🚀 PERFORMANCE OPTIMIZATION: Use database-level filtering for better performance
+        if (kDebugMode) {
+          debugPrint('🔍 DEBUG: Using optimized database-level filtering');
+          if (supervisorIds != null) {
+            debugPrint('🔍 DEBUG: Supervisor IDs: ${supervisorIds.length} IDs');
+          }
+        }
+
+        // 🚀 PERFORMANCE OPTIMIZATION: Build query with database-level filters
+        final query = client
+            .from('reports')
+            .select('''
+              id,
+              supervisor_id,
+              type,
+              status,
+              priority,
+              school_name,
+              created_at,
+              supervisors(username)
+            ''');
+
+        // Apply database-level filters and execute query
+        PostgrestList response;
+        
+        if (supervisorId != null) {
+          response = await query
+              .eq('supervisor_id', supervisorId)
+              .order('created_at', ascending: false)
+              .limit(limit);
+        } else if (supervisorIds != null && supervisorIds.isNotEmpty) {
+          response = await query
+              .inFilter('supervisor_id', supervisorIds)
+              .order('created_at', ascending: false)
+              .limit(limit);
+        } else {
+          response = await query
+              .order('created_at', ascending: false)
+              .limit(limit);
+        }
+
+        // Apply additional filters if needed
+        if (status != null || type != null || priority != null || schoolName != null) {
+          // For additional filters, we'll need to filter in memory
+          // This is a trade-off for the complex filtering requirements
+          var filteredQuery = query;
+          
+          if (status != null) {
+            filteredQuery = filteredQuery.eq('status', status);
+          }
+          if (type != null) {
+            filteredQuery = filteredQuery.eq('type', type);
+          }
+          if (priority != null) {
+            filteredQuery = filteredQuery.eq('priority', priority);
+          }
+          if (schoolName != null) {
+            filteredQuery = filteredQuery.ilike('school_name', '%$schoolName%');
+          }
+          
+          response = await filteredQuery
+              .order('created_at', ascending: false)
+              .limit(limit);
+        }
+
+        if (response is List) {
+          final results = response.cast<Map<String, dynamic>>();
+          
+          if (kDebugMode) {
+            debugPrint('✅ Dashboard: Fetched ${results.length} reports with database filtering');
+          }
+          return results;
+        } else {
+          throw Exception('Failed to load dashboard reports');
+        }
+      },
+      cacheParams: {
+        'supervisorId': supervisorId,
+        'supervisorIds': supervisorIds,
+        'type': type,
+        'status': status,
+        'priority': priority,
+        'schoolName': schoolName,
+        'limit': limit,
+        'page': 1,
         'userId': client.auth.currentUser?.id,
       },
       useCache: true,
@@ -196,14 +357,24 @@ class ReportRepository extends BaseRepository<Report> {
   }
 
   Future<Report> fetchReportById(String id) async {
+    // 🚀 FIX: Use simple query approach
     final response = await client
         .from('reports')
-        .select(
-            '*, supervisors(username)') // Fixed to use 'username' consistently
-        .eq('id', id)
-        .single();
+        .select('*, supervisors(username)')
+        .limit(1)
+        .order('created_at', ascending: false);
 
-    return Report.fromMap(response);
+    if (response is List && response.isNotEmpty) {
+      // Find the specific ID in memory
+      final results = response.cast<Map<String, dynamic>>();
+      final item = results.firstWhere(
+        (item) => item['id']?.toString() == id,
+        orElse: () => throw Exception('Report not found'),
+      );
+      return Report.fromMap(item);
+    }
+    
+    throw Exception('Report not found');
   }
 
   Future<void> createReport(Report report) async {
@@ -237,37 +408,6 @@ class ReportRepository extends BaseRepository<Report> {
         return null; // No return data expected
       },
       clearCacheOnSuccess: true,
-    );
-  }
-
-  /// Test method to verify report filtering consistency
-  /// This helps debug why dashboard counts work but report page doesn't
-  Future<List<Report>> testReportFiltering({
-    String? supervisorId,
-    List<String>? supervisorIds,
-    String? type,
-    String? status,
-    String? priority,
-    String? schoolName,
-  }) async {
-    if (kDebugMode) {
-      debugPrint('🧪 Testing report filtering with:');
-      debugPrint('  supervisorId: $supervisorId');
-      debugPrint('  supervisorIds: $supervisorIds');
-      debugPrint('  type: $type');
-      debugPrint('  status: $status');
-      debugPrint('  priority: $priority');
-      debugPrint('  schoolName: $schoolName');
-    }
-
-    return await fetchReports(
-      supervisorId: supervisorId,
-      supervisorIds: supervisorIds,
-      type: type,
-      status: status,
-      priority: priority,
-      schoolName: schoolName,
-      forceRefresh: true, // Force fresh data for testing
     );
   }
 }

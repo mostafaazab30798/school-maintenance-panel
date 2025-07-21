@@ -8,6 +8,8 @@ import '../../../../data/repositories/supervisor_repository.dart';
 import '../../../../logic/blocs/supervisors/supervisor_bloc.dart';
 import '../../../../logic/blocs/supervisors/supervisor_event.dart';
 import '../../../../logic/blocs/supervisors/supervisor_state.dart';
+import '../../../../logic/blocs/super_admin/super_admin_bloc.dart';
+import 'school_assignment_dialog.dart';
 
 // Simple Cubit for managing schools list state
 class SchoolsListCubit extends Cubit<SchoolsListState> {
@@ -60,6 +62,17 @@ class SchoolsListCubit extends Cubit<SchoolsListState> {
         schools: updatedSchools,
         filteredSchools: updatedFilteredSchools,
         totalSchools: updatedSchools.length,
+      ));
+    }
+  }
+
+  void removeAllSchools() {
+    if (state is SchoolsListLoaded) {
+      final currentState = state as SchoolsListLoaded;
+      emit(currentState.copyWith(
+        schools: [],
+        filteredSchools: [],
+        totalSchools: 0,
       ));
     }
   }
@@ -160,15 +173,15 @@ class _SchoolsListDialogState extends State<SchoolsListDialog> {
           ),
       ],
       child: BlocBuilder<SchoolsListCubit, SchoolsListState>(
-        builder: (context, state) {
-          // Trigger initial load if we're in initial state
-          if (state is SchoolsListInitial) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              context.read<SchoolsListCubit>().loadSchools(widget.supervisorId);
-            });
-          }
-          
-          return Dialog(
+          builder: (context, state) {
+            // Trigger initial load if we're in initial state
+            if (state is SchoolsListInitial) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                context.read<SchoolsListCubit>().loadSchools(widget.supervisorId);
+              });
+            }
+            
+            return Dialog(
             backgroundColor: Colors.transparent,
             child: Container(
               width: 600,
@@ -664,30 +677,186 @@ class _SchoolsListDialogState extends State<SchoolsListDialog> {
   }
 
   Widget _buildActionButtons(BuildContext context, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF374151) : const Color(0xFFF8FAFC),
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'إغلاق',
-              style: TextStyle(
-                fontSize: 14,
-                color: Color(0xFF64748B),
-              ),
+    return BlocBuilder<SchoolsListCubit, SchoolsListState>(
+      builder: (context, state) {
+        final hasSchools = state is SchoolsListLoaded && state.schools.isNotEmpty;
+        
+        return Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF374151) : const Color(0xFFF8FAFC),
+            borderRadius: const BorderRadius.only(
+              bottomLeft: Radius.circular(24),
+              bottomRight: Radius.circular(24),
             ),
           ),
-        ],
-      ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              // Left side - Add Schools Button
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF3B82F6),
+                      Color(0xFF1D4ED8),
+                    ],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF3B82F6).withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => _openSchoolAssignment(context),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Icon(
+                              Icons.school_rounded,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'إضافة مدارس',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              
+              // Right side - Delete All and Close buttons
+              Row(
+                children: [
+                  // Delete All Schools Button (only show if there are schools)
+                  if (hasSchools) ...[
+                    BlocBuilder<SupervisorBloc, SupervisorState>(
+                      builder: (context, supervisorState) {
+                        final isDeletingAll = supervisorState is SupervisorSchoolsRemoving &&
+                            supervisorState.supervisorId == widget.supervisorId;
+                        
+                        return Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: isDeletingAll
+                                  ? [
+                                      const Color(0xFF9CA3AF),
+                                      const Color(0xFF6B7280),
+                                    ]
+                                  : [
+                                      const Color(0xFFEF4444),
+                                      const Color(0xFFDC2626),
+                                    ],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: (isDeletingAll 
+                                    ? const Color(0xFF9CA3AF) 
+                                    : const Color(0xFFEF4444)).withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: isDeletingAll ? null : () => _showDeleteAllSchoolsDialog(context),
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: isDeletingAll
+                                          ? const SizedBox(
+                                              width: 16,
+                                              height: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.delete_sweep_rounded,
+                                              size: 16,
+                                              color: Colors.white,
+                                            ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      isDeletingAll
+                                          ? 'جاري الحذف...'
+                                          : 'حذف جميع المدارس (${state is SchoolsListLoaded ? state.schools.length : 0})',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  
+                  // Close Button
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text(
+                      'إغلاق',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF64748B),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -771,5 +940,157 @@ class _SchoolsListDialogState extends State<SchoolsListDialog> {
         duration: const Duration(seconds: 3),
       ),
     );
+  }
+
+  void _openSchoolAssignment(BuildContext context) {
+    // Create a supervisor map for the school assignment dialog
+    final supervisorMap = {
+      'id': widget.supervisorId,
+      'username': widget.supervisorName,
+    };
+    
+    // Close the current dialog first
+    Navigator.of(context).pop();
+    
+    // Open the school assignment dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => BlocProvider.value(
+        value: context.read<SuperAdminBloc>(),
+        child: SchoolAssignmentDialog(supervisor: supervisorMap),
+      ),
+    );
+  }
+
+  void _showDeleteAllSchoolsDialog(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final state = context.read<SchoolsListCubit>().state;
+    final schoolCount = state is SchoolsListLoaded ? state.schools.length : 0;
+    
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        title: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.red[600],
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              'حذف جميع المدارس',
+              style: TextStyle(
+                color: isDark ? Colors.white : const Color(0xFF1E293B),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'هل أنت متأكد من حذف جميع المدارس المُعيّنة للمشرف "${widget.supervisorName}"؟',
+              style: TextStyle(
+                color: isDark ? Colors.white70 : const Color(0xFF64748B),
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Colors.red.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    size: 16,
+                    color: Colors.red[700],
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'سيتم حذف $schoolCount مدرسة نهائياً. لا يمكن التراجع عن هذا الإجراء.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.red[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text(
+              'إلغاء',
+              style: TextStyle(
+                color: Color(0xFF64748B),
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _deleteAllSchools(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red[600],
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('حذف جميع المدارس'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deleteAllSchools(BuildContext context) {
+    print('🔍 DEBUG: _deleteAllSchools called for supervisor: ${widget.supervisorName}');
+    
+    final state = context.read<SchoolsListCubit>().state;
+    if (state is SchoolsListLoaded) {
+      final schoolIds = state.schools.map((school) => school.id).toList();
+      
+      print('🔍 DEBUG: About to delete ${schoolIds.length} schools');
+      print('🔍 DEBUG: School IDs: $schoolIds');
+      print('🔍 DEBUG: Supervisor ID: ${widget.supervisorId}');
+      
+      // Remove from local state immediately for better UX
+      context.read<SchoolsListCubit>().removeAllSchools();
+      
+      // Use bulk removal event instead of individual events to avoid cache invalidation cascade
+      final event = SchoolsRemovedFromSupervisor(
+        supervisorId: widget.supervisorId,
+        schoolIds: schoolIds,
+      );
+      
+      print('🔍 DEBUG: Dispatching SchoolsRemovedFromSupervisor event');
+      context.read<SupervisorBloc>().add(event);
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تم حذف جميع المدارس (${schoolIds.length} مدرسة) بنجاح'),
+          backgroundColor: const Color(0xFF10B981),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
   }
 }

@@ -1353,9 +1353,12 @@ class _MaintenanceCountDetailScreenState
     final safetyKeys = [
       'fire_boxes',
       'fire_extinguishers',
+      'fire_hose',
       'diesel_pump',
       'electric_pump',
-      'auxiliary_pump'
+      'auxiliary_pump',
+      'emergency_exits',
+      'emergency_lights'
     ];
 
     int itemCount = 0;
@@ -1368,25 +1371,34 @@ class _MaintenanceCountDetailScreenState
     // Add fire safety alarm panel data
     itemCount += count.fireSafetyAlarmPanelData.length;
 
-    // Add fire safety conditions and pump conditions
-    itemCount += count.surveyAnswers.entries
-        .where((e) =>
-            e.key.contains('fire_') ||
-            e.key.contains('emergency_') ||
-            e.key.contains('smoke_') ||
-            e.key.contains('heat_') ||
-            e.key.contains('alarm_panel') ||
-            e.key.contains('pump'))
-        .length;
+    // Add fire safety conditions and pump conditions from survey answers
+    final safetySurveyKeys = [
+      'fire_alarm_system',
+      'fire_hose_condition',
+      'fire_boxes_condition',
+      'alarm_panel_type',
+      'alarm_panel_condition',
+      'diesel_pump_condition',
+      'electric_pump_condition',
+      'fire_suppression_system',
+      'auxiliary_pump_condition',
+      'heat_detectors_condition',
+      'emergency_exits_condition',
+      'smoke_detectors_condition',
+      'emergency_lights_condition',
+      'fire_alarm_system_condition',
+      'break_glasses_bells_condition',
+      'fire_suppression_system_condition'
+    ];
 
-    // Add fire safety text answers count
+    count.surveyAnswers.forEach((key, value) {
+      if (safetySurveyKeys.contains(key)) itemCount++;
+    });
+
+    // Add fire safety expiry dates
     itemCount += count.textAnswers.entries
-        .where((e) => e.value.isNotEmpty && (
-          e.key.contains('fire_extinguishers_expiry') ||
-          e.key == 'fire_extinguishers_expiry_day' ||
-          e.key == 'fire_extinguishers_expiry_month' ||
-          e.key == 'fire_extinguishers_expiry_year'
-        ))
+        .where((e) =>
+            e.key.contains('fire_extinguishers_expiry_'))
         .length;
 
     return itemCount;
@@ -1457,6 +1469,10 @@ class _MaintenanceCountDetailScreenState
       'speakers',
       'microphone_system',
       'ac_panel',
+      'split_ac',
+      'window_ac',
+      'cabinet_ac',
+      'package_ac',
       'power_panel',
       'lighting_panel',
       'main_distribution_panel',
@@ -1506,8 +1522,20 @@ class _MaintenanceCountDetailScreenState
       if (civilKeys.contains(key)) itemCount++;
     });
 
-    // Add yes/no answers count
-    itemCount += count.yesNoAnswers.length;
+    // Add civil/structural yes_no_with_counts survey answers
+    final civilSurveyKeys = [
+      'elevators',
+      'wall_cracks',
+      'falling_shades',
+      'has_water_leaks',
+      'low_railing_height',
+      'concrete_rust_damage',
+      'roof_insulation_damage'
+    ];
+
+    count.yesNoWithCounts.forEach((key, value) {
+      if (civilSurveyKeys.contains(key)) itemCount++;
+    });
 
     return itemCount;
   }
@@ -1517,20 +1545,25 @@ class _MaintenanceCountDetailScreenState
     const translations = {
       // Item counts
       'fire_boxes': 'صناديق الحريق',
+      'fire_hose': 'خرطوم الحريق',
       'diesel_pump': 'مضخة الديزل',
       'water_pumps': 'مضخات المياه',
       'electric_pump': 'المضخة الكهربائية',
       'auxiliary_pump': 'المضخة المساعدة',
-      // 'alarm_panel_count': 'عدد لوحات الإنذار',
+      'emergency_exits': 'مخارج الطوارئ',
+      'emergency_lights': 'أضواء الطوارئ',
       'electrical_panels': 'اللوحات الكهربائية',
       'fire_extinguishers': 'طفايات الحريق',
 
+      // AC types
+      'split_ac': 'مكيف سبليت',
+      'window_ac': 'مكيف نافذة',
+      'cabinet_ac': 'مكيف خزانة',
+      'package_ac': 'مكيف حزمة',
+
       // Survey answers
-      'emergency_exits': 'مخارج الطوارئ',
-      // 'alarm_panel_type': 'نوع لوحة الإنذار',
       'fire_alarm_system': 'نظام إنذار الحريق',
       'fire_boxes_condition': 'حالة صناديق الحريق',
-      // 'alarm_panel_condition': 'حالة لوحة الإنذار',
       'diesel_pump_condition': 'حالة مضخة الديزل',
       'electric_pump_condition': 'حالة المضخة الكهربائية',
       'water_pumps_condition': 'حالة مضخات المياه',
@@ -1553,12 +1586,31 @@ class _MaintenanceCountDetailScreenState
       'concrete_rust_damage': 'أضرار صدأ الخرسانة',
       'roof_insulation_damage': 'أضرار عزل السطح',
 
-      // Text answers
+      // Text answers - Meter numbers
       'water_meter_number': 'رقم عداد المياه',
       'electricity_meter_number': 'رقم عداد الكهرباء',
+      
+      // Text answers - Fire safety expiry dates
       'fire_extinguishers_expiry_day': 'يوم انتهاء صلاحية طفايات الحريق',
       'fire_extinguishers_expiry_year': 'سنة انتهاء صلاحية طفايات الحريق',
       'fire_extinguishers_expiry_month': 'شهر انتهاء صلاحية طفايات الحريق',
+
+      // Text answers - Electrical amperage values
+      'ac_panel_amperage': 'أمبير لوحة التكييف',
+      'power_panel_amperage': 'أمبير لوحة الباور',
+      'main_breaker_amperage': 'أمبير القاطع الرئيسي',
+      'lighting_panel_amperage': 'أمبير لوحة الإنارة',
+      'package_ac_breaker_amperage': 'أمبير قاطع التكييف الباكدج',
+      'concealed_ac_breaker_amperage': 'أمبير قاطع التكييف الكونسيلد',
+      'main_distribution_panel_amperage': 'أمبير لوحة التوزيع الرئيسية',
+
+      // Text answers - Mechanical capacities
+      'bathroom_heaters_capacity': 'سعة سخانات الحمام',
+      'cafeteria_heaters_capacity': 'سعة سخانات المقصف',
+
+      // Text answers - Elevator information
+      'elevators_motor': 'محرك المصاعد',
+      'elevators_main_parts': 'الأجزاء الرئيسية للمصاعد',
 
       // Fire safety alarm panel
       'alarm_panel_type': 'نوع لوحة الإنذار',
@@ -1575,6 +1627,14 @@ class _MaintenanceCountDetailScreenState
       'break_glasses_bells_note': 'ملاحظة أجراس كسر الزجاج',
       'fire_suppression_system_note': 'ملاحظة نظام إطفاء الحريق',
     };
+
+    // Handle dynamic heater capacity keys
+    if (key.startsWith('bathroom_heaters_') && key.endsWith('_capacity')) {
+      return 'سعة سخان الحمام';
+    }
+    if (key.startsWith('cafeteria_heaters_') && key.endsWith('_capacity')) {
+      return 'سعة سخان المقصف';
+    }
 
     return translations[key] ?? key;
   }
@@ -1595,9 +1655,12 @@ class _MaintenanceCountDetailScreenState
     final safetyKeys = [
       'fire_boxes',
       'fire_extinguishers',
+      'fire_hose',
       'diesel_pump',
       'electric_pump',
-      'auxiliary_pump'
+      'auxiliary_pump',
+      'emergency_exits',
+      'emergency_lights'
     ];
 
     Map<String, dynamic> items = {};

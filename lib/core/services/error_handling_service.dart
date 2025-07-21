@@ -134,6 +134,9 @@ class ErrorHandlingService {
       } catch (error, stackTrace) {
         final shouldRetry = policy.shouldRetry(error, attempt);
 
+        // 🚀 ENHANCED: Use detailed error logging
+        _logDetailedError('$operationName (attempt $attempt)', error, stackTrace);
+        
         await handleError(
           'Operation: $operationName (attempt $attempt)',
           error,
@@ -224,6 +227,32 @@ class ErrorHandlingService {
   void _logError(String message) {
     if (kDebugMode) {
       debugPrint('ErrorHandling ERROR: $message');
+    }
+  }
+
+  /// Enhanced error logging with detailed information
+  void _logDetailedError(String operationName, dynamic error, StackTrace? stackTrace) {
+    if (kDebugMode) {
+      debugPrint('🔍 DETAILED ERROR for $operationName:');
+      debugPrint('   Error type: ${error.runtimeType}');
+      debugPrint('   Error message: $error');
+      debugPrint('   Error toString: ${error.toString()}');
+      
+      // Check for specific error types
+      if (error.toString().contains('PostgrestException')) {
+        debugPrint('   🚨 This is a PostgrestException (database error)');
+      } else if (error.toString().contains('AuthException')) {
+        debugPrint('   🚨 This is an AuthException (authentication error)');
+      } else if (error.toString().contains('TimeoutException')) {
+        debugPrint('   🚨 This is a TimeoutException (timeout error)');
+      } else if (error.toString().contains('SocketException')) {
+        debugPrint('   🚨 This is a SocketException (network error)');
+      }
+      
+      if (stackTrace != null) {
+        debugPrint('   Stack trace: $stackTrace');
+      }
+      debugPrint('🔍 END DETAILED ERROR');
     }
   }
 }

@@ -564,7 +564,7 @@ class AdminManagementService {
         _client
             .from('supervisors')
             .select(
-                'id, username, email, admin_id, technicians, technicians_detailed, work_id')
+                'id, username, email, admin_id, technicians, technicians_detailed, work_id, maintenance_meter, car_operational')
             .order('created_at', ascending: false),
 
         // All reports and maintenance data (we'll process these in memory)
@@ -610,6 +610,8 @@ class AdminManagementService {
                 'technicians': s['technicians'] ?? [],
                 'technicians_detailed': s['technicians_detailed'] ?? [],
                 'work_id': s['work_id'] ?? '',
+                'maintenance_meter': s['maintenance_meter'],
+                'car_operational': s['car_operational'],
               })
           .toList();
 
@@ -741,6 +743,8 @@ class AdminManagementService {
         'technicians_detailed': supervisor['technicians_detailed'] ??
             [], // Include detailed technicians field
         'work_id': supervisor['work_id'] ?? '',
+        'maintenance_meter': supervisor['maintenance_meter'],
+        'car_operational': supervisor['car_operational'],
         'schools_count': schoolsCount,
         'stats': {
           'reports': supervisorReports.length,

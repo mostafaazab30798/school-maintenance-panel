@@ -31,10 +31,10 @@ class MaintenanceViewBloc
   Future<void> _onFetchMaintenanceReports(
       FetchMaintenanceReports event, Emitter<MaintenanceViewState> emit) async {
     
-    // 🚀 Create cache key based on filters
+    // 🚀 PERFORMANCE OPTIMIZATION: Create cache key based on filters
     final cacheKey = _generateCacheKey(event);
     
-    // 🚀 Check cache first if not forcing refresh (instant loading like dashboard) 
+    // 🚀 PERFORMANCE OPTIMIZATION: Check cache first if not forcing refresh (instant loading like dashboard) 
     if (!event.forceRefresh) {
       final cachedReports = _cacheService.getCached<List<MaintenanceReport>>(cacheKey);
       if (cachedReports != null) {
@@ -61,63 +61,106 @@ class MaintenanceViewBloc
     try {
       List<MaintenanceReport> reports;
 
-      // If no specific supervisorId is provided, use admin filtering
-      if (event.supervisorId == null) {
-        logAdminFilterDebug(
-            'No specific supervisorId - applying admin filtering',
-            context: 'MaintenanceViewBloc');
+      // 🚀 PERFORMANCE OPTIMIZATION: Use dashboard method for small limits (dashboard scenarios)
+      final isDashboardQuery = event.limit != null && event.limit! <= 20 && event.page == null;
+      
+      if (isDashboardQuery) {
+        logAdminFilterDebug('Using dashboard-optimized query', context: 'MaintenanceViewBloc');
+        
+        if (event.supervisorId == null) {
+          final filterResult = await applyAdminFilter<MaintenanceReport>(
+            fetchAllData: () => maintenanceRepository.fetchMaintenanceReportsForDashboard(
+              status: event.status,
+              limit: event.limit ?? 10,
+            ),
+            fetchFilteredData: (supervisorIds) =>
+                maintenanceRepository.fetchMaintenanceReportsForDashboard(
+              supervisorIds: supervisorIds,
+              status: event.status,
+              limit: event.limit ?? 10,
+            ),
+            debugContext: 'Maintenance',
+          );
+          reports = filterResult.data;
+        } else {
+          final hasAccess = await hasAccessToSupervisor(
+            supervisorId: event.supervisorId!,
+            debugContext: 'Maintenance',
+          );
 
-        // Use AdminFilterMixin to apply admin-based filtering
-        final filterResult = await applyAdminFilter<MaintenanceReport>(
-          fetchAllData: () => maintenanceRepository.fetchMaintenanceReports(
+          if (!hasAccess) {
+            logAdminFilterDebug(
+                'Access denied to supervisor ${event.supervisorId}',
+                context: 'MaintenanceViewBloc');
+            emit(MaintenanceViewError('Access denied to supervisor data'));
+            return;
+          }
+
+          reports = await maintenanceRepository.fetchMaintenanceReportsForDashboard(
+            supervisorId: event.supervisorId,
             status: event.status,
-            limit: event.limit,
-            page: event.page,
-          ),
-          fetchFilteredData: (supervisorIds) =>
-              maintenanceRepository.fetchMaintenanceReports(
-            supervisorIds: supervisorIds,
-            status: event.status,
-            limit: event.limit,
-            page: event.page,
-          ),
-          debugContext: 'Maintenance',
-        );
-
-        reports = filterResult.data;
-
-        logAdminFilterDebug(
-            'Admin filtering completed: ${reports.length} maintenance reports, isSuperAdmin=${filterResult.isSuperAdmin}, hasAccess=${filterResult.hasAccess}',
-            context: 'MaintenanceViewBloc');
-      } else {
-        // Specific supervisor requested - validate access first
-        final hasAccess = await hasAccessToSupervisor(
-          supervisorId: event.supervisorId!,
-          debugContext: 'Maintenance',
-        );
-
-        if (!hasAccess) {
-          logAdminFilterDebug(
-              'Access denied to supervisor ${event.supervisorId}',
-              context: 'MaintenanceViewBloc');
-          emit(MaintenanceViewError('Access denied to supervisor data'));
-          return;
+            limit: event.limit ?? 10,
+          );
         }
+      } else {
+        // Use full query for larger datasets or pagination
+        if (event.supervisorId == null) {
+          logAdminFilterDebug(
+              'No specific supervisorId - applying admin filtering',
+              context: 'MaintenanceViewBloc');
 
-        logAdminFilterDebug(
-            'Fetching maintenance for specific supervisor: ${event.supervisorId}',
-            context: 'MaintenanceViewBloc');
-        reports = await maintenanceRepository.fetchMaintenanceReports(
-          supervisorId: event.supervisorId,
-          status: event.status,
-          limit: event.limit,
-          page: event.page,
-        );
+          // Use AdminFilterMixin to apply admin-based filtering
+          final filterResult = await applyAdminFilter<MaintenanceReport>(
+            fetchAllData: () => maintenanceRepository.fetchMaintenanceReports(
+              status: event.status,
+              limit: event.limit,
+              page: event.page,
+            ),
+            fetchFilteredData: (supervisorIds) =>
+                maintenanceRepository.fetchMaintenanceReports(
+              supervisorIds: supervisorIds,
+              status: event.status,
+              limit: event.limit,
+              page: event.page,
+            ),
+            debugContext: 'Maintenance',
+          );
+
+          reports = filterResult.data;
+
+          logAdminFilterDebug(
+              'Admin filtering completed: ${reports.length} maintenance reports, isSuperAdmin=${filterResult.isSuperAdmin}, hasAccess=${filterResult.hasAccess}',
+              context: 'MaintenanceViewBloc');
+        } else {
+          // Specific supervisor requested - validate access first
+          final hasAccess = await hasAccessToSupervisor(
+            supervisorId: event.supervisorId!,
+            debugContext: 'Maintenance',
+          );
+
+          if (!hasAccess) {
+            logAdminFilterDebug(
+                'Access denied to supervisor ${event.supervisorId}',
+                context: 'MaintenanceViewBloc');
+            emit(MaintenanceViewError('Access denied to supervisor data'));
+            return;
+          }
+
+          logAdminFilterDebug(
+              'Fetching maintenance for specific supervisor: ${event.supervisorId}',
+              context: 'MaintenanceViewBloc');
+          reports = await maintenanceRepository.fetchMaintenanceReports(
+            supervisorId: event.supervisorId,
+            status: event.status,
+            limit: event.limit,
+            page: event.page,
+          );
+        }
       }
 
-      // 🚀 Cache the fresh data
-      _cacheService.setCached(cacheKey, reports);
-      print('💾 Maintenance reports cached for 3 minutes: ${reports.length} reports');
+      // 🚀 PERFORMANCE OPTIMIZATION: Cache the fresh data with appropriate maxAge
+      _cacheService.setCached(cacheKey, reports, maxAge: isDashboardQuery ? Duration(minutes: 2) : Duration(minutes: 5));
+      print('💾 Maintenance reports cached for ${isDashboardQuery ? "2" : "5"} minutes: ${reports.length} reports');
 
       logAdminFilterDebug(
           'Maintenance fetch completed: ${reports.length} reports',

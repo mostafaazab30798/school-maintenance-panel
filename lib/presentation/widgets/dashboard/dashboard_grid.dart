@@ -168,13 +168,13 @@ class _DashboardGridState extends State<DashboardGrid>
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
           colors: Theme.of(context).brightness == Brightness.dark
-              ? [
-                  const Color(0xFF0F172A),
-                  const Color(0xFF1E293B),
+              ? const [
+                  Color(0xFF0F172A),
+                  Color(0xFF1E293B),
                 ]
-              : [
-                  const Color(0xFFF8FAFC),
-                  const Color(0xFFF1F5F9),
+              : const [
+                  Color(0xFFF8FAFC),
+                  Color(0xFFF1F5F9),
                 ],
         ),
       ),
@@ -182,52 +182,25 @@ class _DashboardGridState extends State<DashboardGrid>
         key: const PageStorageKey<String>('dashboard_scroll'),
         controller: _scrollController,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-        physics: const BouncingScrollPhysics(),
+        // 🚀 PERFORMANCE OPTIMIZATION: Use ClampingScrollPhysics for better performance
+        physics: const ClampingScrollPhysics(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Section with welcome animation
-            // AnimatedOpacity(
-            //   opacity: 1.0,
-            //   duration: const Duration(milliseconds: 800),
-            //   child: _buildHeader(context),
-            // ),
-            // const SizedBox(height: 24),
-
-            // Overview Cards Section with staggered animation
-            AnimatedOpacity(
-              opacity: 1.0,
-              duration: const Duration(milliseconds: 800),
-              curve: Curves.easeInOut,
-              child: _buildOverviewSection(context),
-            ),
+            // 🚀 PERFORMANCE OPTIMIZATION: Remove heavy animations for better performance
+            _buildOverviewSection(context),
             const SizedBox(height: 32),
 
             // Maintenance Reports Section
-            AnimatedOpacity(
-              opacity: 1.0,
-              duration: const Duration(milliseconds: 800),
-              curve: Curves.easeInOut,
-              child: _buildMaintenanceSection(context),
-            ),
+            _buildMaintenanceSection(context),
             const SizedBox(height: 32),
 
             // Inventories Section
-            AnimatedOpacity(
-              opacity: 1.0,
-              duration: const Duration(milliseconds: 800),
-              curve: Curves.easeInOut,
-              child: _buildInventoriesSection(context),
-            ),
+            _buildInventoriesSection(context),
             const SizedBox(height: 32),
 
             // Supervisors Section
-            AnimatedOpacity(
-              opacity: 1.0,
-              duration: const Duration(milliseconds: 800),
-              curve: Curves.easeInOut,
-              child: _buildSupervisorsSection(context),
-            ),
+            _buildSupervisorsSection(context),
             const SizedBox(height: 16),
           ],
         ),
@@ -364,22 +337,74 @@ class _DashboardGridState extends State<DashboardGrid>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Progress Chip with super admin sizing
-        ClipRect(
-          child: SizedBox(
-            height: 180,
-            child: _buildProgressChip(context),
-          ),
+        // Progress and Supervisors row
+        LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth >= 600) {
+              // Desktop/Tablet layout - side by side
+              return IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Progress Chip with super admin sizing
+                    Expanded(
+                      flex: 2,
+                      child: Container(
+                        constraints: const BoxConstraints(
+                          minHeight: 200,
+                          maxHeight: 200,
+                        ),
+                        child: ClipRect(
+                          child: _buildProgressChip(context),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    // All Supervisors Chip
+                    Expanded(
+                      flex: 1,
+                      child: Container(
+                        constraints: const BoxConstraints(
+                          minHeight: 200,
+                          maxHeight: 200,
+                        ),
+                        child: _buildSupervisorsChip(context),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            } else {
+              // Mobile layout - stacked
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    constraints: const BoxConstraints(
+                      minHeight: 200,
+                      maxHeight: 200,
+                    ),
+                    child: ClipRect(
+                      child: _buildProgressChip(context),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    constraints: const BoxConstraints(
+                      minHeight: 200,
+                      maxHeight: 200,
+                    ),
+                    child: _buildSupervisorsChip(context),
+                  ),
+                ],
+              );
+            }
+          },
         ),
         const SizedBox(height: 16),
 
         // Schools Section
-        AnimatedOpacity(
-          opacity: 1.0,
-          duration: const Duration(milliseconds: 800),
-          curve: Curves.easeInOut,
-          child: _buildSchoolsSection(context),
-        ),
+        _buildSchoolsSection(context),
         const SizedBox(height: 16),
 
         Container(
@@ -553,6 +578,116 @@ class _DashboardGridState extends State<DashboardGrid>
     );
   }
 
+  Widget _buildSupervisorsChip(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFF0EA5E9).withOpacity(0.1),
+            const Color(0xFF0284C7).withOpacity(0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFF0EA5E9).withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0EA5E9).withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTapTotalSupervisors,
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            width: double.infinity,
+            height: double.infinity,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Icon with background
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        const Color(0xFF0EA5E9),
+                        const Color(0xFF0284C7),
+                      ],
+                    ),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF0EA5E9).withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.people_alt_rounded,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Count
+                Text(
+                  '${widget.totalSupervisors}',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : const Color(0xFF0F172A),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                // Label
+                Text(
+                  'مشرف',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white.withOpacity(0.8)
+                        : const Color(0xFF475569),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                // Subtitle
+                Text(
+                  'عرض الكل',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                    color: const Color(0xFF0EA5E9),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFixedHeightGrid(BuildContext context) {
     final cards = [
       IndicatorCard(
@@ -597,21 +732,14 @@ class _DashboardGridState extends State<DashboardGrid>
         icon: Icons.assignment_late_outlined,
         onTap: widget.onTapLateCompletedReports,
       ),
-      IndicatorCard(
-        label: 'إجمالي المشرفين',
-        count: widget.totalSupervisors,
-        color: const Color(0xFF0EA5E9),
-        icon: Icons.people_alt_outlined,
-        onTap: widget.onTapTotalSupervisors,
-      ),
     ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
         // Use same breakpoints as super admin
         if (constraints.maxWidth >= 1200) {
-          // 4 columns for very wide screens
-          return _buildFixedRowsLayout(cards, 4);
+          // 3 columns for very wide screens (6 cards total)
+          return _buildFixedRowsLayout(cards, 3);
         } else if (constraints.maxWidth >= 900) {
           // 3 columns for medium-wide screens
           return _buildFixedRowsLayout(cards, 3);
@@ -945,74 +1073,176 @@ class _DashboardGridState extends State<DashboardGrid>
   }
 
   Widget _buildSupervisorsSection(BuildContext context) {
+    // Show all supervisor cards instead of limiting to 3
+    final allSupervisorCards = widget.supervisorCards;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Modern header with enhanced visual appeal
         Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          margin: const EdgeInsets.only(bottom: 24),
+          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Theme.of(context).brightness == Brightness.dark
-                ? const Color(0xFF1E293B)
-                : Colors.white,
-            borderRadius: BorderRadius.circular(16),
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: Theme.of(context).brightness == Brightness.dark
+                  ? [
+                      const Color(0xFF1E293B).withOpacity(0.9),
+                      const Color(0xFF0F172A).withOpacity(0.95),
+                    ]
+                  : [
+                      Colors.white.withOpacity(0.9),
+                      const Color(0xFFF8FAFC).withOpacity(0.95),
+                    ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF334155).withOpacity(0.3)
+                  : const Color(0xFFE2E8F0).withOpacity(0.6),
+              width: 1.5,
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.black.withOpacity(0.3)
+                    : Colors.black.withOpacity(0.06),
+                blurRadius: 20,
                 spreadRadius: 0,
-                offset: const Offset(0, 4),
+                offset: const Offset(0, 8),
+              ),
+              BoxShadow(
+                color: const Color(0xFF3B82F6).withOpacity(0.1),
+                blurRadius: 40,
+                spreadRadius: 0,
+                offset: const Offset(0, 16),
               ),
             ],
           ),
           child: Row(
             children: [
+              // Modern icon with gradient background
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF3B82F6).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF3B82F6),
+                      Color(0xFF1D4ED8),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF3B82F6).withOpacity(0.4),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
                 ),
                 child: const Icon(
                   Icons.people_alt_rounded,
-                  color: Color(0xFF3B82F6),
-                  size: 20,
+                  color: Colors.white,
+                  size: 28,
                 ),
               ),
-              const SizedBox(width: 12),
-              Text(
-                'المشرفين',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? Colors.white
-                      : const Color(0xFF334155),
+              const SizedBox(width: 20),
+              
+              // Title and subtitle
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'جميع المشرفين',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white
+                                : const Color(0xFF0F172A),
+                            letterSpacing: -0.5,
+                            height: 1.2,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF3B82F6).withOpacity(0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            'تفصيلي',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'عرض جميع المشرفين المعينين لك مع تفاصيل الأداء والإحصائيات',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? const Color(0xFF94A3B8)
+                            : const Color(0xFF64748B),
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const Spacer(),
+              
+              // Performance indicator
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: const Color(0xFF3B82F6).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: const Color(0xFF3B82F6).withOpacity(0.2),
+                    width: 1,
+                  ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                child: Column(
                   children: [
-                    const Icon(
-                      Icons.person_rounded,
-                      color: Color(0xFF3B82F6),
-                      size: 16,
-                    ),
-                    const SizedBox(width: 6),
                     Text(
-                      '${widget.totalSupervisors} مشرف',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF3B82F6),
+                      '${widget.totalSupervisors}',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                        color: const Color(0xFF3B82F6),
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    Text(
+                      'إجمالي',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF3B82F6),
                       ),
                     ),
                   ],
@@ -1021,28 +1251,92 @@ class _DashboardGridState extends State<DashboardGrid>
             ],
           ),
         ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final crossAxisCount = constraints.maxWidth > 1400
-                ? 3
-                : constraints.maxWidth > 900
-                    ? 2
-                    : 1;
+        
+        // Show all supervisor cards with responsive grid
+        if (allSupervisorCards.isNotEmpty)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final crossAxisCount = constraints.maxWidth > 1400
+                  ? 3
+                  : constraints.maxWidth > 900
+                      ? 2
+                      : 1;
 
-            return GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: crossAxisCount,
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
-              childAspectRatio: crossAxisCount == 1
-                  ? 1.8
-                  : 1.6, // Increased aspect ratio for much more compact cards
-              children: widget.supervisorCards,
-            );
-          },
-        ),
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 16,
+                  childAspectRatio: crossAxisCount == 1
+                      ? 1.4
+                      : 1.2,
+                ),
+                itemCount: allSupervisorCards.length,
+                itemBuilder: (context, index) {
+                  return RepaintBoundary(
+                    child: allSupervisorCards[index],
+                  );
+                },
+              );
+            },
+          )
+        else
+          _buildEmptySupervisorsState(context),
       ],
+    );
+  }
+
+  Widget _buildEmptySupervisorsState(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Container(
+      padding: const EdgeInsets.all(40),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        color: isDark
+            ? const Color(0xFF1E293B).withOpacity(0.5)
+            : const Color(0xFFF8FAFC),
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF334155).withOpacity(0.3)
+              : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF64748B).withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.people_outline_rounded,
+              size: 48,
+              color: const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'لا توجد مشرفين متاحين حالياً',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'سيتم عرض المشرفين المعينين لك هنا',
+            style: TextStyle(
+              fontSize: 14,
+              color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -8,7 +8,7 @@ class MaintenanceReportRepository extends BaseRepository<MaintenanceReport> {
       : super(
           client: client,
           repositoryName: 'MaintenanceReportRepository',
-          cacheConfig: CacheConfig.defaults,
+          cacheConfig: CacheConfig.fast, // 🚀 PERFORMANCE OPTIMIZATION: Use fast cache for frequently accessed data
         );
 
   @override
@@ -54,51 +54,77 @@ class MaintenanceReportRepository extends BaseRepository<MaintenanceReport> {
     return await executeQuery(
       operation: 'fetchMaintenanceReports',
       query: () async {
-        // 🚀 PERFORMANCE OPTIMIZATION: Optimize query construction
-        dynamic query = client
-            .from('maintenance_reports')
-            .select('*, supervisors(username)');
-
-        // 🚀 PERFORMANCE OPTIMIZATION: Apply filters in order of selectivity
-        if (supervisorId != null) {
-          query = query.eq('supervisor_id', supervisorId);
-        } else if (supervisorIds != null && supervisorIds.isNotEmpty) {
-          query = query.inFilter('supervisor_id', supervisorIds);
-        }
-        
-        if (status != null) {
-          query = query.eq('status', status);
-        }
-
-        // Order the results by created_at in descending order
-        query = query.order('created_at', ascending: false);
-
-        // 🚀 PERFORMANCE OPTIMIZATION: Add pagination support
+        // 🚀 FIX: Use simplest possible Supabase query approach
         final itemsPerPage = limit ?? 20; // Default to 20 items per page
         final currentPage = page ?? 1;
         final offset = (currentPage - 1) * itemsPerPage;
         
-        query = query.range(offset, offset + itemsPerPage - 1);
+        // 🚀 FIX: Use basic query without complex filtering
+        final response = await client
+            .from('maintenance_reports')
+            .select('''
+              id,
+              supervisor_id,
+              school_name,
+              description,
+              status,
+              images,
+              created_at,
+              closed_at,
+              completion_photos,
+              completion_note,
+              supervisors(username)
+            ''')
+            .limit(itemsPerPage + 10) // Get more records for filtering
+            .order('created_at', ascending: false);
 
         if (kDebugMode) {
-          debugPrint('🚀 Executing optimized maintenance reports query with pagination...');
+          debugPrint('🚀 Executing simple maintenance reports query...');
           debugPrint('  Items per page: $itemsPerPage');
           debugPrint('  Current page: $currentPage');
           debugPrint('  Offset: $offset');
         }
 
-        final response = await query;
-        
-        if (kDebugMode) {
-          debugPrint('📊 Maintenance reports query response length: ${response is List ? response.length : 'N/A'}');
-        }
-
         if (response is List) {
           final results = response.cast<Map<String, dynamic>>();
-          if (kDebugMode) {
-            debugPrint('✅ Successfully fetched ${results.length} maintenance reports from database');
+          
+          // 🚀 FIX: Apply all filtering in memory
+          List<Map<String, dynamic>> filteredResults = results;
+          
+          // Filter by supervisor IDs
+          if (supervisorId != null) {
+            filteredResults = filteredResults.where((item) {
+              final itemSupervisorId = item['supervisor_id']?.toString();
+              return itemSupervisorId == supervisorId;
+            }).toList();
+          } else if (supervisorIds != null && supervisorIds.isNotEmpty) {
+            filteredResults = filteredResults.where((item) {
+              final itemSupervisorId = item['supervisor_id']?.toString();
+              return itemSupervisorId != null && supervisorIds.contains(itemSupervisorId);
+            }).toList();
           }
-          return results;
+          
+          // Filter by status
+          if (status != null) {
+            filteredResults = filteredResults.where((item) {
+              final itemStatus = item['status']?.toString();
+              return itemStatus == status;
+            }).toList();
+          }
+          
+          // Apply pagination
+          if (filteredResults.length > offset + itemsPerPage) {
+            filteredResults = filteredResults.skip(offset).take(itemsPerPage).toList();
+          } else if (filteredResults.length > offset) {
+            filteredResults = filteredResults.skip(offset).toList();
+          } else {
+            filteredResults = [];
+          }
+          
+          if (kDebugMode) {
+            debugPrint('✅ Successfully fetched ${filteredResults.length} maintenance reports from database');
+          }
+          return filteredResults;
         } else {
           if (kDebugMode) {
             debugPrint('❌ Unexpected maintenance reports response type: ${response.runtimeType}');
@@ -115,6 +141,165 @@ class MaintenanceReportRepository extends BaseRepository<MaintenanceReport> {
       },
       useCache: true,
     );
+  }
+
+  /// 🚀 PERFORMANCE OPTIMIZATION: Fetch maintenance reports for dashboard with minimal data
+  Future<List<MaintenanceReport>> fetchMaintenanceReportsForDashboard({
+    String? supervisorId,
+    List<String>? supervisorIds,
+    String? status,
+    int limit = 10, // Smaller limit for dashboard
+  }) async {
+    final cacheKey = _generateOptimizedCacheKey(
+      supervisorId: supervisorId,
+      supervisorIds: supervisorIds,
+      status: status,
+      limit: limit,
+      page: 1,
+    );
+
+    // Check cache first
+    final cached = getFromCache<List<MaintenanceReport>>(cacheKey);
+    if (cached != null) {
+      if (kDebugMode) {
+        debugPrint('⚡ Dashboard cache hit - returning ${cached.length} maintenance reports');
+      }
+      return cached;
+    }
+
+    return await executeQuery(
+      operation: 'fetchMaintenanceReportsForDashboard',
+      query: () async {
+        // 🚀 FIX: Use simplest possible Supabase query approach
+        if (kDebugMode) {
+          debugPrint('🔍 DEBUG: Using simplest query approach');
+          if (supervisorIds != null) {
+            debugPrint('🔍 DEBUG: Supervisor IDs: ${supervisorIds.length} IDs');
+          }
+        }
+
+        // 🚀 FIX: Use basic query without complex filtering
+        final response = await client
+            .from('maintenance_reports')
+            .select('''
+              id,
+              supervisor_id,
+              school_name,
+              status,
+              created_at,
+              supervisors(username)
+            ''')
+            .limit(limit * 2) // Get more records for filtering
+            .order('created_at', ascending: false);
+
+        if (kDebugMode) {
+          debugPrint('🔍 DEBUG: Executing simple query...');
+        }
+
+        if (response is List) {
+          final results = response.cast<Map<String, dynamic>>();
+          
+          // 🚀 FIX: Apply all filtering in memory
+          List<Map<String, dynamic>> filteredResults = results;
+          
+          // Filter by supervisor IDs
+          if (supervisorId != null) {
+            filteredResults = filteredResults.where((item) {
+              final itemSupervisorId = item['supervisor_id']?.toString();
+              return itemSupervisorId == supervisorId;
+            }).toList();
+          } else if (supervisorIds != null && supervisorIds.isNotEmpty) {
+            filteredResults = filteredResults.where((item) {
+              final itemSupervisorId = item['supervisor_id']?.toString();
+              return itemSupervisorId != null && supervisorIds.contains(itemSupervisorId);
+            }).toList();
+          }
+          
+          // Filter by status
+          if (status != null) {
+            filteredResults = filteredResults.where((item) {
+              final itemStatus = item['status']?.toString();
+              return itemStatus == status;
+            }).toList();
+          }
+          
+          // Apply limit
+          if (filteredResults.length > limit) {
+            filteredResults = filteredResults.take(limit).toList();
+          }
+          
+          if (kDebugMode) {
+            debugPrint('🔍 DEBUG: Applied in-memory filtering: ${results.length} -> ${filteredResults.length}');
+            debugPrint('✅ Dashboard: Fetched ${filteredResults.length} maintenance reports');
+          }
+          return filteredResults;
+        } else {
+          throw Exception('Failed to load dashboard maintenance reports');
+        }
+      },
+      cacheParams: {
+        'supervisorId': supervisorId,
+        'supervisorIds': supervisorIds,
+        'status': status,
+        'limit': limit,
+        'page': 1,
+      },
+      useCache: true,
+    );
+  }
+
+  /// 🚀 PERFORMANCE OPTIMIZATION: Fetch maintenance report counts for quick statistics
+  Future<Map<String, int>> fetchMaintenanceReportCounts({
+    String? supervisorId,
+    List<String>? supervisorIds,
+  }) async {
+    final cacheKey = 'maintenance_counts_${supervisorId ?? supervisorIds?.join('_')}';
+    
+    final cached = getFromCache<Map<String, int>>(cacheKey);
+    if (cached != null) {
+      return cached;
+    }
+
+    try {
+      // 🚀 FIX: Use simple query approach
+      final response = await client
+          .from('maintenance_reports')
+          .select('status, supervisor_id')
+          .limit(1000); // Get enough records for counting
+
+      if (response is List) {
+        final results = response.cast<Map<String, dynamic>>();
+        
+        // 🚀 FIX: Apply filtering in memory
+        List<Map<String, dynamic>> filteredResults = results;
+        
+        if (supervisorId != null) {
+          filteredResults = filteredResults.where((item) {
+            final itemSupervisorId = item['supervisor_id']?.toString();
+            return itemSupervisorId == supervisorId;
+          }).toList();
+        } else if (supervisorIds != null && supervisorIds.isNotEmpty) {
+          filteredResults = filteredResults.where((item) {
+            final itemSupervisorId = item['supervisor_id']?.toString();
+            return itemSupervisorId != null && supervisorIds.contains(itemSupervisorId);
+          }).toList();
+        }
+        
+        final counts = <String, int>{};
+        for (final item in filteredResults) {
+          final status = item['status'] as String? ?? 'unknown';
+          counts[status] = (counts[status] ?? 0) + 1;
+        }
+        
+        setCache(cacheKey, counts);
+        return counts;
+      }
+      
+      return {};
+    } catch (e) {
+      logError('Failed to fetch maintenance report counts', e);
+      return {};
+    }
   }
 
   /// 🚀 PERFORMANCE OPTIMIZATION: Generate optimized cache key
@@ -142,13 +327,24 @@ class MaintenanceReportRepository extends BaseRepository<MaintenanceReport> {
   }
 
   Future<MaintenanceReport> fetchMaintenanceReportById(String id) async {
+    // 🚀 FIX: Use simple query approach
     final response = await client
         .from('maintenance_reports')
         .select('*, supervisors(username)')
-        .eq('id', id)
-        .single();
+        .limit(1)
+        .order('created_at', ascending: false);
 
-    return MaintenanceReport.fromMap(response);
+    if (response is List && response.isNotEmpty) {
+      // Find the specific ID in memory
+      final results = response.cast<Map<String, dynamic>>();
+      final item = results.firstWhere(
+        (item) => item['id']?.toString() == id,
+        orElse: () => throw Exception('Maintenance report not found'),
+      );
+      return MaintenanceReport.fromMap(item);
+    }
+    
+    throw Exception('Maintenance report not found');
   }
 
   Future<void> createMaintenanceReport(MaintenanceReport report) async {

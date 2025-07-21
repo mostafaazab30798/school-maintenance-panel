@@ -66,6 +66,9 @@ class _TechnicianManagementDialogState
     print('Legacy technicians count: ${widget.supervisor.technicians.length}');
     print('Final _technicians count: ${_technicians.length}');
     print('Final _technicians: ${_technicians.map((t) => t.toMap()).toList()}');
+    print('Original _technicians count: ${_originalTechnicians.length}');
+    print('Original _technicians: ${_originalTechnicians.map((t) => t.toMap()).toList()}');
+    print('Initial hasChanges: ${hasChanges}');
     print('=====================================');
   }
 
@@ -79,21 +82,36 @@ class _TechnicianManagementDialogState
   }
 
   bool get hasChanges {
-    if (_technicians.length != _originalTechnicians.length) return true;
+    print('🔍 Checking for changes...');
+    print('Current technicians count: ${_technicians.length}');
+    print('Original technicians count: ${_originalTechnicians.length}');
+    
+    if (_technicians.length != _originalTechnicians.length) {
+      print('🔍 Length mismatch detected - has changes');
+      return true;
+    }
 
     for (int i = 0; i < _technicians.length; i++) {
       final current = _technicians[i];
-      final original = _originalTechnicians.firstWhere(
-        (t) => t.name == current.name,
-        orElse: () => Technician(name: '', workId: '', profession: ''),
-      );
+      // Use index-based comparison instead of name-based to handle name changes
+      final original = i < _originalTechnicians.length 
+          ? _originalTechnicians[i] 
+          : Technician(name: '', workId: '', profession: '');
 
-      if (original.name.isEmpty ||
+      print('🔍 Comparing index $i:');
+      print('  Current: ${current.name} | ${current.workId} | ${current.profession} | ${current.phoneNumber}');
+      print('  Original: ${original.name} | ${original.workId} | ${original.profession} | ${original.phoneNumber}');
+
+      if (current.name != original.name ||
           current.workId != original.workId ||
-          current.profession != original.profession) {
+          current.profession != original.profession ||
+          current.phoneNumber != original.phoneNumber) {
+        print('🔍 Changes detected at index $i');
         return true;
       }
     }
+    
+    print('🔍 No changes detected');
     return false;
   }
 
@@ -732,13 +750,15 @@ class _TechnicianManagementDialogState
         phoneNumber: phoneNumber,
       );
 
+      print('➕ Adding new technician: ${technician.name}');
+
       setState(() {
         _technicians.add(technician);
         _clearForm();
       });
 
-      print(
-          'Added technician: ${technician.name}. Total: ${_technicians.length}');
+      print('✅ Added technician: ${technician.name}. Total: ${_technicians.length}');
+      print('🔍 Has changes after add: ${hasChanges}');
     }
   }
 
@@ -768,13 +788,17 @@ class _TechnicianManagementDialogState
         phoneNumber: phoneNumber,
       );
 
+      print('🔄 Updating technician at index $_editingIndex:');
+      print('  Old: ${_technicians[_editingIndex!].name} | ${_technicians[_editingIndex!].workId} | ${_technicians[_editingIndex!].profession} | ${_technicians[_editingIndex!].phoneNumber}');
+      print('  New: ${updatedTechnician.name} | ${updatedTechnician.workId} | ${updatedTechnician.profession} | ${updatedTechnician.phoneNumber}');
+
       setState(() {
         _technicians[_editingIndex!] = updatedTechnician;
         _cancelEdit();
       });
 
-      print(
-          'Updated technician at index $_editingIndex: ${updatedTechnician.name}');
+      print('✅ Updated technician at index $_editingIndex: ${updatedTechnician.name}');
+      print('🔍 Has changes after update: ${hasChanges}');
     }
   }
 

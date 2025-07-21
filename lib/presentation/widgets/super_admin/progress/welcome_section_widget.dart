@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_fonts.dart';
-import '../../../../logic/blocs/super_admin/super_admin_bloc.dart';
 import '../../../../logic/blocs/super_admin/super_admin_state.dart';
 
 class WelcomeSectionWidget extends StatelessWidget {
@@ -98,14 +97,14 @@ class WelcomeSectionWidget extends StatelessWidget {
                 BoxShadow(
                   color: const Color(0xFF667EEA).withValues(alpha: 0.3),
                   blurRadius: 20,
-                  offset: const Offset(0, 8),
+                  offset: const Offset(0, 10),
                 ),
               ],
             ),
             child: const Icon(
-              Icons.dashboard_rounded,
+              Icons.analytics_rounded,
               color: Colors.white,
-              size: 36,
+              size: 40,
             ),
           ),
         ],
@@ -114,41 +113,55 @@ class WelcomeSectionWidget extends StatelessWidget {
   }
 
   Widget _buildQuickStat(
-    String label,
-    String value,
-    IconData icon,
-    Color color,
-    bool isDark,
-  ) {
+      String label, String value, IconData icon, Color color, bool isDark) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        color: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.05),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.1 : 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 16),
-          const SizedBox(width: 6),
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              icon,
+              color: color,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 value,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 14,
+                style: AppFonts.sectionTitle(isDark: isDark).copyWith(
+                  fontSize: 18,
                   fontWeight: FontWeight.w700,
+                  color: color,
                 ),
               ),
               Text(
                 label,
-                style: TextStyle(
-                  color: color.withValues(alpha: 0.8),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
+                style: AppFonts.bodyText(isDark: isDark).copyWith(
+                  fontSize: 12,
+                  color: isDark ? Colors.white60 : Colors.black.withValues(alpha: 0.6),
                 ),
               ),
             ],

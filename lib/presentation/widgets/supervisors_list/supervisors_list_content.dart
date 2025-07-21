@@ -253,7 +253,7 @@ class _SupervisorsListContentState extends State<SupervisorsListContent> {
           crossAxisCount: crossAxisCount,
           mainAxisSpacing: 24, // Increased spacing between rows
           crossAxisSpacing: 24, // Increased spacing between columns
-          childAspectRatio: 0.7, // Make cards taller to prevent overflow
+          childAspectRatio: 0.72, // Make cards taller to prevent overflow
         ),
         itemCount: paginatedSupervisors.length,
         itemBuilder: (context, index) {

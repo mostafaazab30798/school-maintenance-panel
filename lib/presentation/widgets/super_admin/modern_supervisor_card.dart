@@ -244,8 +244,9 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
                               attendanceCount,
                               supervisorId,
                               username,
+                              supervisor,
                               isDark),
-                          const SizedBox(height: 12),
+const SizedBox(height: 12),
                           _buildLateReportsSection(
                               context,
                               lateReports,
@@ -368,102 +369,54 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  // Technician Management Button
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => _openTechnicianManagement(context),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          color: const Color(0xFF10B981).withOpacity(0.1),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.build_circle,
-                              size: 14,
-                              color: Color(0xFF10B981),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${_getTechnicianCount(supervisor)}',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF10B981),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
                   const SizedBox(width: 8),
-                  // Schools Badge - Always show
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () => _openSchoolsList(context, supervisor),
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 6),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          color: const Color(0xFF7C3AED).withOpacity(0.1),
-                          border: Border.all(
-                            color: const Color(0xFF7C3AED).withOpacity(0.2),
-                            width: 0.5,
+                  // Edit Button
+                  Tooltip(
+                    message: 'تعديل بيانات المشرف',
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => _openEditSupervisor(context, supervisor),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: const Color(0xFF10B981).withOpacity(0.1),
+                            border: Border.all(
+                              color: const Color(0xFF10B981).withOpacity(0.2),
+                              width: 0.5,
+                            ),
                           ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(
-                              Icons.school,
-                              size: 14,
-                              color: Color(0xFF7C3AED),
-                            ),
-                            const SizedBox(width: 4),
-                            Container(
-                              constraints: const BoxConstraints(minWidth: 16),
-                              child: Text(
-                                '${_getSchoolCount(supervisor)}',
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF7C3AED),
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          ],
+                          child: const Icon(
+                            Icons.edit_outlined,
+                            size: 16,
+                            color: Color(0xFF10B981),
+                          ),
                         ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   // Info Button
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: widget.onInfoTap,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          color: const Color(0xFF3B82F6).withOpacity(0.1),
-                        ),
-                        child: const Icon(
-                          Icons.info_outline,
-                          size: 16,
-                          color: Color(0xFF3B82F6),
+                  Tooltip(
+                    message: 'عرض التفاصيل',
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: widget.onInfoTap,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: const Color(0xFF3B82F6).withOpacity(0.1),
+                          ),
+                          child: const Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: Color(0xFF3B82F6),
+                          ),
                         ),
                       ),
                     ),
@@ -740,6 +693,7 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
       int attendanceCount,
       String supervisorId,
       String username,
+      Map<String, dynamic> supervisor,
       bool isDark) {
     return Column(
       children: [
@@ -795,11 +749,22 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
             const SizedBox(width: 12),
             Expanded(
               child: _buildModernStatCard(
-                'تعديل',
-                0,
-                Icons.edit_outlined,
-                const Color(0xFF10B981),
-                () => _openEditSupervisor(context, widget.supervisor),
+                'الفنيين',
+                _getTechnicianCount(supervisor),
+                Icons.engineering,
+                const Color(0xFFF59E0B),
+                () => _openTechnicianManagement(context),
+                isDark,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildModernStatCard(
+                'المدارس',
+                _getSchoolCount(supervisor),
+                Icons.school,
+                const Color(0xFF7C3AED),
+                () => _openSchoolsList(context, supervisor),
                 isDark,
               ),
             ),
@@ -1116,23 +1081,7 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
     }
   }
 
-  int _getTechnicianCount(Map<String, dynamic> supervisor) {
-    final techniciansDetailed = supervisor['technicians_detailed'];
-    if (techniciansDetailed is List) {
-      try {
-        // Parse the JSONB list to count valid technician objects
-        return techniciansDetailed
-            .where((item) =>
-                item is Map<String, dynamic> &&
-                (item['name']?.toString().trim().isNotEmpty ?? false))
-            .length;
-      } catch (e) {
-        print('Error parsing technicians_detailed: $e');
-        return 0;
-      }
-    }
-    return 0;
-  }
+
 
   void _refreshSupervisorData(BuildContext context) {
     // Trigger refresh for both SupervisorBloc and SuperAdminBloc
@@ -1171,6 +1120,24 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
     } catch (e) {
       return 0;
     }
+  }
+
+  int _getTechnicianCount(Map<String, dynamic> supervisor) {
+    final techniciansDetailed = supervisor['technicians_detailed'];
+    if (techniciansDetailed is List) {
+      try {
+        // Parse the JSONB list to count valid technician objects
+        return techniciansDetailed
+            .where((item) =>
+                item is Map<String, dynamic> &&
+                (item['name']?.toString().trim().isNotEmpty ?? false))
+            .length;
+      } catch (e) {
+        print('Error parsing technicians_detailed: $e');
+        return 0;
+      }
+    }
+    return 0;
   }
 
   void _openEditSupervisor(BuildContext context, Map<String, dynamic> supervisor) async {
@@ -1235,4 +1202,6 @@ class _ModernSupervisorCardState extends State<ModernSupervisorCard>
       ),
     );
   }
+
+
 }

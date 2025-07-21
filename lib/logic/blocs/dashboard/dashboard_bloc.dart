@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../core/services/admin_service.dart';
 import '../../../core/services/cache_service.dart';
+import '../../../core/services/performance_optimization_service.dart';
 import 'dashboard_event.dart';
 import 'dashboard_state.dart';
 import '../../../data/repositories/report_repository.dart';
@@ -9,6 +10,8 @@ import '../../../data/repositories/maintenance_repository.dart';
 import '../../../data/repositories/maintenance_count_repository.dart';
 import '../../../data/repositories/damage_count_repository.dart';
 import '../../../data/models/supervisor.dart';
+import '../../../data/models/report.dart';
+import '../../../data/models/maintenance_report.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
@@ -19,6 +22,8 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   final DamageCountRepository damageCountRepository;
   final AdminService adminService;
   final CacheService _cacheService = CacheService();
+  // 🚀 PERFORMANCE OPTIMIZATION: Add performance optimization service
+  final PerformanceOptimizationService _performanceService = PerformanceOptimizationService();
 
   DashboardBloc({
     required this.reportRepository,
@@ -31,6 +36,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     on<LoadDashboardData>(_onLoadDashboardData);
     on<RefreshDashboard>((event, emit) {
       // Clear cache and force refresh
+      _performanceService.clearCache(); // Clear performance cache too
       add(const LoadDashboardData(forceRefresh: true));
     });
   }
@@ -38,6 +44,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   /// Clears cached dashboard data (useful when user logs out or changes)
   static void clearCache() {
     // Clear any static cache if needed
+    PerformanceOptimizationService().clearCache();
   }
 
   Future<void> _onLoadDashboardData(
@@ -87,24 +94,58 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         return;
       }
 
-      // Get supervisors
-      print('🔍 Fetching supervisors...');
-      final allSupervisors = await supervisorRepository.fetchSupervisors();
-      print('📊 Found ${allSupervisors.length} total supervisors');
+      // 🚀 PERFORMANCE OPTIMIZATION: Load all data in parallel for faster dashboard loading
+      print('🚀 Loading dashboard data in parallel...');
       
+      final results = await Future.wait([
+        // Get supervisors
+        supervisorRepository.fetchSupervisors(),
+        // Get reports using dashboard-optimized method
+        reportRepository.fetchReportsForDashboard(
+          supervisorIds: supervisorIds,
+          forceRefresh: event.forceRefresh,
+          limit: 50, // Limit for dashboard
+        ),
+        // Get maintenance reports using dashboard-optimized method
+        maintenanceRepository.fetchMaintenanceReportsForDashboard(
+          supervisorIds: supervisorIds,
+          limit: 20, // Smaller limit for dashboard
+        ),
+        // Get maintenance count summary
+        maintenanceCountRepository.getDashboardSummary(
+          supervisorIds: supervisorIds,
+        ),
+        // Get damage count summary
+        damageCountRepository.getDashboardSummary(
+          supervisorIds: supervisorIds,
+        ),
+      ]);
+
+      final allSupervisors = results[0] as List<Supervisor>;
+      final reports = results[1] as List<Report>;
+      final maintenanceReports = results[2] as List<MaintenanceReport>;
+      final maintenanceCountSummary = results[3] as Map<String, int>;
+      final damageCountSummary = results[4] as Map<String, int>;
+
+      print('📊 Parallel loading completed:');
+      print('  - Supervisors: ${allSupervisors.length}');
+      print('  - Reports: ${reports.length}');
+      print('  - Maintenance: ${maintenanceReports.length}');
+
+      // Filter supervisors for current admin
       final rawSupervisors = allSupervisors
           .where((supervisor) => supervisorIds.contains(supervisor.id))
           .toList();
       print('📊 Filtered to ${rawSupervisors.length} supervisors for current admin');
 
-      // Enrich supervisors with school counts
+      // 🚀 PERFORMANCE OPTIMIZATION: Get schools counts in parallel with supervisor enrichment
       final supervisors = <Supervisor>[];
       
-      // Get schools count for all supervisors at once (more efficient)
+      // 🚀 PERFORMANCE OPTIMIZATION: Use optimized service for schools count
       print('🔍 Getting schools counts...');
       Map<String, int> schoolsCounts = {};
       try {
-        schoolsCounts = await supervisorRepository.getSupervisorsSchoolsCount(
+        schoolsCounts = await _performanceService.getSupervisorsSchoolsCountOptimized(
           rawSupervisors.map((s) => s.id).toList(),
         );
         print('📊 Schools counts: $schoolsCounts');
@@ -125,29 +166,19 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         supervisors.add(enrichedSupervisor);
       }
 
-      // Fetch reports and maintenance
-      final reports = await reportRepository.fetchReports(
-        supervisorIds: supervisorIds,
-        forceRefresh: event.forceRefresh,
-      );
-      final maintenanceReports =
-          await maintenanceRepository.fetchMaintenanceReports(
-        supervisorIds: supervisorIds,
-      );
-
-      // Calculate statistics
+      // 🚀 PERFORMANCE OPTIMIZATION: Calculate statistics efficiently
       final totalReports = reports.length;
       final emergencyReports =
-          reports.where((r) => r.priority.toLowerCase() == 'emergency').length;
+          reports.where((r) => r.priority?.toLowerCase() == 'emergency').length;
       final completedReports =
-          reports.where((r) => r.status.toLowerCase() == 'completed').length;
+          reports.where((r) => r.status?.toLowerCase() == 'completed').length;
       final overdueReports =
-          reports.where((r) => r.status.toLowerCase() == 'late').length;
+          reports.where((r) => r.status?.toLowerCase() == 'late').length;
       final lateCompletedReports = reports
-          .where((r) => r.status.toLowerCase() == 'late_completed')
+          .where((r) => r.status?.toLowerCase() == 'late_completed')
           .length;
       final routineReports =
-          reports.where((r) => r.priority.toLowerCase() == 'routine').length;
+          reports.where((r) => r.priority?.toLowerCase() == 'routine').length;
       final pendingReports = reports.where((r) => r.status == 'pending').length;
       final totalSupervisors = supervisors.length;
       final completionRate =
@@ -156,68 +187,43 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       // Maintenance statistics
       final totalMaintenanceReports = maintenanceReports.length;
       final completedMaintenanceReports = maintenanceReports
-          .where((r) => r.status.toLowerCase() == 'completed')
+          .where((r) => r.status?.toLowerCase() == 'completed')
           .length;
       final pendingMaintenanceReports = maintenanceReports
-          .where((r) => r.status.toLowerCase() == 'pending')
+          .where((r) => r.status?.toLowerCase() == 'pending')
           .length;
 
-      // Get inventory counts
-      final maintenanceCountSummary =
-          await maintenanceCountRepository.getDashboardSummary(
-        supervisorIds: supervisorIds,
-      );
+      // Get inventory counts from parallel results
       final schoolsWithCounts =
           maintenanceCountSummary['schools_with_counts'] ?? 0;
-
-      final damageCountSummary =
-          await damageCountRepository.getDashboardSummary(
-        supervisorIds: supervisorIds,
-      );
       final schoolsWithDamage = damageCountSummary['schools_with_damage'] ?? 0;
 
-      // Get schools count and schools with achievements
+      // 🚀 PERFORMANCE OPTIMIZATION: Get schools data efficiently
       int totalSchools = 0;
       int schoolsWithAchievements = 0;
 
-      // Get total schools count for all supervisors using accurate count method
-      final totalSchoolsCounts = await supervisorRepository.getSupervisorsSchoolsCount(supervisorIds);
-      totalSchools = totalSchoolsCounts.values.fold(0, (sum, count) => sum + count);
+      // Get total schools count from existing schoolsCounts
+      totalSchools = schoolsCounts.values.fold(0, (sum, count) => sum + count);
 
-      // Get all school IDs for this admin's supervisors (for achievements calculation)
-      Set<String> adminSchoolIds = {};
-      for (final supervisorId in supervisorIds) {
-        final schoolsResponse = await Supabase.instance.client
-            .from('supervisor_schools')
-            .select('school_id')
-            .eq('supervisor_id', supervisorId);
-
-        for (final school in schoolsResponse) {
-          if (school['school_id'] != null) {
-            adminSchoolIds.add(school['school_id'].toString());
-          }
-        }
-      }
-
-      // Calculate schools with achievements (schools that have achievement photos)
-      if (adminSchoolIds.isNotEmpty) {
+      // 🚀 PERFORMANCE OPTIMIZATION: Get schools with achievements using optimized service
+      if (totalSchools > 0) {
         try {
-          final achievementsResponse = await Supabase.instance.client
-              .from('achievement_photos')
+          // Get all school IDs for this admin's supervisors
+          final schoolIdsResponse = await Supabase.instance.client
+              .from('supervisor_schools')
               .select('school_id')
-              .inFilter('school_id', adminSchoolIds.toList())
-              .not('school_id', 'is', null);
+              .inFilter('supervisor_id', supervisorIds);
 
-          // Count unique schools with achievements
-          Set<String> schoolsWithAchievementsSet = {};
-          for (final achievement in achievementsResponse) {
-            final schoolId = achievement['school_id']?.toString();
-            if (schoolId != null && schoolId.isNotEmpty) {
-              schoolsWithAchievementsSet.add(schoolId);
-            }
+          final adminSchoolIds = schoolIdsResponse
+              .map((school) => school['school_id']?.toString())
+              .where((id) => id != null && id.isNotEmpty)
+              .map((id) => id!) // Convert nullable String to non-nullable String
+              .toSet();
+
+          // 🚀 PERFORMANCE OPTIMIZATION: Use optimized service for schools achievements
+          if (adminSchoolIds.isNotEmpty) {
+            schoolsWithAchievements = await _performanceService.getSchoolsWithAchievementsOptimized(adminSchoolIds);
           }
-
-          schoolsWithAchievements = schoolsWithAchievementsSet.length;
         } catch (e) {
           print('Warning: Failed to fetch schools with achievements: $e');
           schoolsWithAchievements = 0;
@@ -246,8 +252,10 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         schoolsWithAchievements: schoolsWithAchievements,
       );
 
+      print('✅ Dashboard data loaded successfully in parallel');
       emit(dashboardData);
     } catch (e) {
+      print('❌ Dashboard loading error: $e');
       emit(DashboardError(e.toString()));
     }
   }

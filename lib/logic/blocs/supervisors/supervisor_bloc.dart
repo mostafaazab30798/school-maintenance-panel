@@ -377,6 +377,11 @@ class SupervisorBloc extends Bloc<SupervisorEvent, SupervisorState>
     SchoolsRemovedFromSupervisor event,
     Emitter<SupervisorState> emit,
   ) async {
+    print('🔍 DEBUG: _onSchoolsRemovedFromSupervisor called');
+    print('🔍 DEBUG: supervisorId: ${event.supervisorId}');
+    print('🔍 DEBUG: schoolIds: ${event.schoolIds}');
+    print('🔍 DEBUG: schoolIds count: ${event.schoolIds.length}');
+    
     emit(SupervisorSchoolsRemoving(
       supervisorId: event.supervisorId,
       schoolIds: event.schoolIds,
@@ -386,11 +391,13 @@ class SupervisorBloc extends Bloc<SupervisorEvent, SupervisorState>
       // Import the school assignment service
       final schoolService = SchoolAssignmentService(Supabase.instance.client);
       
+      print('🔍 DEBUG: Calling removeSchoolsFromSupervisor service method');
       // Remove the school assignments
       await schoolService.removeSchoolsFromSupervisor(
         event.supervisorId,
         event.schoolIds,
       );
+      print('🔍 DEBUG: removeSchoolsFromSupervisor completed successfully');
 
       // 🚀 Critical Fix: Clear all supervisor-related caches
       CacheInvalidationService.invalidateSupervisorCaches();
@@ -416,7 +423,8 @@ class SupervisorBloc extends Bloc<SupervisorEvent, SupervisorState>
         print('SupervisorBloc: Failed to refresh SuperAdminBloc: $e');
       }
     } catch (e) {
-      emit(SupervisorError('Failed to remove schools: $e'));
+      print('🔍 DEBUG: Error in _onSchoolsRemovedFromSupervisor: $e');
+      emit(SupervisorError('فشل في حذف المدارس: $e'));
     }
   }
 }

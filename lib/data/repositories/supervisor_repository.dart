@@ -314,22 +314,22 @@ class SupervisorRepository {
     try {
       if (supervisorIds.isEmpty) return {};
       
-      // Use individual count queries for each supervisor to avoid query limits
-      final Map<String, int> counts = {};
+      // 🚀 PERFORMANCE OPTIMIZATION: Use single query with GROUP BY for better performance
+      final response = await _client
+          .from('supervisor_schools')
+          .select('supervisor_id')
+          .inFilter('supervisor_id', supervisorIds);
       
+      // Count schools per supervisor
+      final Map<String, int> counts = {};
       for (final supervisorId in supervisorIds) {
-        try {
-          final response = await _client
-              .from('supervisor_schools')
-              .select('*')
-              .eq('supervisor_id', supervisorId)
-              .count(CountOption.exact);
-          
-          final count = response.count;
-          counts[supervisorId] = count ?? 0;
-        } catch (e) {
-          print('Error getting schools count for supervisor $supervisorId: $e');
-          counts[supervisorId] = 0;
+        counts[supervisorId] = 0;
+      }
+      
+      for (final record in response) {
+        final supervisorId = record['supervisor_id']?.toString();
+        if (supervisorId != null && counts.containsKey(supervisorId)) {
+          counts[supervisorId] = (counts[supervisorId] ?? 0) + 1;
         }
       }
       

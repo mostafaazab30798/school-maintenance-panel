@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../../data/models/supervisor.dart';
+import '../../../../data/models/car_maintenance.dart';
 import '../../../../data/repositories/supervisor_repository.dart';
+import '../../../../data/repositories/car_maintenance_repository.dart';
 import '../../../../logic/blocs/super_admin/super_admin_bloc.dart';
 import '../../../../logic/blocs/super_admin/super_admin_event.dart';
 import '../../../../logic/blocs/supervisors/supervisor_bloc.dart';
@@ -12,7 +14,9 @@ import '../../common/esc_dismissible_dialog.dart';
 import 'technician_management_dialog.dart';
 import 'school_assignment_dialog.dart';
 import 'edit_supervisor_dialog.dart';
+import 'car_maintenance_dialog.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart' as intl;
 
 
 class SupervisorDetailDialog extends StatelessWidget {
@@ -28,8 +32,8 @@ class SupervisorDetailDialog extends StatelessWidget {
     final supervisorId = supervisor['id'] as String? ?? '';
     final username = supervisor['username'] as String? ?? 'غير محدد';
 
-    return FutureBuilder<Supervisor?>(
-      future: _fetchSupervisorDetails(supervisorId),
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _fetchSupervisorAndCarMaintenanceDetails(supervisorId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Dialog(
@@ -79,7 +83,8 @@ class SupervisorDetailDialog extends StatelessWidget {
           );
         }
 
-        final supervisorData = snapshot.data!;
+        final supervisorData = snapshot.data!['supervisor'] as Supervisor;
+        final carMaintenanceData = snapshot.data!['carMaintenance'] as CarMaintenance?;
         final stats = supervisor['stats'] as Map<String, dynamic>;
 
         return Dialog(
@@ -91,7 +96,7 @@ class SupervisorDetailDialog extends StatelessWidget {
           clipBehavior: Clip.antiAlias,
           child: Container(
             width: 500,
-            height: 650,
+            height: 700, // Increased height to accommodate car maintenance section
             child: Column(
               children: [
                 // Enhanced Header
@@ -110,6 +115,10 @@ class SupervisorDetailDialog extends StatelessWidget {
 
                         // Saudi License Plate Section
                         _buildSaudiLicensePlateSection(context, supervisorData),
+                        const SizedBox(height: 16),
+
+                        // Car Maintenance Section
+                        _buildCarMaintenanceSection(context, carMaintenanceData),
                         const SizedBox(height: 16),
 
                         // Status & Assignment Section
@@ -131,18 +140,34 @@ class SupervisorDetailDialog extends StatelessWidget {
     );
   }
 
-  Future<Supervisor?> _fetchSupervisorDetails(String supervisorId) async {
+  Future<Map<String, dynamic>> _fetchSupervisorAndCarMaintenanceDetails(String supervisorId) async {
     try {
-      final response = await Supabase.instance.client
+      // Fetch supervisor details
+      final supervisorResponse = await Supabase.instance.client
           .from('supervisors')
           .select('*')
           .eq('id', supervisorId)
           .single();
 
-      return Supervisor.fromMap(response);
+      final supervisorData = Supervisor.fromMap(supervisorResponse);
+
+      // Fetch car maintenance details
+      CarMaintenance? carMaintenanceData;
+      try {
+        final carMaintenanceRepository = CarMaintenanceRepository(Supabase.instance.client);
+        carMaintenanceData = await carMaintenanceRepository.getCarMaintenanceBySupervisorId(supervisorId);
+      } catch (e) {
+        debugPrint('Error fetching car maintenance details: $e');
+        // Car maintenance data is optional, so we don't fail the entire request
+      }
+
+      return {
+        'supervisor': supervisorData,
+        'carMaintenance': carMaintenanceData,
+      };
     } catch (e) {
       debugPrint('Error fetching supervisor details: $e');
-      return null;
+      rethrow;
     }
   }
 
@@ -635,53 +660,6 @@ class SupervisorDetailDialog extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // Edit Supervisor Button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () => _openEditSupervisor(context),
-              icon: const Icon(Icons.edit_outlined, size: 16),
-              label: const Text('تعديل البيانات', style: TextStyle(fontSize: 12)),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                backgroundColor: const Color(0xFF10B981),
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          // School Assignment Button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () => _openSchoolAssignment(context),
-              icon: const Icon(Icons.school_rounded, size: 16),
-              label:
-                  const Text('تعيين المدارس', style: TextStyle(fontSize: 12)),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                backgroundColor: const Color(0xFF3B82F6),
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          // // Technician Management Button
-          // SizedBox(
-          //   width: double.infinity,
-          //   child: ElevatedButton.icon(
-          //     onPressed: () => _openTechnicianManagement(context),
-          //     icon: const Icon(Icons.build_circle, size: 16),
-          //     label: Text('إدارة الفنيين (${_getTechnicianCount()})',
-          //         style: const TextStyle(fontSize: 12)),
-          //     style: ElevatedButton.styleFrom(
-          //       padding: const EdgeInsets.symmetric(vertical: 8),
-          //       backgroundColor: const Color(0xFF10B981),
-          //       foregroundColor: Colors.white,
-          //     ),
-          //   ),
-          // ),
-          // const SizedBox(height: 8),
           // Close Button
           SizedBox(
             width: double.infinity,
@@ -883,6 +861,308 @@ class SupervisorDetailDialog extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Widget _buildCarMaintenanceSection(BuildContext context, CarMaintenance? carMaintenance) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Icon(
+                Icons.directions_car_outlined,
+                color: Color(0xFF10B981),
+                size: 16,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'معلومات صيانة السيارة',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.white
+                      : const Color(0xFF1E293B),
+                ),
+              ),
+            ),
+            IconButton(
+              onPressed: () => _openCarMaintenanceDialog(context, carMaintenance),
+              icon: const Icon(
+                Icons.edit_outlined,
+                size: 16,
+                color: Color(0xFF10B981),
+              ),
+              tooltip: 'تعديل صيانة السيارة',
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0xFF334155)
+                : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? const Color(0xFF475569)
+                  : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: carMaintenance == null
+              ? _buildNoCarMaintenanceData()
+              : _buildCarMaintenanceData(context, carMaintenance),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNoCarMaintenanceData() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          Icon(
+            Icons.directions_car_outlined,
+            size: 32,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'لا توجد بيانات صيانة للسيارة',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCarMaintenanceData(BuildContext context, CarMaintenance carMaintenance) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Maintenance Meter Section
+        if (carMaintenance.maintenanceMeter != null) ...[
+          _buildMaintenanceMeterInfo(context, carMaintenance),
+          const SizedBox(height: 16),
+        ],
+
+        // Tyre Changes Section
+        if (carMaintenance.tyreChanges.isNotEmpty) ...[
+          _buildTyreChangesSection(context, carMaintenance.tyreChanges),
+          const SizedBox(height: 16),
+        ],
+
+        // Last Updated Info
+        _buildLastUpdatedInfo(context, carMaintenance),
+      ],
+    );
+  }
+
+  Widget _buildMaintenanceMeterInfo(BuildContext context, CarMaintenance carMaintenance) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF10B981).withOpacity(0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: const Color(0xFF10B981).withOpacity(0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.speed_outlined,
+            color: const Color(0xFF10B981),
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'عداد الصيانة',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: const Color(0xFF10B981),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${carMaintenance.maintenanceMeter} كم',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : const Color(0xFF1E293B),
+                  ),
+                ),
+                if (carMaintenance.maintenanceMeterDate != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'تاريخ القراءة: ${intl.DateFormat('yyyy/MM/dd').format(carMaintenance.maintenanceMeterDate!)}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTyreChangesSection(BuildContext context, List<TyreChange> tyreChanges) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(
+              Icons.tire_repair_outlined,
+              color: const Color(0xFFF59E0B),
+              size: 16,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'تغييرات الإطارات',
+              style: TextStyle(
+                fontSize: 12,
+                color: const Color(0xFFF59E0B),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...tyreChanges.map((change) => _buildTyreChangeItem(context, change)).toList(),
+      ],
+    );
+  }
+
+  Widget _buildTyreChangeItem(BuildContext context, TyreChange change) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF59E0B).withOpacity(0.05),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: const Color(0xFFF59E0B).withOpacity(0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.circle,
+            color: const Color(0xFFF59E0B),
+            size: 8,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  TyrePositions.getArabicLabel(change.tyrePosition),
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : const Color(0xFF1E293B),
+                  ),
+                ),
+                Text(
+                  'تاريخ التغيير: ${intl.DateFormat('yyyy/MM/dd').format(change.changeDate)}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLastUpdatedInfo(BuildContext context, CarMaintenance carMaintenance) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.grey.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.update_outlined,
+            color: Colors.grey[600],
+            size: 14,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'آخر تحديث: ${intl.DateFormat('yyyy/MM/dd HH:mm').format(carMaintenance.updatedAt)}',
+            style: TextStyle(
+              fontSize: 11,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openCarMaintenanceDialog(BuildContext context, CarMaintenance? carMaintenance) {
+    final supervisorId = supervisor['id'] as String? ?? '';
+    final username = supervisor['username'] as String? ?? 'غير محدد';
+
+    if (supervisorId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('خطأ: لا يمكن العثور على معرف المشرف'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    context.showEscDismissibleDialog<bool>(
+      barrierDismissible: false,
+      builder: (dialogContext) => CarMaintenanceDialog(
+        supervisorId: supervisorId,
+        supervisorName: username,
+        initialCarMaintenance: carMaintenance,
+      ),
+    ).then((result) {
+      if (result == true) {
+        // Refresh the dialog data if car maintenance was updated
+        Navigator.of(context).pop();
+        SupervisorDetailDialog.show(context, supervisor);
+      }
+    });
   }
 
   static void show(BuildContext context, Map<String, dynamic> supervisor) {

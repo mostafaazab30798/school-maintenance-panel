@@ -6,9 +6,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../logic/cubits/theme_cubit.dart';
 import '../../../logic/blocs/super_admin/super_admin_bloc.dart';
 import '../../../logic/blocs/super_admin/super_admin_event.dart';
+import '../../../core/services/excel_export_service.dart';
+import '../../../data/repositories/maintenance_count_repository.dart';
+import '../../../data/repositories/damage_count_repository.dart';
 import '../common/weekly_report_dialog.dart';
 import '../common/user_info_widget.dart';
 import '../common/shared_back_button.dart';
+import '../../../core/services/admin_service.dart';
 
 class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onCreateAdmin;
@@ -68,6 +72,46 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
         ],
       ),
       actions: [
+        // Download Maintenance Counts button
+        Container(
+          margin: const EdgeInsets.only(right: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: const Color(0xFFF59E0B).withOpacity(0.1),
+            border: Border.all(
+              color: const Color(0xFFF59E0B).withOpacity(0.2),
+              width: 1,
+            ),
+          ),
+          child: IconButton(
+            icon: const Icon(
+              Icons.build_outlined,
+              color: Color(0xFFF59E0B),
+            ),
+            tooltip: 'تحميل حصر الصيانة',
+            onPressed: () => _downloadMaintenanceCounts(context),
+          ),
+        ),
+        // Download Damage Counts button
+        Container(
+          margin: const EdgeInsets.only(right: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: const Color(0xFFEF4444).withOpacity(0.1),
+            border: Border.all(
+              color: const Color(0xFFEF4444).withOpacity(0.2),
+              width: 1,
+            ),
+          ),
+          child: IconButton(
+            icon: const Icon(
+              Icons.warning_outlined,
+              color: Color(0xFFEF4444),
+            ),
+            tooltip: 'تحميل حصر التوالف',
+            onPressed: () => _downloadDamageCounts(context),
+          ),
+        ),
         // Weekly Report button
         Container(
           margin: const EdgeInsets.only(right: 8),
@@ -84,7 +128,7 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
               Icons.assessment_outlined,
               color: Color(0xFF10B981),
             ),
-            tooltip: 'تقرير أسبوعي',
+            tooltip: 'تقرير أسبوعي/شهري',
             onPressed: () => _showWeeklyReportDialog(context),
           ),
         ),
@@ -438,8 +482,12 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
                         child: TextButton(
                           onPressed: () async {
                             await Supabase.instance.client.auth.signOut();
-                            Navigator.of(ctx).pop();
-                            context.go('/auth');
+                            if (ctx.mounted) {
+                              Navigator.of(ctx).pop();
+                            }
+                            if (context.mounted) {
+                              context.go('/auth');
+                            }
                           },
                           style: TextButton.styleFrom(
                             shape: RoundedRectangleBorder(
@@ -484,7 +532,196 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
   void _showWeeklyReportDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => WeeklyReportDialog(),
+      builder: (context) => WeeklyReportDialog(
+        adminService: AdminService(Supabase.instance.client),
+      ),
     );
+  }
+
+  Future<void> _downloadMaintenanceCounts(BuildContext context) async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(color: Color(0xFFF59E0B)),
+              const SizedBox(width: 20),
+              Text(
+                'جاري تحضير ملف حصر الصيانة...',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      // Add a small delay to ensure UI updates
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      final repository = MaintenanceCountRepository(Supabase.instance.client);
+      final excelService = ExcelExportService(repository);
+      
+      // Export with retry mechanism
+      int retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          await excelService.exportAllMaintenanceCounts();
+          break; // Success, exit retry loop
+        } catch (e) {
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            rethrow; // Re-throw if all retries failed
+          }
+          // Wait before retry
+          await Future.delayed(Duration(milliseconds: 500 * retryCount));
+        }
+      }
+      
+      // Close loading dialog
+      if (context.mounted) {
+        Navigator.of(context).pop();
+      }
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                const Text('تم تحميل حصر الصيانة بنجاح!'),
+              ],
+            ),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog if still open
+      if (context.mounted) {
+        Navigator.of(context).pop();
+      }
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('حدث خطأ أثناء التحميل: $e')),
+              ],
+            ),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _downloadDamageCounts(BuildContext context) async {
+    try {
+      // Show loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          content: Row(
+            children: [
+              const CircularProgressIndicator(color: Color(0xFFEF4444)),
+              const SizedBox(width: 20),
+              Text(
+                'جاري تحضير ملف حصر التوالف...',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      // Add a small delay to ensure UI updates
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      final maintenanceRepo = MaintenanceCountRepository(Supabase.instance.client);
+      final damageRepo = DamageCountRepository(Supabase.instance.client);
+      final excelService = ExcelExportService(maintenanceRepo, damageRepository: damageRepo);
+      
+      // Export with retry mechanism
+      int retryCount = 0;
+      const maxRetries = 3;
+      
+      while (retryCount < maxRetries) {
+        try {
+          await excelService.exportAllDamageCounts();
+          break; // Success, exit retry loop
+        } catch (e) {
+          retryCount++;
+          if (retryCount >= maxRetries) {
+            rethrow; // Re-throw if all retries failed
+          }
+          // Wait before retry
+          await Future.delayed(Duration(milliseconds: 500 * retryCount));
+        }
+      }
+      
+      // Close loading dialog
+      if (context.mounted) {
+        Navigator.of(context).pop();
+      }
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                const Text('تم تحميل حصر التوالف بنجاح!'),
+              ],
+            ),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog if still open
+      if (context.mounted) {
+        Navigator.of(context).pop();
+      }
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('حدث خطأ أثناء التحميل: $e')),
+              ],
+            ),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
   }
 }

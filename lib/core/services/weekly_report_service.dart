@@ -4,6 +4,7 @@ import 'package:excel/excel.dart' as excel_lib;
 import 'package:file_saver/file_saver.dart';
 import 'package:intl/intl.dart';
 import 'dart:typed_data';
+import 'admin_service.dart';
 
 class WeeklyReportService {
   final SupabaseClient _client = Supabase.instance.client;
@@ -45,32 +46,114 @@ class WeeklyReportService {
     
     return weeks;
   }
+
+  /// Get month data for monthly reports
+  static Map<String, dynamic> getMonthData(int year, int month) {
+    final firstDay = DateTime(year, month, 1);
+    final lastDay = DateTime(year, month + 1, 0);
+    
+    return {
+      'startDate': firstDay,
+      'endDate': lastDay,
+      'label': '${_getMonthName(month)} $year',
+    };
+  }
+
+  /// Get month name in Arabic
+  static String _getMonthName(int month) {
+    const monthNames = [
+      'يناير', 'فبراير', 'مارس', 'أبريل',
+      'مايو', 'يونيو', 'يوليو', 'أغسطس',
+      'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'
+    ];
+    return monthNames[month - 1];
+  }
   
   /// Generate weekly report data
   Future<Map<String, dynamic>> generateWeeklyReportData({
     required DateTime startDate,
     required DateTime endDate,
+    AdminService? adminService,
   }) async {
     try {
-      // Get all reports for the week
-      final reportsResponse = await _client
-          .from('reports')
-          .select('*, supervisors(username)')
-          .gte('created_at', startDate.toIso8601String())
-          .lte('created_at', endDate.toIso8601String())
-          .order('created_at', ascending: false);
-
-      final reports = List<Map<String, dynamic>>.from(reportsResponse);
+      List<Map<String, dynamic>> reports;
+      List<Map<String, dynamic>> maintenance;
       
-      // Get all maintenance reports for the week
-      final maintenanceResponse = await _client
-          .from('maintenance_reports')
-          .select('*, supervisors(username)')
-          .gte('created_at', startDate.toIso8601String())
-          .lte('created_at', endDate.toIso8601String())
-          .order('created_at', ascending: false);
+      // Check if admin filtering is needed
+      if (adminService != null) {
+        final isSuperAdmin = await adminService.isCurrentUserSuperAdmin();
+        
+        if (isSuperAdmin) {
+          // Super admin gets all data
+          final reportsResponse = await _client
+              .from('reports')
+              .select('*, supervisors(username)')
+              .gte('created_at', startDate.toIso8601String())
+              .lte('created_at', endDate.toIso8601String())
+              .order('created_at', ascending: false);
 
-      final maintenance = List<Map<String, dynamic>>.from(maintenanceResponse);
+          reports = List<Map<String, dynamic>>.from(reportsResponse);
+          
+          final maintenanceResponse = await _client
+              .from('maintenance_reports')
+              .select('*, supervisors(username)')
+              .gte('created_at', startDate.toIso8601String())
+              .lte('created_at', endDate.toIso8601String())
+              .order('created_at', ascending: false);
+
+          maintenance = List<Map<String, dynamic>>.from(maintenanceResponse);
+        } else {
+          // Regular admin - filter by assigned supervisors
+          final adminSupervisorIds = await adminService.getCurrentAdminSupervisorIds();
+          
+          if (adminSupervisorIds.isEmpty) {
+            // No supervisors assigned, return empty data
+            reports = [];
+            maintenance = [];
+          } else {
+            // Filter reports by assigned supervisors
+            final reportsResponse = await _client
+                .from('reports')
+                .select('*, supervisors(username)')
+                .gte('created_at', startDate.toIso8601String())
+                .lte('created_at', endDate.toIso8601String())
+                .inFilter('supervisor_id', adminSupervisorIds)
+                .order('created_at', ascending: false);
+
+            reports = List<Map<String, dynamic>>.from(reportsResponse);
+            
+            // Filter maintenance by assigned supervisors
+            final maintenanceResponse = await _client
+                .from('maintenance_reports')
+                .select('*, supervisors(username)')
+                .gte('created_at', startDate.toIso8601String())
+                .lte('created_at', endDate.toIso8601String())
+                .inFilter('supervisor_id', adminSupervisorIds)
+                .order('created_at', ascending: false);
+
+            maintenance = List<Map<String, dynamic>>.from(maintenanceResponse);
+          }
+        }
+      } else {
+        // No admin service provided, get all data (backward compatibility)
+        final reportsResponse = await _client
+            .from('reports')
+            .select('*, supervisors(username)')
+            .gte('created_at', startDate.toIso8601String())
+            .lte('created_at', endDate.toIso8601String())
+            .order('created_at', ascending: false);
+
+        reports = List<Map<String, dynamic>>.from(reportsResponse);
+        
+        final maintenanceResponse = await _client
+            .from('maintenance_reports')
+            .select('*, supervisors(username)')
+            .gte('created_at', startDate.toIso8601String())
+            .lte('created_at', endDate.toIso8601String())
+            .order('created_at', ascending: false);
+
+        maintenance = List<Map<String, dynamic>>.from(maintenanceResponse);
+      }
       
       // Calculate statistics
       final statistics = _calculateWeeklyStatistics(reports, maintenance);
@@ -872,11 +955,13 @@ class WeeklyReportService {
     required DateTime startDate,
     required DateTime endDate,
     required String weekLabel,
+    AdminService? adminService,
   }) async {
     // Generate report data
     final reportData = await generateWeeklyReportData(
       startDate: startDate,
       endDate: endDate,
+      adminService: adminService,
     );
     
     // Generate Excel file
@@ -887,6 +972,36 @@ class WeeklyReportService {
     
     // Download file
     final fileName = 'تقرير_أسبوعي_${DateFormat('yyyy_MM_dd').format(startDate)}_${DateFormat('yyyy_MM_dd').format(endDate)}.xlsx';
+    
+    await FileSaver.instance.saveFile(
+      name: fileName,
+      bytes: excelBytes,
+      ext: 'xlsx',
+      mimeType: MimeType.microsoftExcel,
+    );
+  }
+
+  Future<void> generateAndDownloadMonthlyReport({
+    required DateTime startDate,
+    required DateTime endDate,
+    required String monthLabel,
+    AdminService? adminService,
+  }) async {
+    // Generate report data
+    final reportData = await generateWeeklyReportData(
+      startDate: startDate,
+      endDate: endDate,
+      adminService: adminService,
+    );
+    
+    // Generate Excel file
+    final excelBytes = await generateWeeklyExcelReport(
+      reportData: reportData,
+      weekLabel: monthLabel,
+    );
+    
+    // Download file
+    final fileName = 'تقرير_شهري_${DateFormat('yyyy_MM').format(startDate)}.xlsx';
     
     await FileSaver.instance.saveFile(
       name: fileName,

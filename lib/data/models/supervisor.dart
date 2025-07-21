@@ -18,6 +18,8 @@ class Supervisor extends Equatable {
   final List<Technician>
       techniciansDetailed; // Enhanced field for detailed technicians
   final int? schoolsCount; // Number of schools assigned to this supervisor
+  final int? maintenanceMeter; // Car maintenance meter reading
+  final bool? carOperational; // Car operational status
 
   const Supervisor({
     required this.id,
@@ -35,6 +37,8 @@ class Supervisor extends Equatable {
     this.technicians = const [], // Default empty list
     this.techniciansDetailed = const [], // Default empty list
     this.schoolsCount,
+    this.maintenanceMeter,
+    this.carOperational,
   });
 
   factory Supervisor.fromMap(Map<String, dynamic> map) {
@@ -57,6 +61,8 @@ class Supervisor extends Equatable {
       techniciansDetailed:
           _parseTechniciansDetailed(map['technicians_detailed']),
       schoolsCount: map['schools_count'] as int?,
+      maintenanceMeter: map['maintenance_meter'] as int?,
+      carOperational: map['car_operational'] as bool?,
     );
   }
 
@@ -102,6 +108,8 @@ class Supervisor extends Equatable {
       'technicians_detailed':
           techniciansDetailed.map((t) => t.toMap()).toList(),
       if (schoolsCount != null) 'schools_count': schoolsCount,
+      if (maintenanceMeter != null) 'maintenance_meter': maintenanceMeter,
+      if (carOperational != null) 'car_operational': carOperational,
     };
   }
 
@@ -122,6 +130,8 @@ class Supervisor extends Equatable {
     List<String>? technicians,
     List<Technician>? techniciansDetailed,
     int? schoolsCount,
+    int? maintenanceMeter,
+    bool? carOperational,
   }) {
     return Supervisor(
       id: id ?? this.id,
@@ -139,6 +149,8 @@ class Supervisor extends Equatable {
       technicians: technicians ?? this.technicians,
       techniciansDetailed: techniciansDetailed ?? this.techniciansDetailed,
       schoolsCount: schoolsCount ?? this.schoolsCount,
+      maintenanceMeter: maintenanceMeter ?? this.maintenanceMeter,
+      carOperational: carOperational ?? this.carOperational,
     );
   }
 
@@ -173,5 +185,7 @@ class Supervisor extends Equatable {
         technicians, // Add to props for equality comparison
         techniciansDetailed, // Add to props for equality comparison
         schoolsCount, // Add to props for equality comparison
+        maintenanceMeter, // Add to props for equality comparison
+        carOperational, // Add to props for equality comparison
       ];
 }

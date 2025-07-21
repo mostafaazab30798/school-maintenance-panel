@@ -24,7 +24,7 @@ class SupervisorCard extends StatefulWidget {
   final int completedMaintenanceCount;
   final int techniciansCount;
   final int schoolsCount;
-  final Supervisor? supervisor; // Add supervisor object for badge functionality
+  final Supervisor? supervisor;
 
   /// The completion rate for this supervisor's reports (0.0 to 1.0)
   final double completionRate;
@@ -53,44 +53,64 @@ class SupervisorCard extends StatefulWidget {
 class _SupervisorCardState extends State<SupervisorCard>
     with TickerProviderStateMixin {
   bool _isHovered = false;
+  bool _isPressed = false;
   late AnimationController _scaleController;
-  late AnimationController _shimmerController;
+  // 🚀 PERFORMANCE OPTIMIZATION: Remove heavy animations for better performance
+  // late AnimationController _glowController;
+  // late AnimationController _pulseController;
   late Animation<double> _scaleAnimation;
-  late Animation<double> _shimmerAnimation;
+  // late Animation<double> _glowAnimation;
+  // late Animation<double> _pulseAnimation;
 
   @override
   void initState() {
     super.initState();
     _scaleController = AnimationController(
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 150),
       vsync: this,
     );
-    _shimmerController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    )..repeat();
+    // 🚀 PERFORMANCE OPTIMIZATION: Remove heavy animations
+    // _glowController = AnimationController(
+    //   duration: const Duration(milliseconds: 2000),
+    //   vsync: this,
+    // )..repeat(reverse: true);
+    // _pulseController = AnimationController(
+    //   duration: const Duration(milliseconds: 1000),
+    //   vsync: this,
+    // );
 
     _scaleAnimation = Tween<double>(
       begin: 1.0,
-      end: 1.005,
+      end: 1.02,
     ).animate(CurvedAnimation(
       parent: _scaleController,
-      curve: Curves.easeInOut,
+      curve: Curves.easeOutCubic,
     ));
 
-    _shimmerAnimation = Tween<double>(
-      begin: -2.0,
-      end: 2.0,
-    ).animate(CurvedAnimation(
-      parent: _shimmerController,
-      curve: Curves.easeInOut,
-    ));
+    // 🚀 PERFORMANCE OPTIMIZATION: Remove heavy animations
+    // _glowAnimation = Tween<double>(
+    //   begin: 0.3,
+    //   end: 0.7,
+    // ).animate(CurvedAnimation(
+    //   parent: _glowController,
+    //   curve: Curves.easeInOut,
+    // ));
+
+    // _pulseAnimation = Tween<double>(
+    //   begin: 1.0,
+    //   end: 1.05,
+    // ).animate(CurvedAnimation(
+    //   parent: _pulseController,
+    //   curve: Curves.easeInOut,
+    // ));
   }
 
   @override
   void dispose() {
     _scaleController.dispose();
-    _shimmerController.dispose();
+    // 🚀 PERFORMANCE OPTIMIZATION: Remove heavy animations
+    // _glowController.dispose();
+    // _pulseController.dispose();
     super.dispose();
   }
 
@@ -107,369 +127,519 @@ class _SupervisorCardState extends State<SupervisorCard>
         setState(() => _isHovered = false);
         _scaleController.reverse();
       },
-      child: AnimatedBuilder(
-        animation: _scaleAnimation,
-        builder: (context, child) {
-          return Transform.scale(
-            scale: _scaleAnimation.value,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  // Primary shadow
-                  BoxShadow(
-                    color: isDark
-                        ? Colors.black.withOpacity(0.4)
-                        : const Color(0xFF64748B).withOpacity(0.08),
-                    offset: const Offset(0, 4),
-                    blurRadius: 16,
-                    spreadRadius: 0,
-                  ),
-                  // Accent shadow
-                  if (_isHovered)
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapUp: (_) => setState(() => _isPressed = false),
+        onTapCancel: () => setState(() => _isPressed = false),
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_scaleAnimation]),
+          builder: (context, child) {
+            return Transform.scale(
+              scale: _isPressed ? 0.98 : _scaleAnimation.value,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    // Primary shadow
                     BoxShadow(
-                      color: const Color(0xFF3B82F6).withOpacity(0.15),
-                      offset: const Offset(0, 2),
-                      blurRadius: 12,
+                      color: isDark
+                          ? Colors.black.withOpacity(0.4)
+                          : const Color(0xFF64748B).withOpacity(0.12),
+                      offset: const Offset(0, 12),
+                      blurRadius: 32,
                       spreadRadius: 0,
                     ),
-                  // Inner highlight
-                  BoxShadow(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.05)
-                        : Colors.white.withOpacity(0.8),
-                    offset: const Offset(0, 1),
-                    blurRadius: 0,
-                    spreadRadius: 0,
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Stack(
-                  children: [
-                    // Main card background
-                    Container(
+                    // Secondary shadow for depth
+                    BoxShadow(
+                      color: isDark
+                          ? Colors.black.withOpacity(0.2)
+                          : const Color(0xFF64748B).withOpacity(0.06),
+                      offset: const Offset(0, 6),
+                      blurRadius: 16,
+                      spreadRadius: 0,
+                    ),
+                    // Glow effect on hover
+                    if (_isHovered)
+                      BoxShadow(
+                        color: const Color(0xFF3B82F6).withOpacity(0.25),
+                        offset: const Offset(0, 8),
+                        blurRadius: 24,
+                        spreadRadius: 2,
+                      ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: isDark
                               ? [
-                                  const Color(0xFF1E293B),
-                                  const Color(0xFF0F172A),
+                                  const Color(0xFF1E293B).withOpacity(0.95),
+                                  const Color(0xFF0F172A).withOpacity(0.98),
                                 ]
                               : [
-                                  Colors.white,
-                                  const Color(0xFFFAFBFC),
+                                  Colors.white.withOpacity(0.95),
+                                  const Color(0xFFFAFBFC).withOpacity(0.98),
                                 ],
                         ),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withOpacity(0.12)
+                              : Colors.white.withOpacity(0.3),
+                          width: 1.5,
+                        ),
                       ),
-                    ),
-
-                    // Subtle pattern overlay
-                    Positioned.fill(
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Colors.transparent,
-                              (isDark ? Colors.white : Colors.black)
-                                  .withOpacity(0.01),
-                            ],
-                          ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min, // Remove unnecessary flex
+                          children: [
+                            _buildModernHeader(isDark),
+                            const SizedBox(height: 16),
+                            _buildProgressDashboard(isDark),
+                            const SizedBox(height: 16),
+                            _buildCompactMetrics(isDark), // Changed to non-expanded version
+                            const SizedBox(height: 50),
+                            _buildModernActionBar(isDark),
+                          ],
                         ),
                       ),
                     ),
-
-                    // Animated shimmer effect on hover
-                    if (_isHovered)
-                      AnimatedBuilder(
-                        animation: _shimmerAnimation,
-                        builder: (context, child) {
-                          return Positioned.fill(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  begin: Alignment(_shimmerAnimation.value, -1),
-                                  end: Alignment(
-                                      _shimmerAnimation.value + 0.5, 0),
-                                  colors: [
-                                    Colors.transparent,
-                                    Colors.white
-                                        .withOpacity(isDark ? 0.03 : 0.08),
-                                    Colors.transparent,
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-
-                    // Content - More aggressive padding reduction
-                    Padding(
-                      padding: const EdgeInsets.all(10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          _buildModernHeader(isDark),
-                          const SizedBox(height: 20),
-                          _buildMetricsSection(isDark),
-                          const SizedBox(height: 20),
-                          _buildActionSection(isDark),
-                        ],
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
 
   Widget _buildModernHeader(bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
+    return Row(
       children: [
-        // Supervisor name with badges
-        Row(
-          children: [
-            Expanded(
-              child: Text(
+        // Modern avatar with gradient and status
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                const Color(0xFF3B82F6),
+                const Color(0xFF1D4ED8),
+                const Color(0xFF1E40AF),
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF3B82F6).withOpacity(0.4),
+                offset: const Offset(0, 6),
+                blurRadius: 16,
+                spreadRadius: 1,
+              ),
+            ],
+            border: Border.all(
+              color: Colors.white.withOpacity(0.2),
+              width: 2,
+            ),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              const Icon(
+                Icons.person_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+              // Active status indicator
+              Positioned(
+                top: 2,
+                right: 2,
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                      width: 2,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
+        
+        // Name and role info
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
                 widget.name,
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white : const Color(0xFF1E293B),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  letterSpacing: -0.3,
+                  height: 1.2,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
+              const SizedBox(height: 4),
+              Text(
+                'مشرف ميداني',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF3B82F6),
+                  letterSpacing: 0.1,
+                ),
+              ),
+              const SizedBox(height: 8),
+              
+              // Enhanced badges row
+              Row(
+                children: [
+                  _buildEnhancedBadge(
+                    Icons.engineering_rounded,
+                    widget.techniciansCount,
+                    'فنيين',
+                    const Color(0xFF10B981),
+                    isDark,
+                    onTap: widget.supervisor != null
+                        ? () => _openTechnicianManagement(context)
+                        : null,
+                  ),
+                  const SizedBox(width: 8),
+                  _buildEnhancedBadge(
+                    Icons.school_rounded,
+                    widget.schoolsCount,
+                    'مدارس',
+                    const Color(0xFF8B5CF6),
+                    isDark,
+                    onTap: () => _openSchoolsList(context),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        
+        // Performance score
+        _buildPerformanceScore(isDark),
+      ],
+    );
+  }
+
+  Widget _buildEnhancedBadge(
+    IconData icon,
+    int count,
+    String label,
+    Color color,
+    bool isDark, {
+    VoidCallback? onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            color: color.withOpacity(0.1),
+            border: Border.all(
+              color: color.withOpacity(0.3),
+              width: 1,
             ),
-            const SizedBox(width: 8),
-            // Technicians badge
-            InkWell(
-              onTap: widget.supervisor != null
-                  ? () => _openTechnicianManagement(context)
-                  : null,
-              borderRadius: BorderRadius.circular(8),
-              child: _buildInfoBadge(
-                icon: Icons.build_circle,
-                count: widget.techniciansCount,
-                color: const Color(0xFF10B981),
-                isDark: isDark,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 4),
+              Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+              const SizedBox(width: 2),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: color.withOpacity(0.8),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPerformanceScore(bool isDark) {
+    final overallScore = ((widget.completionRate * 0.6) + 
+                         ((widget.maintenanceCount > 0 ? 
+                           widget.completedMaintenanceCount / widget.maintenanceCount : 0) * 0.4))
+                        .clamp(0.0, 1.0);
+    
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: overallScore >= 0.8
+              ? [const Color(0xFF10B981), const Color(0xFF059669)]
+              : overallScore >= 0.6
+                  ? [const Color(0xFFF59E0B), const Color(0xFFD97706)]
+                  : [const Color(0xFFEF4444), const Color(0xFFDC2626)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: (overallScore >= 0.8
+                ? const Color(0xFF10B981)
+                : overallScore >= 0.6
+                    ? const Color(0xFFF59E0B)
+                    : const Color(0xFFEF4444)).withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CircularProgressIndicator(
+            value: overallScore,
+            backgroundColor: Colors.white.withOpacity(0.2),
+            valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+            strokeWidth: 4,
+            strokeCap: StrokeCap.round,
+          ),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '${(overallScore * 100).toInt()}',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  height: 1,
+                ),
+              ),
+              Text(
+                '%',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withOpacity(0.9),
+                  height: 1,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressDashboard(bool isDark) {
+    final reportsProgress = widget.completionRate.clamp(0.0, 1.0);
+    final maintenanceProgress = widget.maintenanceCount > 0
+        ? (widget.completedMaintenanceCount / widget.maintenanceCount).clamp(0.0, 1.0)
+        : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: isDark
+            ? const Color(0xFF334155).withOpacity(0.3)
+            : const Color(0xFFF8FAFC),
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF475569).withOpacity(0.3)
+              : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.trending_up_rounded,
+                size: 16,
+                color: const Color(0xFF3B82F6),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'مؤشرات الأداء',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? Colors.white : const Color(0xFF1E293B),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildProgressIndicator(
+                  'البلاغات',
+                  reportsProgress,
+                  const Color(0xFF3B82F6),
+                  widget.completedCount,
+                  widget.completedCount + widget.routineCount + widget.emergencyCount + widget.overdueCount,
+                  isDark,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildProgressIndicator(
+                  'الصيانة',
+                  maintenanceProgress,
+                  const Color(0xFF10B981),
+                  widget.completedMaintenanceCount,
+                  widget.maintenanceCount,
+                  isDark,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProgressIndicator(
+    String label,
+    double progress,
+    Color color,
+    int completed,
+    int total,
+    bool isDark,
+  ) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
               ),
             ),
-            const SizedBox(width: 6),
-            // Schools badge
-            InkWell(
-              onTap: () => _openSchoolsList(context),
-              borderRadius: BorderRadius.circular(8),
-              child: _buildInfoBadge(
-                icon: Icons.school_rounded,
-                count: widget.schoolsCount,
-                color: const Color(0xFF3B82F6),
-                isDark: isDark,
+            Text(
+              '$completed/$total',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: color,
               ),
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        Container(
+          height: 8,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            color: color.withOpacity(0.1),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress,
+              backgroundColor: Colors.transparent,
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+        ),
         const SizedBox(height: 4),
-
-        // Progress indicators - More compact
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildReportsProgressIndicator(isDark),
-            _buildMaintenanceProgressIndicator(isDark),
-          ],
+        Text(
+          '${(progress * 100).toInt()}%',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildReportsProgressIndicator(bool isDark) {
-    final clampedRate = widget.completionRate.clamp(0.0, 1.0);
-    final color = _getProgressColor(clampedRate);
-    final percentText = '${(clampedRate * 100).toStringAsFixed(0)}%';
-
-    return SizedBox(
-      height: 40,
-      width: 40,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Background circle
-          Container(
-            height: 40,
-            width: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isDark
-                  ? const Color(0xFF334155).withOpacity(0.3)
-                  : const Color(0xFFE2E8F0),
-            ),
-          ),
-          // Progress circle
-          SizedBox(
-            height: 40,
-            width: 40,
-            child: CircularProgressIndicator(
-              value: clampedRate,
-              backgroundColor: Colors.transparent,
-              valueColor: AlwaysStoppedAnimation<Color>(color),
-              strokeWidth: 4.0,
-              strokeCap: StrokeCap.round,
-            ),
-          ),
-          // Percentage text
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                percentText,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : const Color(0xFF334155),
-                ),
-              ),
-              Text(
-                'إنجاز',
-                style: TextStyle(
-                  fontSize: 7,
-                  color: color,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMaintenanceProgressIndicator(bool isDark) {
-    final completionRate = widget.maintenanceCount > 0
-        ? widget.completedMaintenanceCount / widget.maintenanceCount
-        : 0.0;
-    final clampedRate = completionRate.clamp(0.0, 1.0);
-    final color = _getProgressColor(clampedRate);
-    final percentText = '${(clampedRate * 100).toStringAsFixed(0)}%';
-
-    return SizedBox(
-      height: 40,
-      width: 40,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Background circle
-          Container(
-            height: 40,
-            width: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isDark
-                  ? const Color(0xFF334155).withOpacity(0.3)
-                  : const Color(0xFFE2E8F0),
-            ),
-          ),
-          // Progress circle
-          SizedBox(
-            height: 40,
-            width: 40,
-            child: CircularProgressIndicator(
-              value: clampedRate,
-              backgroundColor: Colors.transparent,
-              valueColor: AlwaysStoppedAnimation<Color>(color),
-              strokeWidth: 4.0,
-              strokeCap: StrokeCap.round,
-            ),
-          ),
-          // Percentage text
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                percentText,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : const Color(0xFF334155),
-                ),
-              ),
-              Text(
-                'صيانة',
-                style: TextStyle(
-                  fontSize: 7,
-                  color: color,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetricsSection(bool isDark) {
-    final stats = [
+  Widget _buildCompactMetrics(bool isDark) {
+    final metrics = [
       {
         'label': 'روتيني',
         'count': widget.routineCount,
         'color': const Color(0xFF06B6D4),
         'icon': Icons.schedule_rounded,
-        'route':
-            '/reports?title=البلاغات الروتينية للمشرف ${widget.name}&priority=Routine&supervisorId=${widget.supervisorId}'
+        'route': '/reports?title=البلاغات الروتينية للمشرف ${widget.name}&priority=Routine&supervisorId=${widget.supervisorId}'
       },
       {
         'label': 'طارئ',
         'count': widget.emergencyCount,
         'color': const Color(0xFFEF4444),
         'icon': Icons.warning_rounded,
-        'route':
-            '/reports?title=البلاغات الطارئة للمشرف ${widget.name}&priority=Emergency&supervisorId=${widget.supervisorId}'
+        'route': '/reports?title=البلاغات الطارئة للمشرف ${widget.name}&priority=Emergency&supervisorId=${widget.supervisorId}'
       },
       {
         'label': 'مكتمل',
         'count': widget.completedCount,
         'color': const Color(0xFF10B981),
         'icon': Icons.check_circle_rounded,
-        'route':
-            '/reports?title=البلاغات المكتملة للمشرف ${widget.name}&status=completed&supervisorId=${widget.supervisorId}'
+        'route': '/reports?title=البلاغات المكتملة للمشرف ${widget.name}&status=completed&supervisorId=${widget.supervisorId}'
       },
       {
         'label': 'متأخر',
         'count': widget.overdueCount,
         'color': const Color(0xFFF59E0B),
         'icon': Icons.access_time_rounded,
-        'route':
-            '/reports?title=البلاغات المتأخرة للمشرف ${widget.name}&status=late&supervisorId=${widget.supervisorId}'
+        'route': '/reports?title=البلاغات المتأخرة للمشرف ${widget.name}&status=late&supervisorId=${widget.supervisorId}'
       },
       {
-        'label': 'مكتمل متأخر',
+        'label': 'متأخر مكتمل',
         'count': widget.lateCompletedCount,
         'color': const Color(0xFF8B5CF6),
         'icon': Icons.done_all_rounded,
-        'route':
-            '/reports?title=البلاغات المتأخرة المنجزة للمشرف ${widget.name}&status=late_completed&supervisorId=${widget.supervisorId}'
+        'route': '/reports?title=البلاغات المتأخرة المنجزة للمشرف ${widget.name}&status=late_completed&supervisorId=${widget.supervisorId}'
       },
       {
         'label': 'صيانة',
         'count': widget.maintenanceCount,
         'color': const Color(0xFF059669),
         'icon': Icons.build_circle_rounded,
-        'route':
-            '/maintenance-reports?title=بلاغات الصيانة للمشرف ${widget.name}&supervisorId=${widget.supervisorId}'
+        'route': '/maintenance-reports?title=بلاغات الصيانة للمشرف ${widget.name}&supervisorId=${widget.supervisorId}'
       },
     ];
 
@@ -477,80 +647,51 @@ class _SupervisorCardState extends State<SupervisorCard>
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Section header - Reduced
         Row(
           children: [
             Container(
-              width: 2,
-              height: 12,
+              width: 4,
+              height: 16,
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(1),
-                color: const Color(0xFF3B82F6),
+                borderRadius: BorderRadius.circular(2),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF3B82F6), Color(0xFF1D4ED8)],
+                ),
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 10),
             Text(
-              'إحصائيات',
+              'تفاصيل البلاغات',
               style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color:
-                    isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
-                letterSpacing: -0.1,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
               ),
             ),
           ],
         ),
-
-        const SizedBox(height: 4),
-
-        // Modern metrics grid - using LayoutBuilder to ensure proper constraints
-        LayoutBuilder(
-          builder: (context, constraints) {
-            // Determine the best layout based on available width
-            final availableWidth = constraints.maxWidth;
-
-            // Dynamically adjust the grid layout based on available space
-            int crossAxisCount;
-
-            if (availableWidth < 300) {
-              // Very narrow screens - 2 items per row
-              crossAxisCount = 2;
-            } else {
-              // Normal screens - 3 items per row
-              crossAxisCount = 3;
-            }
-
-            const crossAxisSpacing = 6.0;
-            const mainAxisSpacing = 6.0;
-
-            // Use Wrap instead of GridView for more flexible layout
-            return Wrap(
-              spacing: crossAxisSpacing,
-              runSpacing: mainAxisSpacing,
-              children: stats.map((stat) {
-                return SizedBox(
-                  width: (availableWidth -
-                          (crossAxisSpacing * (crossAxisCount - 1))) /
-                      crossAxisCount,
-                  child: _buildModernMetricCard(
-                    stat['label'] as String,
-                    stat['count'] as int,
-                    stat['color'] as Color,
-                    stat['icon'] as IconData,
-                    () => context.go(stat['route'] as String),
-                    isDark,
-                  ),
-                );
-              }).toList(),
+        const SizedBox(height: 8),
+        
+        // Compact metrics as small badges
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: metrics.map((metric) {
+            return _buildSmallBadge(
+              metric['label'] as String,
+              metric['count'] as int,
+              metric['color'] as Color,
+              metric['icon'] as IconData,
+              () => context.go(metric['route'] as String),
+              isDark,
             );
-          },
+          }).toList(),
         ),
       ],
     );
   }
 
-  Widget _buildModernMetricCard(
+  Widget _buildSmallBadge(
     String label,
     int count,
     Color color,
@@ -562,54 +703,38 @@ class _SupervisorCardState extends State<SupervisorCard>
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.all(6),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            color: isDark ? color.withOpacity(0.05) : color.withOpacity(0.03),
+            borderRadius: BorderRadius.circular(12),
+            color: color.withOpacity(0.1),
             border: Border.all(
-              color: color.withOpacity(0.15),
+              color: color.withOpacity(0.3),
               width: 1,
             ),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    icon,
-                    size: 12,
-                    color: color,
-                  ),
-                  const SizedBox(width: 3),
-                  Text(
-                    '$count',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: color,
-                      height: 1.0,
-                    ),
-                  ),
-                ],
+              Icon(icon, size: 12, color: color),
+              const SizedBox(width: 4),
+              Text(
+                '$count',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(width: 3),
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 9,
+                  fontSize: 10,
                   fontWeight: FontWeight.w600,
-                  color: isDark
-                      ? const Color(0xFF94A3B8)
-                      : const Color(0xFF64748B),
-                  height: 1.1,
+                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
               ),
             ],
           ),
@@ -618,85 +743,54 @@ class _SupervisorCardState extends State<SupervisorCard>
     );
   }
 
-  Widget _buildActionSection(bool isDark) {
-    // Use LayoutBuilder to make the action section responsive
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // If width is less than 280px, stack buttons vertically
-        final isNarrow = constraints.maxWidth < 280;
-
-        if (isNarrow) {
-          // Vertical layout for small screens
-          return Column(
-            children: [
-              _buildModernActionButton(
-                'إضافة بلاغ',
-                Icons.add_circle_outline_rounded,
-                const Color(0xFF3B82F6),
-                () => context.push('/add-reports/${widget.supervisorId}'),
-                isDark,
-                isPrimary: true,
-              ),
-              const SizedBox(height: 8),
-              _buildModernActionButton(
-                'صيانة دورية',
-                Icons.build_circle_outlined,
-                const Color(0xFF059669),
-                () => context.push('/add-maintenance/${widget.supervisorId}'),
-                isDark,
-                isPrimary: false,
-              ),
-              const SizedBox(height: 8),
-              _buildModernActionButton(
-                'سجل الحضور',
-                Icons.calendar_today,
-                const Color(0xFF8B5CF6),
-                () => _showAttendanceDialog(context),
-                isDark,
-                isPrimary: false,
-              ),
-            ],
-          );
-        } else {
-          // Horizontal layout for normal screens
-          return Row(
-            children: [
-              Expanded(
-                child: _buildModernActionButton(
-                  'إضافة بلاغ',
-                  Icons.add_circle_outline_rounded,
-                  const Color(0xFF3B82F6),
-                  () => context.push('/add-reports/${widget.supervisorId}'),
-                  isDark,
-                  isPrimary: true,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildModernActionButton(
-                  'صيانة دورية',
-                  Icons.build_circle_outlined,
-                  const Color(0xFF059669),
-                  () => context.push('/add-maintenance/${widget.supervisorId}'),
-                  isDark,
-                  isPrimary: false,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildModernActionButton(
-                  'سجل الحضور',
-                  Icons.calendar_today,
-                  const Color(0xFF8B5CF6),
-                  () => _showAttendanceDialog(context),
-                  isDark,
-                  isPrimary: false,
-                ),
-              ),
-            ],
-          );
-        }
-      },
+  Widget _buildModernActionBar(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: isDark
+            ? const Color(0xFF334155).withOpacity(0.2)
+            : const Color(0xFFF1F5F9),
+        border: Border.all(
+          color: isDark
+              ? const Color(0xFF475569).withOpacity(0.3)
+              : const Color(0xFFE2E8F0),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildModernActionButton(
+              'إضافة بلاغ',
+              Icons.add_circle_rounded,
+              const Color(0xFF3B82F6),
+              () => context.push('/add-reports/${widget.supervisorId}'),
+              isDark,
+              isPrimary: true,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _buildModernActionButton(
+              'صيانة',
+              Icons.build_circle_rounded,
+              const Color(0xFF10B981),
+              () => context.push('/add-maintenance/${widget.supervisorId}'),
+              isDark,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: _buildModernActionButton(
+              'حضور',
+              Icons.event_available_rounded,
+              const Color(0xFF8B5CF6),
+              () => _showAttendanceDialog(context),
+              isDark,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -709,32 +803,26 @@ class _SupervisorCardState extends State<SupervisorCard>
     bool isPrimary = false,
   }) {
     return Container(
-      height: 30,
+      height: 44,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         gradient: isPrimary
             ? LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  color,
-                  color.withOpacity(0.8),
-                ],
+                colors: [color, color.withOpacity(0.8)],
               )
             : null,
-        color: isPrimary ? null : color.withOpacity(0.08),
+        color: isPrimary ? null : color.withOpacity(0.1),
         border: isPrimary
             ? null
-            : Border.all(
-                color: color.withOpacity(0.2),
-                width: 1,
-              ),
+            : Border.all(color: color.withOpacity(0.3), width: 1),
         boxShadow: isPrimary
             ? [
                 BoxShadow(
                   color: color.withOpacity(0.3),
-                  offset: const Offset(0, 2),
-                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                  blurRadius: 12,
                 ),
               ]
             : null,
@@ -743,28 +831,23 @@ class _SupervisorCardState extends State<SupervisorCard>
         color: Colors.transparent,
         child: InkWell(
           onTap: onPressed,
-          borderRadius: BorderRadius.circular(10),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+          borderRadius: BorderRadius.circular(12),
+          child: Center(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
                   icon,
                   color: isPrimary ? Colors.white : color,
-                  size: 12,
+                  size: 16,
                 ),
-                const SizedBox(width: 4),
-                Flexible(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      color: isPrimary ? Colors.white : color,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 10,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: isPrimary ? Colors.white : color,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
                   ),
                 ),
               ],
@@ -775,51 +858,6 @@ class _SupervisorCardState extends State<SupervisorCard>
     );
   }
 
-  Widget _buildInfoBadge({
-    required IconData icon,
-    required int count,
-    required Color color,
-    required bool isDark,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        color: color.withOpacity(0.1),
-        border: Border.all(
-          color: color.withOpacity(0.3),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 12,
-            color: color,
-          ),
-          const SizedBox(width: 4),
-          Text(
-            '$count',
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _getProgressColor(double percent) {
-    if (percent >= 0.81) return const Color(0xFF10B981); // Green - Excellent
-    if (percent >= 0.61) return const Color(0xFF3B82F6); // Blue - Good
-    if (percent >= 0.51) return const Color(0xFFF59E0B); // Orange - Average
-    return const Color(0xFFEF4444); // Red - Bad
-  }
-
   void _openTechnicianManagement(BuildContext context) {
     if (widget.supervisor == null) return;
 
@@ -828,7 +866,6 @@ class _SupervisorCardState extends State<SupervisorCard>
       builder: (dialogContext) => TechnicianManagementDialog(
         supervisor: widget.supervisor!,
         onSaveDetailed: (supervisorId, techniciansDetailed) {
-          // Read-only mode for regular admins - no save functionality
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('عرض فقط - لا يمكن تعديل بيانات الفنيين'),
@@ -836,17 +873,13 @@ class _SupervisorCardState extends State<SupervisorCard>
             ),
           );
         },
-        onTechniciansUpdated: () {
-          // Read-only mode - no updates allowed
-        },
-        isReadOnly: true, // Enable read-only mode for regular admins
+        onTechniciansUpdated: () {},
+        isReadOnly: true,
       ),
     );
   }
 
   void _openSchoolsList(BuildContext context) {
-    // For regular admin dashboard, show read-only schools list
-    // Super admins get the assignment dialog with Excel upload
     context.showEscDismissibleDialog(
       barrierDismissible: true,
       builder: (dialogContext) => BlocProvider(

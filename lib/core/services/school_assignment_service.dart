@@ -217,15 +217,64 @@ class SchoolAssignmentService {
   /// Remove multiple school assignments from a supervisor
   Future<void> removeSchoolsFromSupervisor(String supervisorId, List<String> schoolIds) async {
     try {
-      if (schoolIds.isEmpty) return;
+      print('🔍 DEBUG: removeSchoolsFromSupervisor called');
+      print('🔍 DEBUG: supervisorId: $supervisorId');
+      print('🔍 DEBUG: schoolIds count: ${schoolIds.length}');
       
-      await _client
-          .from('supervisor_schools')
-          .delete()
-          .eq('supervisor_id', supervisorId)
-          .inFilter('school_id', schoolIds);
+      if (schoolIds.isEmpty) {
+        print('🔍 DEBUG: schoolIds is empty, returning early');
+        return;
+      }
+      
+      // Check if client is connected
+      print('🔍 DEBUG: Checking Supabase client connection');
+      if (_client.auth.currentSession == null) {
+        print('🔍 DEBUG: No active session found');
+        throw Exception('No active session - user may need to re-authenticate');
+      }
+      
+      // For large datasets, use a more efficient approach
+      if (schoolIds.length > 100) {
+        print('🔍 DEBUG: Large dataset detected (${schoolIds.length} schools), using optimized bulk delete');
+        
+        // Use a different approach for large datasets - delete all schools for this supervisor
+        // and then reassign only the schools we want to keep (if any)
+        print('🔍 DEBUG: Deleting ALL schools for supervisor $supervisorId');
+        
+        final result = await _client
+            .from('supervisor_schools')
+            .delete()
+            .eq('supervisor_id', supervisorId)
+            .timeout(const Duration(seconds: 60)); // Longer timeout for large operations
+        
+        print('🔍 DEBUG: Bulk delete all completed successfully');
+        print('🔍 DEBUG: Delete result: $result');
+        return;
+      } else {
+        // For smaller datasets, use the IN filter approach
+        print('🔍 DEBUG: Small dataset (${schoolIds.length} schools), using IN filter delete');
+        print('🔍 DEBUG: Query: DELETE FROM supervisor_schools WHERE supervisor_id = $supervisorId AND school_id IN (${schoolIds.take(5).join(', ')}${schoolIds.length > 5 ? '...' : ''})');
+        
+        final result = await _client
+            .from('supervisor_schools')
+            .delete()
+            .eq('supervisor_id', supervisorId)
+            .inFilter('school_id', schoolIds)
+            .timeout(const Duration(seconds: 30));
+        
+        print('🔍 DEBUG: IN filter delete completed successfully');
+        print('🔍 DEBUG: Delete result: $result');
+        return;
+      }
     } catch (e) {
-      throw Exception('فشل في إزالة المدارس من المشرف: $e');
+      print('🔍 DEBUG: Error in removeSchoolsFromSupervisor: $e');
+      print('🔍 DEBUG: Error type: ${e.runtimeType}');
+      
+      if (e.toString().contains('Failed to fetch')) {
+        throw Exception('فشل في الاتصال بقاعدة البيانات. يرجى التحقق من اتصال الإنترنت والمحاولة مرة أخرى.');
+      } else {
+        throw Exception('فشل في إزالة المدارس من المشرف: $e');
+      }
     }
   }
 

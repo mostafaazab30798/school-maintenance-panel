@@ -22,7 +22,9 @@ import '../widgets/dashboard/dashboard_grid.dart';
 import '../widgets/dashboard/supervisor_card.dart';
 import '../widgets/common/esc_dismissible_dialog.dart';
 import '../widgets/common/user_info_widget.dart';
+import '../widgets/common/weekly_report_dialog.dart';
 import '../../core/services/navigation/dashboard_state_service.dart';
+
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -143,6 +145,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               actions: [
+                // Weekly Report button
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    color: const Color.fromARGB(255, 89, 16, 185).withOpacity(0.1),
+                    border: Border.all(
+                      color: const Color.fromARGB(255, 75, 16, 185).withOpacity(0.2),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color.fromARGB(255, 75, 16, 185).withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.assessment_outlined,
+                      color: Color.fromARGB(255, 75, 16, 185),
+                    ),
+                    tooltip: 'تقرير أسبوعي/شهري',
+                    onPressed: () => _showWeeklyReportDialog(context),
+                  ),
+                ),
                 // Theme toggle button
                 BlocBuilder<ThemeCubit, ThemeMode>(
                   builder: (context, themeMode) {
@@ -179,6 +208,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     );
                   },
                 ),
+                
                 // Refresh button
                 Builder(builder: (context) {
                   return Container(
@@ -854,6 +884,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _showWeeklyReportDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => WeeklyReportDialog(
+        adminService: AdminService(Supabase.instance.client),
       ),
     );
   }

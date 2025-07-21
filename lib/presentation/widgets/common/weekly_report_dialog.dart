@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../../../core/services/weekly_report_service.dart';
+import '../../../core/services/admin_service.dart';
 
 class WeeklyReportDialog extends StatefulWidget {
-  const WeeklyReportDialog({super.key});
+  final AdminService? adminService;
+  
+  const WeeklyReportDialog({
+    super.key,
+    this.adminService,
+  });
 
   @override
   State<WeeklyReportDialog> createState() => _WeeklyReportDialogState();
@@ -14,7 +19,9 @@ class _WeeklyReportDialogState extends State<WeeklyReportDialog> {
   late int selectedMonth;
   List<Map<String, dynamic>> availableWeeks = [];
   Map<String, dynamic>? selectedWeek;
+  Map<String, dynamic>? selectedMonthData;
   bool isGenerating = false;
+  bool isMonthlyReport = false; // Toggle between weekly and monthly reports
 
   final WeeklyReportService _reportService = WeeklyReportService();
 
@@ -25,11 +32,17 @@ class _WeeklyReportDialogState extends State<WeeklyReportDialog> {
     selectedYear = now.year;
     selectedMonth = now.month;
     _updateAvailableWeeks();
+    _updateMonthData();
   }
 
   void _updateAvailableWeeks() {
     availableWeeks = WeeklyReportService.getWeeksInMonth(selectedYear, selectedMonth);
     selectedWeek = null;
+    setState(() {});
+  }
+
+  void _updateMonthData() {
+    selectedMonthData = WeeklyReportService.getMonthData(selectedYear, selectedMonth);
     setState(() {});
   }
 
@@ -42,7 +55,7 @@ class _WeeklyReportDialogState extends State<WeeklyReportDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
-        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 700),
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 800),
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -50,9 +63,23 @@ class _WeeklyReportDialogState extends State<WeeklyReportDialog> {
           children: [
             _buildHeader(context, isDark),
             const SizedBox(height: 24),
+            _buildReportTypeToggle(isDark),
+            const SizedBox(height: 20),
             _buildMonthYearSelector(isDark),
             const SizedBox(height: 20),
-            _buildWeekSelector(isDark),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (isMonthlyReport)
+                      _buildMonthSelector(isDark)
+                    else
+                      _buildWeekSelector(isDark),
+                  ],
+                ),
+              ),
+            ),
             const SizedBox(height: 24),
             _buildActionButtons(context, isDark),
           ],
@@ -82,7 +109,7 @@ class _WeeklyReportDialogState extends State<WeeklyReportDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'تقرير أسبوعي',
+                isMonthlyReport ? 'تقرير شهري' : 'تقرير أسبوعي',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
@@ -90,7 +117,9 @@ class _WeeklyReportDialogState extends State<WeeklyReportDialog> {
                 ),
               ),
               Text(
-                'اختر الأسبوع لإنشاء تقرير مفصل',
+                isMonthlyReport 
+                    ? 'اختر الشهر لإنشاء تقرير مفصل'
+                    : 'اختر الأسبوع لإنشاء تقرير مفصل',
                 style: TextStyle(
                   fontSize: 14,
                   color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -104,6 +133,94 @@ class _WeeklyReportDialogState extends State<WeeklyReportDialog> {
           icon: Icon(
             Icons.close,
             color: isDark ? Colors.grey[400] : Colors.grey[600],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReportTypeToggle(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'نوع التقرير',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : const Color(0xFF374151),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF374151) : const Color(0xFFF9FAFB),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? const Color(0xFF4B5563) : const Color(0xFFD1D5DB),
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      isMonthlyReport = false;
+                      selectedWeek = null;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: !isMonthlyReport
+                          ? const Color(0xFF3B82F6)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      'تقرير أسبوعي',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: !isMonthlyReport
+                            ? Colors.white
+                            : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                        fontWeight: !isMonthlyReport ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      isMonthlyReport = true;
+                      selectedWeek = null;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: isMonthlyReport
+                          ? const Color(0xFF3B82F6)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      'تقرير شهري',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: isMonthlyReport
+                            ? Colors.white
+                            : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                        fontWeight: isMonthlyReport ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -155,6 +272,7 @@ class _WeeklyReportDialogState extends State<WeeklyReportDialog> {
                       if (value != null) {
                         selectedMonth = value;
                         _updateAvailableWeeks();
+                        _updateMonthData();
                       }
                     },
                   ),
@@ -192,6 +310,7 @@ class _WeeklyReportDialogState extends State<WeeklyReportDialog> {
                       if (value != null) {
                         selectedYear = value;
                         _updateAvailableWeeks();
+                        _updateMonthData();
                       }
                     },
                   ),
@@ -235,83 +354,138 @@ class _WeeklyReportDialogState extends State<WeeklyReportDialog> {
             ),
           )
         else
-          Container(
-            constraints: const BoxConstraints(maxHeight: 320),
-            child: SingleChildScrollView(
-              child: Column(
-                children: availableWeeks.map((week) {
-                  final isSelected = selectedWeek == week;
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          selectedWeek = week;
-                        });
-                      },
+          Column(
+            children: availableWeeks.map((week) {
+              final isSelected = selectedWeek == week;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      selectedWeek = week;
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFF3B82F6).withOpacity(0.1)
+                          : (isDark ? const Color(0xFF374151) : const Color(0xFFF9FAFB)),
                       borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? const Color(0xFF3B82F6).withOpacity(0.1)
-                              : (isDark ? const Color(0xFF374151) : const Color(0xFFF9FAFB)),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: isSelected
-                                ? const Color(0xFF3B82F6)
-                                : (isDark ? const Color(0xFF4B5563) : const Color(0xFFD1D5DB)),
-                            width: isSelected ? 2 : 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? const Color(0xFF3B82F6)
-                                    : (isDark ? const Color(0xFF4B5563) : const Color(0xFFE5E7EB)),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                week['weekNumber'].toString(),
-                                style: TextStyle(
-                                  color: isSelected
-                                      ? Colors.white
-                                      : (isDark ? Colors.grey[400] : Colors.grey[600]),
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                week['label'],
-                                style: TextStyle(
-                                  color: isSelected
-                                      ? const Color(0xFF3B82F6)
-                                      : (isDark ? Colors.white : const Color(0xFF374151)),
-                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                                ),
-                              ),
-                            ),
-                            if (isSelected)
-                              const Icon(
-                                Icons.check_circle,
-                                color: Color(0xFF3B82F6),
-                                size: 20,
-                              ),
-                          ],
-                        ),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFF3B82F6)
+                            : (isDark ? const Color(0xFF4B5563) : const Color(0xFFD1D5DB)),
+                        width: isSelected ? 2 : 1,
                       ),
                     ),
-                  );
-                }).toList(),
-              ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFF3B82F6)
+                                : (isDark ? const Color(0xFF4B5563) : const Color(0xFFE5E7EB)),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            week['weekNumber'].toString(),
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.white
+                                  : (isDark ? Colors.grey[400] : Colors.grey[600]),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            week['label'],
+                            style: TextStyle(
+                              color: isSelected
+                                  ? const Color(0xFF3B82F6)
+                                  : (isDark ? Colors.white : const Color(0xFF374151)),
+                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                        if (isSelected)
+                          const Icon(
+                            Icons.check_circle,
+                            color: Color(0xFF3B82F6),
+                            size: 20,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildMonthSelector(bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'الشهر المحدد',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: isDark ? Colors.white : const Color(0xFF374151),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF3B82F6).withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: const Color(0xFF3B82F6),
+              width: 2,
             ),
           ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Icon(
+                  Icons.calendar_month,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  selectedMonthData?['label'] ?? '${_getMonthName(selectedMonth)} $selectedYear',
+                  style: TextStyle(
+                    color: const Color(0xFF3B82F6),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              const Icon(
+                Icons.check_circle,
+                color: Color(0xFF3B82F6),
+                size: 20,
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -331,7 +505,7 @@ class _WeeklyReportDialogState extends State<WeeklyReportDialog> {
         ),
         const SizedBox(width: 12),
         ElevatedButton.icon(
-          onPressed: (selectedWeek != null && !isGenerating) ? _generateReport : null,
+          onPressed: ((isMonthlyReport ? selectedMonthData != null : selectedWeek != null) && !isGenerating) ? _generateReport : null,
           icon: isGenerating
               ? const SizedBox(
                   width: 16,
@@ -363,27 +537,45 @@ class _WeeklyReportDialogState extends State<WeeklyReportDialog> {
   }
 
   Future<void> _generateReport() async {
-    if (selectedWeek == null) return;
+    if (isMonthlyReport) {
+      if (selectedMonthData == null) return;
+    } else {
+      if (selectedWeek == null) return;
+    }
 
     setState(() {
       isGenerating = true;
     });
 
     try {
-      final startDate = selectedWeek!['startDate'] as DateTime;
-      final endDate = selectedWeek!['endDate'] as DateTime;
-      final weekLabel = selectedWeek!['label'] as String;
+      if (isMonthlyReport) {
+        final startDate = selectedMonthData!['startDate'] as DateTime;
+        final endDate = selectedMonthData!['endDate'] as DateTime;
+        final monthLabel = selectedMonthData!['label'] as String;
 
-      await _reportService.generateAndDownloadWeeklyReport(
-        startDate: startDate,
-        endDate: endDate,
-        weekLabel: weekLabel,
-      );
+        await _reportService.generateAndDownloadMonthlyReport(
+          startDate: startDate,
+          endDate: endDate,
+          monthLabel: monthLabel,
+          adminService: widget.adminService,
+        );
+      } else {
+        final startDate = selectedWeek!['startDate'] as DateTime;
+        final endDate = selectedWeek!['endDate'] as DateTime;
+        final weekLabel = selectedWeek!['label'] as String;
+
+        await _reportService.generateAndDownloadWeeklyReport(
+          startDate: startDate,
+          endDate: endDate,
+          weekLabel: weekLabel,
+          adminService: widget.adminService,
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم تحميل التقرير بنجاح'),
+          SnackBar(
+            content: Text(isMonthlyReport ? 'تم تحميل التقرير الشهري بنجاح' : 'تم تحميل التقرير الأسبوعي بنجاح'),
             backgroundColor: Colors.green,
           ),
         );

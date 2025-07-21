@@ -235,7 +235,7 @@ abstract class BaseRepository<T> {
           final rawData = await query();
           return rawData.map((item) => fromMap(item)).toList();
         },
-        timeout: const Duration(seconds: 15), // 🚀 Reduced timeout for faster failure detection
+        timeout: const Duration(seconds: 8), // 🚀 Reduced timeout for faster failure detection
         fallbackValue: <T>[],
       );
 
