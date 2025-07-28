@@ -1237,37 +1237,91 @@ class _ExportAttendanceButtonState extends State<_ExportAttendanceButton> {
 
       final xlsio.Workbook workbook = xlsio.Workbook();
       final sheet = workbook.worksheets[0];
+      sheet.name = 'تقرير الحضور';
+
+      // Enhanced Header with styling
+      final headerRange = sheet.getRangeByName('A1:F1');
+      headerRange.cellStyle.backColor = '#4472C4';
+      headerRange.cellStyle.fontColor = '#FFFFFF';
+      headerRange.cellStyle.bold = true;
+      headerRange.cellStyle.fontSize = 12;
+
       // Arabic headers
       sheet.getRangeByName('A1').setText('اسم المشرف');
       sheet.getRangeByName('B1').setText('البريد الإلكتروني');
       sheet.getRangeByName('C1').setText('تاريخ الحضور');
       sheet.getRangeByName('D1').setText('وقت الحضور');
+      sheet.getRangeByName('E1').setText('وقت الانصراف');
+      sheet.getRangeByName('F1').setText('إجمالي الساعات');
+
+      // Set column widths for better readability
+      sheet.setColumnWidthInPixels(1, 150); // Supervisor Name
+      sheet.setColumnWidthInPixels(2, 200); // Supervisor Email
+      sheet.setColumnWidthInPixels(3, 120); // Attendance Date
+      sheet.setColumnWidthInPixels(4, 100); // Arrival Time
+      sheet.setColumnWidthInPixels(5, 100); // Leave Time
+      sheet.setColumnWidthInPixels(6, 120); // Total Hours
 
       int row = 2;
       for (final supervisor in supervisors) {
         final attendanceList = await attendanceRepo.fetchAttendanceForSupervisor(supervisor.id);
         for (final attendance in attendanceList) {
+          // Calculate total hours if both arrival and leave times exist
+          String totalHours = '';
+          if (attendance.leaveTime != null) {
+            final duration = attendance.leaveTime!.difference(attendance.createdAt);
+            final hours = duration.inHours;
+            final minutes = duration.inMinutes % 60;
+            totalHours = '${hours}ساعة ${minutes}دقيقة';
+          }
+
           sheet.getRangeByName('A$row').setText(supervisor.username);
           sheet.getRangeByName('B$row').setText(supervisor.email);
           sheet.getRangeByName('C$row').setText(dateFormat.format(attendance.createdAt));
           sheet.getRangeByName('D$row').setText(timeFormat.format(attendance.createdAt));
+          sheet.getRangeByName('E$row').setText(
+            attendance.leaveTime != null 
+              ? timeFormat.format(attendance.leaveTime!)
+              : 'لم يتم التسجيل'
+          );
+          sheet.getRangeByName('F$row').setText(totalHours);
+
+          // Apply alternating row colors for better readability
+          if (row % 2 == 0) {
+            final range = sheet.getRangeByName('A$row:F$row');
+            range.cellStyle.backColor = '#F2F2F2';
+          }
+
           row++;
         }
       }
 
+      // Auto-fit rows for better appearance
+      sheet.autoFitRow(1);
+
+      // Add summary information
+      final summaryRow = row + 1;
+      sheet.getRangeByName('A$summaryRow').setText('تاريخ إنشاء التقرير:');
+      sheet.getRangeByName('B$summaryRow').setText(intl.DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now()));
+      sheet.getRangeByName('A$summaryRow').cellStyle.bold = true;
+
       final List<int> bytes = workbook.saveAsStream();
       workbook.dispose();
+
+      // Generate filename with timestamp
+      final timestamp = intl.DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final filename = 'تقرير_حضور_المشرفين_$timestamp.xlsx';
 
       if (kIsWeb) {
         final blob = html.Blob([Uint8List.fromList(bytes)]);
         final url = html.Url.createObjectUrlFromBlob(blob);
         final anchor = html.AnchorElement(href: url)
-          ..setAttribute('download', 'حضور المشرفين.xlsx')
+          ..setAttribute('download', filename)
           ..click();
         html.Url.revokeObjectUrl(url);
       } else {
         final directory = await getApplicationDocumentsDirectory();
-        final path = '${directory.path}/حضور المشرفين.xlsx';
+        final path = '${directory.path}/$filename';
         final file = File(path);
         await file.writeAsBytes(bytes, flush: true);
         await OpenFile.open(path);

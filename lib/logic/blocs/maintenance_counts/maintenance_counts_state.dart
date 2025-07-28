@@ -22,20 +22,28 @@ class MaintenanceCountsError extends MaintenanceCountsState {
 
 class MaintenanceCountRecordsLoaded extends MaintenanceCountsState {
   final List<MaintenanceCount> records;
+  final Map<String, String> supervisorNames; // Map supervisor ID to name
 
-  const MaintenanceCountRecordsLoaded({required this.records});
+  const MaintenanceCountRecordsLoaded({
+    required this.records,
+    this.supervisorNames = const {},
+  });
 
   @override
-  List<Object> get props => [records];
+  List<Object> get props => [records, supervisorNames];
 }
 
 class DamageCountRecordsLoaded extends MaintenanceCountsState {
   final List<DamageCount> records;
+  final Map<String, String> supervisorNames; // Map supervisor ID to name
 
-  const DamageCountRecordsLoaded({required this.records});
+  const DamageCountRecordsLoaded({
+    required this.records,
+    this.supervisorNames = const {},
+  });
 
   @override
-  List<Object> get props => [records];
+  List<Object> get props => [records, supervisorNames];
 }
 
 class SchoolsWithCountsLoaded extends MaintenanceCountsState {
@@ -49,11 +57,15 @@ class SchoolsWithCountsLoaded extends MaintenanceCountsState {
 
 class SchoolsWithDamageLoaded extends MaintenanceCountsState {
   final List<Map<String, dynamic>> schools;
+  final Map<String, String> supervisorNames; // Map supervisor ID to name
 
-  const SchoolsWithDamageLoaded({required this.schools});
+  const SchoolsWithDamageLoaded({
+    required this.schools,
+    this.supervisorNames = const {},
+  });
 
   @override
-  List<Object> get props => [schools];
+  List<Object> get props => [schools, supervisorNames];
 }
 
 class MaintenanceCountSummaryLoaded extends MaintenanceCountsState {
@@ -68,11 +80,15 @@ class MaintenanceCountSummaryLoaded extends MaintenanceCountsState {
 // New damage count specific states
 class DamageCountDetailsLoaded extends MaintenanceCountsState {
   final DamageCount damageCount;
+  final String? supervisorName;
 
-  const DamageCountDetailsLoaded({required this.damageCount});
+  const DamageCountDetailsLoaded({
+    required this.damageCount,
+    this.supervisorName,
+  });
 
   @override
-  List<Object> get props => [damageCount];
+  List<Object> get props => [damageCount, supervisorName ?? ''];
 }
 
 class DamageCountSummaryLoaded extends MaintenanceCountsState {

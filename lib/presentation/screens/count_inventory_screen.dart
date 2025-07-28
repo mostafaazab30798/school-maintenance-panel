@@ -85,12 +85,13 @@ class CountInventoryView extends StatelessWidget {
 
             if (state is MaintenanceCountRecordsLoaded) {
               final records = state.records;
+              final supervisorNames = state.supervisorNames;
 
               if (records.isEmpty) {
                 return _buildEmptyState(context);
               }
 
-              return _buildMaintenanceCountsList(context, records);
+              return _buildMaintenanceCountsList(context, records, supervisorNames);
             }
 
             return _buildEmptyState(context);
@@ -234,7 +235,7 @@ class CountInventoryView extends StatelessWidget {
   }
 
   Widget _buildMaintenanceCountsList(
-      BuildContext context, List<MaintenanceCount> records) {
+      BuildContext context, List<MaintenanceCount> records, Map<String, String> supervisorNames) {
     return RefreshIndicator(
       onRefresh: () async {
         context
@@ -249,14 +250,14 @@ class CountInventoryView extends StatelessWidget {
             sliver: SliverGrid(
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                 maxCrossAxisExtent: 300,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 1.4,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                childAspectRatio: 1,
               ),
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
                   final record = records[index];
-                  return _buildMaintenanceCountChip(context, record);
+                  return _buildMaintenanceCountChip(context, record, supervisorNames);
                 },
                 childCount: records.length,
               ),
@@ -267,114 +268,205 @@ class CountInventoryView extends StatelessWidget {
     );
   }
 
-  Widget _buildMaintenanceCountChip(BuildContext context, MaintenanceCount record) {
+  Widget _buildMaintenanceCountChip(BuildContext context, MaintenanceCount record, Map<String, String> supervisorNames) {
     final schoolName = record.schoolName;
     final status = record.status;
     final createdAt = record.createdAt;
-    final hasDamage = record.hasDamageData;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final statusColor = status == 'submitted' ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
 
-    return Card(
-      margin: const EdgeInsets.all(8.0),
-      child: InkWell(
-        onTap: () => _showMaintenanceCountDetails(context, record),
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                const Color(0xFF10B981).withOpacity(0.1),
-                const Color(0xFF059669).withOpacity(0.05),
+    return Container(
+      margin: const EdgeInsets.all(6.0),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _showMaintenanceCountDetails(context, record),
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: isDark 
+                    ? Colors.black.withOpacity(0.3)
+                    : const Color(0xFF64748B).withOpacity(0.08),
+                  offset: const Offset(0, 4),
+                  blurRadius: 12,
+                  spreadRadius: 0,
+                ),
+                BoxShadow(
+                  color: isDark
+                    ? Colors.white.withOpacity(0.05)
+                    : Colors.white.withOpacity(0.8),
+                  offset: const Offset(0, 1),
+                  blurRadius: 0,
+                  spreadRadius: 0,
+                ),
               ],
             ),
-            border: Border.all(
-              color: const Color(0xFF10B981).withOpacity(0.2),
-              width: 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.inventory_outlined,
-                    color: const Color(0xFF10B981),
-                    size: 20,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      schoolName,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF1F2937),
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  // Container(
-                  //   padding: const EdgeInsets.symmetric(
-                  //     horizontal: 8,
-                  //     vertical: 4,
-                  //   ),
-                  //   decoration: BoxDecoration(
-                  //     color: status == 'submitted'
-                  //         ? const Color(0xFF10B981)
-                  //         : const Color(0xFFF59E0B),
-                  //     borderRadius: BorderRadius.circular(12),
-                  //   ),
-                  //   child: Text(
-                  //     status == 'submitted' ? 'تم الإرسال' : 'مسودة',
-                  //     style: const TextStyle(
-                  //       fontSize: 12,
-                  //       fontWeight: FontWeight.w500,
-                  //       color: Colors.white,
-                  //     ),
-                  //   ),
-                  // ),
-                  if (hasDamage) ...[
-                    const SizedBox(width: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header with icon and status
+                Row(
+                  children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Text(
-                        'يوجد توالف',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white,
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            statusColor.withOpacity(0.15),
+                            statusColor.withOpacity(0.1),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: statusColor.withOpacity(0.2),
+                          width: 1,
                         ),
                       ),
+                      child: Icon(
+                        Icons.inventory_2_rounded,
+                        color: statusColor,
+                        size: 18,
+                      ),
+                    ),
+                    const Spacer(),
+                    // Container(
+                    //   padding: const EdgeInsets.symmetric(
+                    //     horizontal: 8,
+                    //     vertical: 4,
+                    //   ),
+                    //   decoration: BoxDecoration(
+                    //     color: statusColor,
+                    //     borderRadius: BorderRadius.circular(16),
+                    //   ),
+                    //   child: Text(
+                    //     status == 'submitted' ? 'تم الإرسال' : 'مسودة',
+                    //     style: const TextStyle(
+                    //       fontSize: 10,
+                    //       fontWeight: FontWeight.w600,
+                    //       color: Colors.white,
+                    //     ),
+                    //   ),
+                    // ),
+                  ],
+                ),
+                
+                const SizedBox(height: 12),
+                
+                // School name
+                Text(
+                  schoolName,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : const Color(0xFF1E293B),
+                    height: 1.2,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                
+                const SizedBox(height: 10),
+                
+                // Details section - more compact
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF334155).withOpacity(0.3) : const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isDark ? const Color(0xFF475569) : const Color(0xFFE2E8F0),
+                      width: 1,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      // Creation date
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.calendar_today_rounded,
+                            size: 12,
+                            color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'تاريخ الإنشاء: ${_formatDate(createdAt)}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 6),
+                      
+                      // Supervisor
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.person_rounded,
+                            size: 12,
+                            color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _getSupervisorDisplayText(record.supervisorId, supervisorNames),
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 8),
+                
+                // Action indicator
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      'عرض التفاصيل',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: statusColor,
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      size: 10,
+                      color: statusColor,
                     ),
                   ],
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'تاريخ الإنشاء: ${_formatDate(createdAt)}',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Color(0xFF6B7280),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -465,5 +557,34 @@ class CountInventoryView extends StatelessWidget {
 
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
+  }
+
+  String _getSupervisorDisplayText(String supervisorId, Map<String, String> supervisorNames) {
+    // Check if this is a merged record (contains multiple supervisor IDs)
+    if (supervisorId.contains(', ')) {
+      final supervisorIdList = supervisorId.split(', ');
+      final supervisorNameList = <String>[];
+      
+      for (final id in supervisorIdList) {
+        final name = supervisorNames[id.trim()];
+        if (name != null && name.isNotEmpty) {
+          supervisorNameList.add(name);
+        }
+      }
+      
+      if (supervisorNameList.isNotEmpty) {
+        if (supervisorNameList.length == 1) {
+          return 'المشرف: ${supervisorNameList.first}';
+        } else {
+          return 'المشرفون: ${supervisorNameList.join('، ')}';
+        }
+      } else {
+        return 'المشرفون: غير محدد';
+      }
+    } else {
+      // Single supervisor
+      final supervisorName = supervisorNames[supervisorId];
+      return 'المشرف: ${supervisorName ?? 'غير محدد'}';
+    }
   }
 }

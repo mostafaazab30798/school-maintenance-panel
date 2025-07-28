@@ -544,7 +544,8 @@ class _MaintenanceFormContentState extends State<_MaintenanceFormContent> {
           supervisorId: widget.supervisorId,
           selectedSchoolName: state.schoolName,
           hintText: 'ابحث واختر المدرسة...',
-          errorText: state.schoolName == null || state.schoolName!.isEmpty
+          errorText: state.hasInteractedWithForm && 
+                    (state.schoolName == null || state.schoolName!.isEmpty)
               ? 'يرجى اختيار المدرسة'
               : null,
           onSchoolSelected: (schoolName) {

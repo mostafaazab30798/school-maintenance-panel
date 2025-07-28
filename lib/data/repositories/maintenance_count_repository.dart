@@ -147,33 +147,23 @@ class MaintenanceCountRepository {
     List<String>? supervisorIds,
   }) async {
     try {
-      // RULE: Supabase query pattern is: from() -> select() -> where/eq/filter -> order()
-      // Never apply filters before select() - it causes NoSuchMethodError
-      var query = _client.from('maintenance_counts').select('''
-            school_id,
-            school_name,
-            supervisor_id
-          ''');
-
-      // Apply supervisor filter after select
-      if (supervisorIds != null && supervisorIds.isNotEmpty) {
-        query = query.inFilter('supervisor_id', supervisorIds);
-      }
-
-      // Finally apply ordering
-      final response = await query.order('school_name');
+      // Use merged records for more accurate statistics
+      final mergedRecords = await getMergedMaintenanceCountRecords(
+        supervisorIds: supervisorIds,
+        limit: 1000, // Get all records for statistics
+      );
 
       // Handle empty response
-      if (response == null || response.isEmpty) {
+      if (mergedRecords.isEmpty) {
         return [];
       }
 
       // Group by school and count maintenance records
       final Map<String, Map<String, dynamic>> schoolCounts = {};
 
-      for (final item in response) {
-        final schoolId = item['school_id']?.toString() ?? '';
-        final schoolName = item['school_name']?.toString() ?? '';
+      for (final record in mergedRecords) {
+        final schoolId = record.schoolId;
+        final schoolName = record.schoolName;
 
         if (schoolId.isNotEmpty) {
           if (!schoolCounts.containsKey(schoolId)) {
@@ -257,19 +247,14 @@ class MaintenanceCountRepository {
   /// Get summary statistics for dashboard
   Future<Map<String, int>> getDashboardSummary({List<String>? supervisorIds}) async {
     try {
-      // RULE: Supabase query pattern is: from() -> select() -> where/eq/filter -> order()
-      // Never apply filters before select() - it causes NoSuchMethodError
-      var query = _client.from('maintenance_counts').select(
-          'status, school_id, yes_no_answers, fire_safety_condition_only_data, survey_answers');
-
-      if (supervisorIds != null && supervisorIds.isNotEmpty) {
-        query = query.inFilter('supervisor_id', supervisorIds);
-      }
-
-      final response = await query;
+      // Use merged records for more accurate statistics
+      final mergedRecords = await getMergedMaintenanceCountRecords(
+        supervisorIds: supervisorIds,
+        limit: 1000, // Get all records for statistics
+      );
 
       // Handle empty response
-      if (response == null || response.isEmpty) {
+      if (mergedRecords.isEmpty) {
         return {
           'total_maintenance_counts': 0,
           'schools_with_counts': 0,
@@ -281,12 +266,12 @@ class MaintenanceCountRepository {
 
       final Set<String> schoolsWithCounts = {};
       final Set<String> schoolsWithDamage = {};
-      int totalCounts = response.length;
+      int totalCounts = mergedRecords.length;
       int submittedCounts = 0;
 
-      for (final item in response) {
-        final status = item['status']?.toString() ?? 'draft';
-        final schoolId = item['school_id']?.toString() ?? '';
+      for (final record in mergedRecords) {
+        final status = record.status;
+        final schoolId = record.schoolId;
 
         if (schoolId.isNotEmpty) {
           schoolsWithCounts.add(schoolId);
@@ -296,16 +281,9 @@ class MaintenanceCountRepository {
           submittedCounts++;
         }
 
-        try {
-          // Check for damage data
-          final maintenanceCount = MaintenanceCount.fromMap(item);
-          if (maintenanceCount.hasDamageData && schoolId.isNotEmpty) {
-            schoolsWithDamage.add(schoolId);
-          }
-        } catch (e) {
-          // Skip invalid records
-          print('Warning: Skipping invalid record in summary: $e');
-          continue;
+        // Check for damage data
+        if (record.hasDamageData && schoolId.isNotEmpty) {
+          schoolsWithDamage.add(schoolId);
         }
       }
 
@@ -326,5 +304,255 @@ class MaintenanceCountRepository {
         'draft_counts': 0,
       };
     }
+  }
+
+  /// 🚀 NEW: Get merged maintenance count records (combines duplicates by school)
+  Future<List<MaintenanceCount>> getMergedMaintenanceCountRecords({
+    List<String>? supervisorIds,
+    String? schoolId,
+    String? status,
+    int limit = 50,
+  }) async {
+    try {
+      print('🔍 DEBUG: Starting getMergedMaintenanceCountRecords');
+      print('🔍 DEBUG: supervisorIds: $supervisorIds');
+      print('🔍 DEBUG: schoolId: $schoolId');
+      print('🔍 DEBUG: status: $status');
+
+      // First, get all maintenance count records
+      final allRecords = await getAllMaintenanceCountRecords(
+        supervisorIds: supervisorIds,
+        schoolId: schoolId,
+        status: status,
+        limit: 1000, // Get more records for merging
+      );
+
+      print('🔍 DEBUG: Retrieved ${allRecords.length} records for merging');
+
+      // Group records by school ID
+      final Map<String, List<MaintenanceCount>> schoolGroups = {};
+      
+      for (final record in allRecords) {
+        final schoolId = record.schoolId;
+        if (schoolId.isNotEmpty) {
+          schoolGroups.putIfAbsent(schoolId, () => []).add(record);
+        }
+      }
+
+      print('🔍 DEBUG: Grouped into ${schoolGroups.length} schools');
+
+      // Merge records for each school
+      final List<MaintenanceCount> mergedRecords = [];
+      
+      for (final entry in schoolGroups.entries) {
+        final schoolId = entry.key;
+        final records = entry.value;
+        
+        if (records.length == 1) {
+          // Single record, no merging needed
+          mergedRecords.add(records.first);
+        } else {
+          // Multiple records, merge them
+          print('🔍 DEBUG: Merging ${records.length} records for school: $schoolId');
+          final mergedRecord = _mergeMaintenanceCounts(records);
+          mergedRecords.add(mergedRecord);
+        }
+      }
+
+      // Sort by creation date (most recent first) and apply limit
+      mergedRecords.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      
+      final limitedRecords = mergedRecords.take(limit).toList();
+      
+      print('🔍 DEBUG: Returning ${limitedRecords.length} merged records');
+      return limitedRecords;
+    } catch (e, stackTrace) {
+      print('❌ ERROR: Failed to get merged maintenance count records: $e');
+      print('❌ ERROR: Stack trace: $stackTrace');
+      return [];
+    }
+  }
+
+  /// 🚀 NEW: Merge multiple maintenance counts for the same school
+  MaintenanceCount _mergeMaintenanceCounts(List<MaintenanceCount> records) {
+    if (records.isEmpty) {
+      throw Exception('Cannot merge empty list of maintenance counts');
+    }
+
+    if (records.length == 1) {
+      return records.first;
+    }
+
+    // Use the first record as the base
+    final baseRecord = records.first;
+    
+    // Merge all data from other records
+    final mergedItemCounts = Map<String, int>.from(baseRecord.itemCounts);
+    final mergedTextAnswers = Map<String, String>.from(baseRecord.textAnswers);
+    final mergedYesNoAnswers = Map<String, bool>.from(baseRecord.yesNoAnswers);
+    final mergedYesNoWithCounts = Map<String, int>.from(baseRecord.yesNoWithCounts);
+    final mergedSurveyAnswers = Map<String, String>.from(baseRecord.surveyAnswers);
+    final mergedMaintenanceNotes = Map<String, String>.from(baseRecord.maintenanceNotes);
+    final mergedFireSafetyAlarmPanelData = Map<String, String>.from(baseRecord.fireSafetyAlarmPanelData);
+    final mergedFireSafetyConditionOnlyData = Map<String, String>.from(baseRecord.fireSafetyConditionOnlyData);
+    final mergedFireSafetyExpiryDates = Map<String, String>.from(baseRecord.fireSafetyExpiryDates);
+    final mergedSectionPhotos = Map<String, List<String>>.from(baseRecord.sectionPhotos);
+    final mergedHeaterEntries = Map<String, dynamic>.from(baseRecord.heaterEntries);
+
+    // Track all supervisor IDs
+    final Set<String> allSupervisorIds = {baseRecord.supervisorId};
+    
+    // Track the most recent creation date
+    DateTime mostRecentCreatedAt = baseRecord.createdAt;
+    DateTime? mostRecentUpdatedAt = baseRecord.updatedAt;
+
+    // Merge data from other records
+    for (int i = 1; i < records.length; i++) {
+      final record = records[i];
+      allSupervisorIds.add(record.supervisorId);
+
+      // Update timestamps
+      if (record.createdAt.isAfter(mostRecentCreatedAt)) {
+        mostRecentCreatedAt = record.createdAt;
+      }
+      if (record.updatedAt != null && 
+          (mostRecentUpdatedAt == null || record.updatedAt!.isAfter(mostRecentUpdatedAt))) {
+        mostRecentUpdatedAt = record.updatedAt;
+      }
+
+      // Merge item counts (sum the values)
+      for (final entry in record.itemCounts.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        mergedItemCounts[key] = (mergedItemCounts[key] ?? 0) + value;
+      }
+
+      // Merge text answers (keep non-empty values, prefer newer ones)
+      for (final entry in record.textAnswers.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        if (value.isNotEmpty && (mergedTextAnswers[key]?.isEmpty ?? true)) {
+          mergedTextAnswers[key] = value;
+        }
+      }
+
+      // Merge yes/no answers (if any record has true, keep true)
+      for (final entry in record.yesNoAnswers.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        if (value && !(mergedYesNoAnswers[key] ?? false)) {
+          mergedYesNoAnswers[key] = true;
+        }
+      }
+
+      // Merge yes/no with counts (sum the values)
+      for (final entry in record.yesNoWithCounts.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        mergedYesNoWithCounts[key] = (mergedYesNoWithCounts[key] ?? 0) + value;
+      }
+
+      // Merge survey answers (keep non-empty values, prefer newer ones)
+      for (final entry in record.surveyAnswers.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        if (value.isNotEmpty && (mergedSurveyAnswers[key]?.isEmpty ?? true)) {
+          mergedSurveyAnswers[key] = value;
+        }
+      }
+
+      // Merge maintenance notes (concatenate with line breaks)
+      for (final entry in record.maintenanceNotes.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        if (value.isNotEmpty) {
+          final existingNote = mergedMaintenanceNotes[key] ?? '';
+          if (existingNote.isNotEmpty) {
+            mergedMaintenanceNotes[key] = '$existingNote\n$value';
+          } else {
+            mergedMaintenanceNotes[key] = value;
+          }
+        }
+      }
+
+      // Merge fire safety alarm panel data (keep non-empty values)
+      for (final entry in record.fireSafetyAlarmPanelData.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        if (value.isNotEmpty && (mergedFireSafetyAlarmPanelData[key]?.isEmpty ?? true)) {
+          mergedFireSafetyAlarmPanelData[key] = value;
+        }
+      }
+
+      // Merge fire safety condition only data (keep non-empty values)
+      for (final entry in record.fireSafetyConditionOnlyData.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        if (value.isNotEmpty && (mergedFireSafetyConditionOnlyData[key]?.isEmpty ?? true)) {
+          mergedFireSafetyConditionOnlyData[key] = value;
+        }
+      }
+
+      // Merge fire safety expiry dates (keep non-empty values)
+      for (final entry in record.fireSafetyExpiryDates.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        if (value.isNotEmpty && (mergedFireSafetyExpiryDates[key]?.isEmpty ?? true)) {
+          mergedFireSafetyExpiryDates[key] = value;
+        }
+      }
+
+      // Merge section photos (combine all photos)
+      for (final entry in record.sectionPhotos.entries) {
+        final key = entry.key;
+        final photos = entry.value;
+        if (photos.isNotEmpty) {
+          final existingPhotos = mergedSectionPhotos[key] ?? [];
+          mergedSectionPhotos[key] = [...existingPhotos, ...photos];
+        }
+      }
+
+      // Merge heater entries (combine all entries)
+      for (final entry in record.heaterEntries.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        
+        if (value is List) {
+          final existingList = mergedHeaterEntries[key] as List? ?? [];
+          mergedHeaterEntries[key] = [...existingList, ...value];
+        } else if (value is Map) {
+          // For map values, merge them
+          final existingMap = mergedHeaterEntries[key] as Map? ?? {};
+          mergedHeaterEntries[key] = {...existingMap, ...value};
+        } else {
+          // For other types, keep the value if not already present
+          if (!mergedHeaterEntries.containsKey(key)) {
+            mergedHeaterEntries[key] = value;
+          }
+        }
+      }
+    }
+
+    // Create merged record
+    return MaintenanceCount(
+      id: baseRecord.id, // Use the first record's ID
+      schoolId: baseRecord.schoolId,
+      schoolName: baseRecord.schoolName,
+      supervisorId: allSupervisorIds.join(', '), // Combine all supervisor IDs
+      status: records.any((r) => r.status == 'submitted') ? 'submitted' : 'draft',
+      itemCounts: mergedItemCounts,
+      textAnswers: mergedTextAnswers,
+      yesNoAnswers: mergedYesNoAnswers,
+      yesNoWithCounts: mergedYesNoWithCounts,
+      surveyAnswers: mergedSurveyAnswers,
+      maintenanceNotes: mergedMaintenanceNotes,
+      fireSafetyAlarmPanelData: mergedFireSafetyAlarmPanelData,
+      fireSafetyConditionOnlyData: mergedFireSafetyConditionOnlyData,
+      fireSafetyExpiryDates: mergedFireSafetyExpiryDates,
+      sectionPhotos: mergedSectionPhotos,
+      heaterEntries: mergedHeaterEntries,
+      createdAt: mostRecentCreatedAt,
+      updatedAt: mostRecentUpdatedAt,
+    );
   }
 }

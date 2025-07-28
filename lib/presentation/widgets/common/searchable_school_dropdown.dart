@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/services/school_assignment_service.dart';
+import '../../../core/services/admin_service.dart';
 import '../../../data/models/school.dart';
 
 // State class for the dropdown
@@ -64,12 +65,14 @@ class SchoolDropdownCubit extends Cubit<SchoolDropdownState> {
 
   Future<void> _loadSchools() async {
     try {
+      if (isClosed) return;
       emit(state.copyWith(isLoading: true, errorMessage: null));
       print('🏫 Loading schools for supervisor: $supervisorId');
       
       final schools = await _schoolService.getSchoolsForSupervisor(supervisorId);
       print('🏫 Loaded ${schools.length} schools: ${schools.map((s) => s.name).toList()}');
       
+      if (isClosed) return;
       emit(state.copyWith(
         schools: schools,
         filteredSchools: schools,
@@ -77,6 +80,7 @@ class SchoolDropdownCubit extends Cubit<SchoolDropdownState> {
       ));
     } catch (e) {
       print('🏫 Error loading schools: $e');
+      if (isClosed) return;
       emit(state.copyWith(
         errorMessage: 'فشل في تحميل المدارس: $e',
         isLoading: false,
@@ -85,6 +89,7 @@ class SchoolDropdownCubit extends Cubit<SchoolDropdownState> {
   }
 
   void filterSchools(String query) {
+    if (isClosed) return;
     final filteredQuery = query.toLowerCase().trim();
     List<School> filtered;
     
@@ -97,11 +102,12 @@ class SchoolDropdownCubit extends Cubit<SchoolDropdownState> {
         return nameMatch || addressMatch;
       }).toList();
     }
-    
+    if (isClosed) return;
     emit(state.copyWith(filteredSchools: filtered));
   }
 
   void openDropdown() {
+    if (isClosed) return;
     if (state.filteredSchools.isNotEmpty) {
       print('🏫 Opening dropdown');
       emit(state.copyWith(isDropdownOpen: true));
@@ -109,11 +115,13 @@ class SchoolDropdownCubit extends Cubit<SchoolDropdownState> {
   }
 
   void closeDropdown() {
+    if (isClosed) return;
     print('🏫 Closing dropdown');
     emit(state.copyWith(isDropdownOpen: false));
   }
 
   void selectSchool(School school) {
+    if (isClosed) return;
     print('🏫 School selected: ${school.name}');
     emit(state.copyWith(
       selectedSchoolName: school.name,
@@ -122,6 +130,7 @@ class SchoolDropdownCubit extends Cubit<SchoolDropdownState> {
   }
 
   void setSelectedSchoolName(String? schoolName) {
+    if (isClosed) return;
     emit(state.copyWith(selectedSchoolName: schoolName));
   }
 }
@@ -219,6 +228,24 @@ class _SearchableSchoolDropdownState extends State<SearchableSchoolDropdown> {
           _cubit.closeDropdown();
         }
       });
+    }
+  }
+
+  Future<Map<String, dynamic>> _getUserRoleInfo() async {
+    try {
+      final adminService = AdminService(Supabase.instance.client);
+      final isSuperAdmin = await adminService.isCurrentUserSuperAdmin();
+      final isAdmin = await adminService.isCurrentUserAdmin();
+      
+      return {
+        'isSuperAdmin': isSuperAdmin,
+        'isAdmin': isAdmin,
+      };
+    } catch (e) {
+      return {
+        'isSuperAdmin': false,
+        'isAdmin': false,
+      };
     }
   }
 
@@ -420,37 +447,120 @@ class _SearchableSchoolDropdownState extends State<SearchableSchoolDropdown> {
               // Empty state when supervisor has no schools
               if (state.schools.isEmpty && !state.isLoading && state.errorMessage == null) ...[
                 const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: isDark ? const Color(0xFF1E293B) : Colors.white,
-                    border: Border.all(
-                      color:
-                          isDark ? const Color(0xFF475569) : const Color(0xFFE2E8F0),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.school_outlined,
-                        color: isDark
-                            ? const Color(0xFF94A3B8)
-                            : const Color(0xFF64748B),
-                        size: 16,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'لا توجد مدارس مُعيّنة لهذا المشرف',
-                        style: TextStyle(
-                          color: isDark
-                              ? const Color(0xFF94A3B8)
-                              : const Color(0xFF64748B),
-                          fontSize: 14,
+                FutureBuilder<Map<String, dynamic>>(
+                  future: _getUserRoleInfo(),
+                  builder: (context, roleSnapshot) {
+                    final isSuperAdmin = roleSnapshot.data?['isSuperAdmin'] ?? false;
+                    final isAdmin = roleSnapshot.data?['isAdmin'] ?? false;
+                    
+                    return Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                        border: Border.all(
+                          color:
+                              isDark ? const Color(0xFF475569) : const Color(0xFFE2E8F0),
                         ),
                       ),
-                    ],
-                  ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.school_outlined,
+                                color: isDark
+                                    ? const Color(0xFF94A3B8)
+                                    : const Color(0xFF64748B),
+                                size: 16,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'لا توجد مدارس مُعيّنة لهذا المشرف',
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? const Color(0xFF94A3B8)
+                                        : const Color(0xFF64748B),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'لا يمكن إرسال بلاغات الصيانة بدون تعيين مدارس. يرجى التواصل مع المدير لتعيين المدارس المطلوبة.',
+                            style: TextStyle(
+                              color: isDark
+                                  ? const Color(0xFF94A3B8)
+                                  : const Color(0xFF64748B),
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSuperAdmin 
+                                  ? const Color(0xFFDCFCE7) 
+                                  : isAdmin
+                                      ? const Color(0xFFDBEAFE)
+                                      : const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isSuperAdmin 
+                                    ? const Color(0xFF16A34A) 
+                                    : isAdmin
+                                        ? const Color(0xFF2563EB)
+                                        : const Color(0xFFF59E0B),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  isSuperAdmin 
+                                      ? Icons.admin_panel_settings 
+                                      : isAdmin
+                                          ? Icons.person_rounded
+                                          : Icons.info_outline,
+                                  color: isSuperAdmin 
+                                      ? const Color(0xFF15803D) 
+                                      : isAdmin
+                                          ? const Color(0xFF1D4ED8)
+                                          : const Color(0xFFD97706),
+                                  size: 16,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    isSuperAdmin 
+                                        ? 'يمكنك تعيين المدارس مباشرة من لوحة التحكم'
+                                        : isAdmin
+                                            ? 'يمكنك طلب تعيين المدارس من المشرف العام'
+                                            : 'للمساعدة: تواصل مع المدير أو المشرف العام لتعيين المدارس',
+                                    style: TextStyle(
+                                      color: isSuperAdmin 
+                                          ? const Color(0xFF15803D) 
+                                          : isAdmin
+                                              ? const Color(0xFF1E40AF)
+                                              : const Color(0xFF92400E),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
               ],
             ],

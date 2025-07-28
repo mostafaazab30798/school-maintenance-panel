@@ -5,6 +5,9 @@ import 'package:admin_panel/presentation/screens/all_maintenance_screen.dart';
 import 'package:admin_panel/presentation/screens/count_inventory_screen.dart';
 import 'package:admin_panel/presentation/screens/damage_inventory_screen.dart';
 import 'package:admin_panel/presentation/screens/damage_count_detail_screen.dart';
+import 'package:admin_panel/presentation/screens/fci_assessments_screen.dart';
+import 'package:admin_panel/presentation/screens/fci_assessment_details_screen.dart';
+import 'package:admin_panel/data/models/fci_assessment.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -12,6 +15,7 @@ import '../../data/repositories/report_repository.dart';
 import '../../data/repositories/maintenance_repository.dart';
 import '../../data/repositories/maintenance_count_repository.dart';
 import '../../data/repositories/damage_count_repository.dart';
+import '../../data/repositories/fci_assessment_repository.dart';
 import '../../data/repositories/supervisor_repository.dart';
 import '../../logic/blocs/maintenance_reports/maintenance_bloc.dart';
 import '../../logic/blocs/maintenance_reports/maintenance_view_bloc.dart';
@@ -110,6 +114,7 @@ final GoRouter appRouter = GoRouter(
               MaintenanceCountRepository(Supabase.instance.client),
           damageCountRepository:
               DamageCountRepository(Supabase.instance.client),
+          fciAssessmentRepository: FciAssessmentRepository(Supabase.instance.client),
           supervisorRepository: SupervisorRepository(Supabase.instance.client),
           adminService: AdminService(Supabase.instance.client),
         )..add(const LoadDashboardData()),
@@ -337,6 +342,49 @@ final GoRouter appRouter = GoRouter(
       path: '/schools-with-achievements',
       name: 'schools-with-achievements',
       builder: (context, state) => const SchoolsWithAchievementsScreen(),
+    ),
+    GoRoute(
+      path: '/fci-assessments',
+      name: 'fci-assessments',
+      builder: (context, state) {
+        final status = state.uri.queryParameters['status'];
+        final view = state.uri.queryParameters['view'];
+        return MultiRepositoryProvider(
+          providers: [
+            RepositoryProvider<FciAssessmentRepository>.value(
+              value: FciAssessmentRepository(Supabase.instance.client),
+            ),
+            RepositoryProvider<AdminService>.value(
+              value: AdminService(Supabase.instance.client),
+            ),
+          ],
+          child: FciAssessmentsScreen(
+            status: status,
+            view: view,
+          ),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/fci-assessment-details',
+      name: 'fci-assessment-details',
+      builder: (context, state) {
+        // Handle the case where extra might be a _JsonMap from Supabase
+        final extra = state.extra;
+        FciAssessment assessment;
+        
+        if (extra is FciAssessment) {
+          assessment = extra;
+        } else if (extra is Map<String, dynamic>) {
+          // Convert _JsonMap to FciAssessment
+          assessment = FciAssessment.fromJson(extra);
+        } else {
+          // Fallback: create a default assessment or show error
+          throw Exception('Invalid FCI assessment data provided');
+        }
+        
+        return FciAssessmentDetailsScreen(assessment: assessment);
+      },
     ),
     GoRoute(
       path: '/school-details/:schoolId',

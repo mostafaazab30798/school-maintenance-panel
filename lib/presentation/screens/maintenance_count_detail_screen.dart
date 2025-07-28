@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../logic/blocs/maintenance_counts/maintenance_counts_bloc.dart';
 import '../../data/repositories/maintenance_count_repository.dart';
+import '../../data/repositories/damage_count_repository.dart';
+import '../../data/repositories/supervisor_repository.dart';
 import '../../data/models/maintenance_count.dart';
+import '../../data/models/supervisor.dart';
+import '../../core/services/admin_service.dart';
 import '../widgets/common/shared_app_bar.dart';
 import '../widgets/common/error_widget.dart';
 import 'maintenance_count_category_screen.dart';
 
-class MaintenanceCountDetailScreen extends StatefulWidget {
+class MaintenanceCountDetailScreen extends StatelessWidget {
   final String schoolId;
   final String schoolName;
 
@@ -17,17 +23,38 @@ class MaintenanceCountDetailScreen extends StatefulWidget {
   });
 
   @override
-  State<MaintenanceCountDetailScreen> createState() =>
-      _MaintenanceCountDetailScreenState();
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => MaintenanceCountsBloc(
+        repository: MaintenanceCountRepository(Supabase.instance.client),
+        damageRepository: DamageCountRepository(Supabase.instance.client),
+        adminService: AdminService(Supabase.instance.client),
+      )..add(LoadMaintenanceCountRecords(schoolId: schoolId)),
+      child: MaintenanceCountDetailView(
+        schoolId: schoolId,
+        schoolName: schoolName,
+      ),
+    );
+  }
 }
 
-class _MaintenanceCountDetailScreenState
-    extends State<MaintenanceCountDetailScreen> with TickerProviderStateMixin {
-  final MaintenanceCountRepository _repository =
-      MaintenanceCountRepository(Supabase.instance.client);
-  List<MaintenanceCount> _maintenanceCounts = [];
-  bool _isLoading = true;
-  String? _error;
+class MaintenanceCountDetailView extends StatefulWidget {
+  final String schoolId;
+  final String schoolName;
+
+  const MaintenanceCountDetailView({
+    super.key,
+    required this.schoolId,
+    required this.schoolName,
+  });
+
+  @override
+  State<MaintenanceCountDetailView> createState() =>
+      _MaintenanceCountDetailViewState();
+}
+
+class _MaintenanceCountDetailViewState
+    extends State<MaintenanceCountDetailView> with TickerProviderStateMixin {
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -45,36 +72,12 @@ class _MaintenanceCountDetailScreenState
       parent: _animationController,
       curve: Curves.easeOutCubic,
     ));
-    _loadMaintenanceCounts();
   }
 
   @override
   void dispose() {
     _animationController.dispose();
     super.dispose();
-  }
-
-  Future<void> _loadMaintenanceCounts() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final counts = await _repository.getMaintenanceCounts(
-        schoolId: widget.schoolId,
-      );
-      setState(() {
-        _maintenanceCounts = counts;
-        _isLoading = false;
-      });
-      _animationController.forward();
-    } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
-    }
   }
 
   @override
@@ -89,53 +92,37 @@ class _MaintenanceCountDetailScreenState
         appBar: SharedAppBar(
           title: 'تفاصيل حصر ${widget.schoolName}',
         ),
-        body: _buildBody(),
-      ),
-    );
-  }
+        body: BlocBuilder<MaintenanceCountsBloc, MaintenanceCountsState>(
+          builder: (context, state) {
+            if (state is MaintenanceCountsLoading) {
+              return _buildLoadingState();
+            }
 
-  Widget _buildBody() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    if (_isLoading) {
-      return _buildLoadingState();
-    }
-
-    if (_error != null) {
-      return Center(
-        child: AppErrorWidget(
-          message: _error!,
-          onRetry: _loadMaintenanceCounts,
-        ),
-      );
-    }
-
-    if (_maintenanceCounts.isEmpty) {
-      return _buildEmptyState();
-    }
-
-    return FadeTransition(
-      opacity: _fadeAnimation,
-      child: RefreshIndicator(
-        onRefresh: _loadMaintenanceCounts,
-        color: const Color(0xFF3B82F6),
-        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
-        child: CustomScrollView(
-          slivers: [
-            // Maintenance Records List
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final count = _maintenanceCounts[index];
-                    return _buildMaintenanceCountCard(count, index);
-                  },
-                  childCount: _maintenanceCounts.length,
+            if (state is MaintenanceCountsError) {
+              return Center(
+                child: AppErrorWidget(
+                  message: state.message,
+                  onRetry: () => context
+                      .read<MaintenanceCountsBloc>()
+                      .add(LoadMaintenanceCountRecords(schoolId: widget.schoolId)),
                 ),
-              ),
-            ),
-          ],
+              );
+            }
+
+            if (state is MaintenanceCountRecordsLoaded) {
+              final records = state.records;
+              final supervisorNames = state.supervisorNames;
+
+              if (records.isEmpty) {
+                return _buildEmptyState();
+              }
+
+              _animationController.forward();
+              return _buildMaintenanceCountsList(context, records, supervisorNames);
+            }
+
+            return _buildEmptyState();
+          },
         ),
       ),
     );
@@ -247,7 +234,40 @@ class _MaintenanceCountDetailScreenState
     );
   }
 
-  Widget _buildMaintenanceCountCard(MaintenanceCount count, int index) {
+  Widget _buildMaintenanceCountsList(BuildContext context, List<MaintenanceCount> records, Map<String, String> supervisorNames) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return FadeTransition(
+      opacity: _fadeAnimation,
+      child: RefreshIndicator(
+        onRefresh: () async {
+          context
+              .read<MaintenanceCountsBloc>()
+              .add(LoadMaintenanceCountRecords(schoolId: widget.schoolId));
+        },
+        color: const Color(0xFF3B82F6),
+        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        child: CustomScrollView(
+          slivers: [
+            // Maintenance Records List
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final count = records[index];
+                    return _buildMaintenanceCountCard(count, index, supervisorNames);
+                  },
+                  childCount: records.length,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMaintenanceCountCard(MaintenanceCount count, int index, Map<String, String> supervisorNames) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final statusColor = _getStatusColor(count.status);
 
@@ -320,6 +340,33 @@ class _MaintenanceCountDetailScreenState
                                   : const Color(0xFF64748B),
                             ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.person_rounded,
+                            size: 14,
+                            color: isDark
+                                ? Colors.grey[400]
+                                : const Color(0xFF64748B),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              _getSupervisorDisplayText(count.supervisorId, supervisorNames),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: isDark
+                                    ? Colors.grey[400]
+                                    : const Color(0xFF64748B),
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                           const SizedBox(width: 12),
                           Container(
                             padding: const EdgeInsets.symmetric(
@@ -354,6 +401,36 @@ class _MaintenanceCountDetailScreenState
         ],
       ),
     );
+  }
+
+  /// 🚀 NEW: Helper method to display supervisor names for merged records
+  String _getSupervisorDisplayText(String supervisorId, Map<String, String> supervisorNames) {
+    // Check if this is a merged record (contains multiple supervisor IDs)
+    if (supervisorId.contains(', ')) {
+      final supervisorIdList = supervisorId.split(', ');
+      final supervisorNameList = <String>[];
+      
+      for (final id in supervisorIdList) {
+        final name = supervisorNames[id.trim()];
+        if (name != null && name.isNotEmpty) {
+          supervisorNameList.add(name);
+        }
+      }
+      
+      if (supervisorNameList.isNotEmpty) {
+        if (supervisorNameList.length == 1) {
+          return 'المشرف: ${supervisorNameList.first}';
+        } else {
+          return 'المشرفون: ${supervisorNameList.join('، ')}';
+        }
+      } else {
+        return 'المشرفون: غير محدد';
+      }
+    } else {
+      // Single supervisor
+      final supervisorName = supervisorNames[supervisorId];
+      return 'المشرف: ${supervisorName ?? 'غير محدد'}';
+    }
   }
 
   Widget _buildStatusIndicator(String status, Color color) {
@@ -550,741 +627,6 @@ class _MaintenanceCountDetailScreenState
     );
   }
 
-  // Widget _buildSafetySecurityCategory(MaintenanceCount count) {
-  //   final isDark = Theme.of(context).brightness == Brightness.dark;
-  //   final safetyColor = const Color(0xFFEF4444);
-
-  //   // Extract safety-related data
-  //   final safetyItems = _getSafetyItems(count);
-  //   final safetyAnswers = _getSafetyAnswers(count);
-  //   final safetyPhotos = _getSafetyPhotos(count);
-  //   final safetyNotes = _getSafetyNotes(count);
-
-  //   return SingleChildScrollView(
-  //     padding: const EdgeInsets.all(16),
-  //     child: Column(
-  //       crossAxisAlignment: CrossAxisAlignment.start,
-  //       children: [
-  //         _buildCategoryHeader(
-  //             'أمن وسلامة', Icons.security_rounded, safetyColor),
-  //         const SizedBox(height: 20),
-  //         if (safetyItems.isNotEmpty) ...[
-  //           _buildModernDataSection('المعدات والأجهزة', Icons.inventory_rounded,
-  //               safetyColor, safetyItems),
-  //           const SizedBox(height: 16),
-  //         ],
-  //         if (safetyAnswers.isNotEmpty) ...[
-  //           _buildModernConditionSection('حالة الأنظمة',
-  //               Icons.health_and_safety_rounded, safetyColor, safetyAnswers),
-  //           const SizedBox(height: 16),
-  //         ],
-  //         if (safetyPhotos.isNotEmpty) ...[
-  //           _buildModernPhotosSection('صور الأمن والسلامة',
-  //               Icons.photo_camera_rounded, safetyColor, safetyPhotos),
-  //           const SizedBox(height: 16),
-  //         ],
-  //         if (safetyNotes.isNotEmpty) ...[
-  //           _buildModernNotesSection('ملاحظات الأمن والسلامة',
-  //               Icons.note_alt_rounded, safetyColor, safetyNotes),
-  //         ],
-  //         if (safetyItems.isEmpty &&
-  //             safetyAnswers.isEmpty &&
-  //             safetyPhotos.isEmpty &&
-  //             safetyNotes.isEmpty)
-  //           _buildEmptyCategory(
-  //               'أمن وسلامة', Icons.security_rounded, safetyColor),
-  //       ],
-  //     ),
-  //   );
-  // }
-
-  // Widget _buildMechanicalCategory(MaintenanceCount count) {
-  //   final mechanicalColor = const Color(0xFF10B981);
-
-  //   // Extract mechanical-related data
-  //   final mechanicalItems = _getMechanicalItems(count);
-  //   final mechanicalAnswers = _getMechanicalAnswers(count);
-  //   final mechanicalPhotos = _getMechanicalPhotos(count);
-  //   final mechanicalNotes = _getMechanicalNotes(count);
-
-  //   return SingleChildScrollView(
-  //     padding: const EdgeInsets.all(16),
-  //     child: Column(
-  //       crossAxisAlignment: CrossAxisAlignment.start,
-  //       children: [
-  //         _buildCategoryHeader('ميكانيكا',
-  //             Icons.precision_manufacturing_rounded, mechanicalColor),
-  //         const SizedBox(height: 20),
-  //         if (mechanicalItems.isNotEmpty) ...[
-  //           _buildModernDataSection('المضخات والمعدات',
-  //               Icons.water_damage_rounded, mechanicalColor, mechanicalItems),
-  //           const SizedBox(height: 16),
-  //         ],
-  //         if (mechanicalAnswers.isNotEmpty) ...[
-  //           _buildModernConditionSection('حالة المعدات الميكانيكية',
-  //               Icons.settings_rounded, mechanicalColor, mechanicalAnswers),
-  //           const SizedBox(height: 16),
-  //         ],
-  //         if (mechanicalPhotos.isNotEmpty) ...[
-  //           _buildModernPhotosSection('صور الميكانيكا',
-  //               Icons.photo_camera_rounded, mechanicalColor, mechanicalPhotos),
-  //           const SizedBox(height: 16),
-  //         ],
-  //         if (mechanicalNotes.isNotEmpty) ...[
-  //           _buildModernNotesSection('ملاحظات الميكانيكا',
-  //               Icons.note_alt_rounded, mechanicalColor, mechanicalNotes),
-  //         ],
-  //         if (mechanicalItems.isEmpty &&
-  //             mechanicalAnswers.isEmpty &&
-  //             mechanicalPhotos.isEmpty &&
-  //             mechanicalNotes.isEmpty)
-  //           _buildEmptyCategory('ميكانيكا',
-  //               Icons.precision_manufacturing_rounded, mechanicalColor),
-  //       ],
-  //     ),
-  //   );
-  // }
-
-  // Widget _buildElectricalCategory(MaintenanceCount count) {
-  //   final electricalColor = const Color(0xFFF59E0B);
-
-  //   // Extract electrical-related data
-  //   final electricalItems = _getElectricalItems(count);
-  //   final electricalAnswers = _getElectricalAnswers(count);
-  //   final electricalPhotos = _getElectricalPhotos(count);
-  //   final electricalNotes = _getElectricalNotes(count);
-
-  //   return SingleChildScrollView(
-  //     padding: const EdgeInsets.all(16),
-  //     child: Column(
-  //       crossAxisAlignment: CrossAxisAlignment.start,
-  //       children: [
-  //         _buildCategoryHeader(
-  //             'كهرباء', Icons.electrical_services_rounded, electricalColor),
-  //         const SizedBox(height: 20),
-  //         if (electricalItems.isNotEmpty) ...[
-  //           _buildModernDataSection(
-  //               'الأنظمة الكهربائية',
-  //               Icons.electrical_services_rounded,
-  //               electricalColor,
-  //               electricalItems),
-  //           const SizedBox(height: 16),
-  //         ],
-  //         if (electricalAnswers.isNotEmpty) ...[
-  //           _buildModernConditionSection('حالة الأنظمة الكهربائية',
-  //               Icons.power_rounded, electricalColor, electricalAnswers),
-  //           const SizedBox(height: 16),
-  //         ],
-  //         if (electricalPhotos.isNotEmpty) ...[
-  //           _buildModernPhotosSection('صور الكهرباء',
-  //               Icons.photo_camera_rounded, electricalColor, electricalPhotos),
-  //           const SizedBox(height: 16),
-  //         ],
-  //         if (electricalNotes.isNotEmpty) ...[
-  //           _buildModernNotesSection('ملاحظات الكهرباء', Icons.note_alt_rounded,
-  //               electricalColor, electricalNotes),
-  //         ],
-  //         if (electricalItems.isEmpty &&
-  //             electricalAnswers.isEmpty &&
-  //             electricalPhotos.isEmpty &&
-  //             electricalNotes.isEmpty)
-  //           _buildEmptyCategory(
-  //               'كهرباء', Icons.electrical_services_rounded, electricalColor),
-  //       ],
-  //     ),
-  //   );
-  // }
-
-  // Widget _buildCivilCategory(MaintenanceCount count) {
-  //   final civilColor = const Color(0xFF8B5CF6);
-
-  //   // Extract civil-related data
-  //   final civilItems = _getCivilItems(count);
-  //   final civilAnswers = _getCivilAnswers(count);
-  //   final civilPhotos = _getCivilPhotos(count);
-  //   final civilNotes = _getCivilNotes(count);
-
-  //   return SingleChildScrollView(
-  //     padding: const EdgeInsets.all(16),
-  //     child: Column(
-  //       crossAxisAlignment: CrossAxisAlignment.start,
-  //       children: [
-  //         _buildCategoryHeader('مدني', Icons.business_rounded, civilColor),
-  //         const SizedBox(height: 20),
-  //         if (civilItems.isNotEmpty) ...[
-  //           _buildModernDataSection('البنية التحتية', Icons.foundation_rounded,
-  //               civilColor, civilItems),
-  //           const SizedBox(height: 16),
-  //         ],
-  //         if (civilAnswers.isNotEmpty) ...[
-  //           _buildModernConditionSection('حالة البناء', Icons.apartment_rounded,
-  //               civilColor, civilAnswers),
-  //           const SizedBox(height: 16),
-  //         ],
-  //         if (civilPhotos.isNotEmpty) ...[
-  //           _buildModernPhotosSection('صور المدني', Icons.photo_camera_rounded,
-  //               civilColor, civilPhotos),
-  //           const SizedBox(height: 16),
-  //         ],
-  //         if (civilNotes.isNotEmpty) ...[
-  //           _buildModernNotesSection('ملاحظات المدني', Icons.note_alt_rounded,
-  //               civilColor, civilNotes),
-  //         ],
-  //         if (civilItems.isEmpty &&
-  //             civilAnswers.isEmpty &&
-  //             civilPhotos.isEmpty &&
-  //             civilNotes.isEmpty)
-  //           _buildEmptyCategory('مدني', Icons.business_rounded, civilColor),
-  //       ],
-  //     ),
-  //   );
-  // }
-
-  // Widget _buildSurveyAnswers(Map<String, String> surveyAnswers) {
-  //   final isDark = Theme.of(context).brightness == Brightness.dark;
-
-  //   return Column(
-  //     children: surveyAnswers.entries.map((entry) {
-  //       final color = _getConditionColor(entry.value);
-  //       return AnimatedContainer(
-  //         duration: const Duration(milliseconds: 300),
-  //         margin: const EdgeInsets.only(bottom: 12),
-  //         padding: const EdgeInsets.all(16),
-  //         decoration: BoxDecoration(
-  //           gradient: LinearGradient(
-  //             colors: [
-  //               color.withOpacity(0.08),
-  //               color.withOpacity(0.03),
-  //             ],
-  //             begin: Alignment.centerLeft,
-  //             end: Alignment.centerRight,
-  //           ),
-  //           borderRadius: BorderRadius.circular(12),
-  //           border: Border.all(color: color.withOpacity(0.3), width: 1),
-  //           boxShadow: [
-  //             BoxShadow(
-  //               color: color.withOpacity(0.1),
-  //               blurRadius: 8,
-  //               spreadRadius: 0,
-  //               offset: const Offset(0, 2),
-  //             ),
-  //           ],
-  //         ),
-  //         child: Row(
-  //           children: [
-  //             Container(
-  //               padding: const EdgeInsets.all(6),
-  //               decoration: BoxDecoration(
-  //                 color: color.withOpacity(0.15),
-  //                 borderRadius: BorderRadius.circular(8),
-  //               ),
-  //               child: Icon(
-  //                 _getConditionIcon(entry.value),
-  //                 color: color,
-  //                 size: 16,
-  //               ),
-  //             ),
-  //             const SizedBox(width: 12),
-  //             Expanded(
-  //               child: Text(
-  //                 _translateItemName(entry.key),
-  //                 style: TextStyle(
-  //                   fontSize: 14,
-  //                   fontWeight: FontWeight.w600,
-  //                   color: isDark ? Colors.grey[300] : const Color(0xFF475569),
-  //                 ),
-  //               ),
-  //             ),
-  //             Container(
-  //               padding:
-  //                   const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-  //               decoration: BoxDecoration(
-  //                 color: color,
-  //                 borderRadius: BorderRadius.circular(16),
-  //                 boxShadow: [
-  //                   BoxShadow(
-  //                     color: color.withOpacity(0.3),
-  //                     blurRadius: 4,
-  //                     spreadRadius: 0,
-  //                     offset: const Offset(0, 2),
-  //                   ),
-  //                 ],
-  //               ),
-  //               child: Text(
-  //                 entry.value,
-  //                 style: const TextStyle(
-  //                   fontSize: 12,
-  //                   fontWeight: FontWeight.w700,
-  //                   color: Colors.white,
-  //                 ),
-  //               ),
-  //             ),
-  //           ],
-  //         ),
-  //       );
-  //     }).toList(),
-  //   );
-  // }
-
-  // Widget _buildYesNoAnswers(Map<String, bool> yesNoAnswers) {
-  //   final isDark = Theme.of(context).brightness == Brightness.dark;
-
-  //   return Column(
-  //     children: yesNoAnswers.entries.map((entry) {
-  //       final color =
-  //           entry.value ? const Color(0xFFEF4444) : const Color(0xFF10B981);
-  //       final icon =
-  //           entry.value ? Icons.warning_rounded : Icons.check_circle_rounded;
-  //       final text = entry.value ? 'نعم' : 'لا';
-
-  //       return AnimatedContainer(
-  //         duration: const Duration(milliseconds: 300),
-  //         margin: const EdgeInsets.only(bottom: 12),
-  //         padding: const EdgeInsets.all(16),
-  //         decoration: BoxDecoration(
-  //           gradient: LinearGradient(
-  //             colors: [
-  //               color.withOpacity(0.08),
-  //               color.withOpacity(0.03),
-  //             ],
-  //             begin: Alignment.centerLeft,
-  //             end: Alignment.centerRight,
-  //           ),
-  //           borderRadius: BorderRadius.circular(12),
-  //           border: Border.all(color: color.withOpacity(0.3), width: 1),
-  //           boxShadow: [
-  //             BoxShadow(
-  //               color: color.withOpacity(0.1),
-  //               blurRadius: 8,
-  //               spreadRadius: 0,
-  //               offset: const Offset(0, 2),
-  //             ),
-  //           ],
-  //         ),
-  //         child: Row(
-  //           children: [
-  //             Container(
-  //               padding: const EdgeInsets.all(8),
-  //               decoration: BoxDecoration(
-  //                 color: color.withOpacity(0.15),
-  //                 borderRadius: BorderRadius.circular(10),
-  //               ),
-  //               child: Icon(icon, color: color, size: 20),
-  //             ),
-  //             const SizedBox(width: 16),
-  //             Expanded(
-  //               child: Text(
-  //                 _translateItemName(entry.key),
-  //                 style: TextStyle(
-  //                   fontSize: 14,
-  //                   fontWeight: FontWeight.w600,
-  //                   color: isDark ? Colors.grey[300] : const Color(0xFF475569),
-  //                 ),
-  //               ),
-  //             ),
-  //             Container(
-  //               padding:
-  //                   const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-  //               decoration: BoxDecoration(
-  //                 color: color,
-  //                 borderRadius: BorderRadius.circular(16),
-  //                 boxShadow: [
-  //                   BoxShadow(
-  //                     color: color.withOpacity(0.3),
-  //                     blurRadius: 4,
-  //                     spreadRadius: 0,
-  //                     offset: const Offset(0, 2),
-  //                   ),
-  //                 ],
-  //               ),
-  //               child: Text(
-  //                 text,
-  //                 style: const TextStyle(
-  //                   fontSize: 12,
-  //                   fontWeight: FontWeight.w700,
-  //                   color: Colors.white,
-  //                 ),
-  //               ),
-  //             ),
-  //           ],
-  //         ),
-  //       );
-  //     }).toList(),
-  //   );
-  // }
-
-  // Widget _buildTextAnswers(Map<String, String> textAnswers) {
-  //   return Column(
-  //     children: textAnswers.entries.map((entry) {
-  //       return Container(
-  //         margin: const EdgeInsets.only(bottom: 8),
-  //         padding: const EdgeInsets.all(12),
-  //         decoration: BoxDecoration(
-  //           color: const Color(0xFF8B5CF6).withOpacity(0.05),
-  //           borderRadius: BorderRadius.circular(8),
-  //           border: Border.all(color: const Color(0xFF8B5CF6).withOpacity(0.2)),
-  //         ),
-  //         child: Row(
-  //           crossAxisAlignment: CrossAxisAlignment.start,
-  //           children: [
-  //             Expanded(
-  //               flex: 2,
-  //               child: Text(
-  //                 _translateItemName(entry.key),
-  //                 style: TextStyle(
-  //                   fontSize: 14,
-  //                   fontWeight: FontWeight.w500,
-  //                   color: Theme.of(context).brightness == Brightness.dark
-  //                       ? Colors.grey[300]
-  //                       : const Color(0xFF64748B),
-  //                 ),
-  //               ),
-  //             ),
-  //             const SizedBox(width: 8),
-  //             Expanded(
-  //               flex: 1,
-  //               child: Text(
-  //                 entry.value,
-  //                 style: TextStyle(
-  //                   fontSize: 14,
-  //                   color: Theme.of(context).brightness == Brightness.dark
-  //                       ? Colors.white
-  //                       : const Color(0xFF1E293B),
-  //                 ),
-  //               ),
-  //             ),
-  //           ],
-  //         ),
-  //       );
-  //     }).toList(),
-  //   );
-  // }
-
-  // Widget _buildFireSafetyData(Map<String, String> fireSafetyData) {
-  //   return Column(
-  //     children: fireSafetyData.entries.map((entry) {
-  //       return Container(
-  //         margin: const EdgeInsets.only(bottom: 8),
-  //         padding: const EdgeInsets.all(12),
-  //         decoration: BoxDecoration(
-  //           color: const Color(0xFFEF4444).withOpacity(0.05),
-  //           borderRadius: BorderRadius.circular(8),
-  //           border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.2)),
-  //         ),
-  //         child: Row(
-  //           crossAxisAlignment: CrossAxisAlignment.start,
-  //           children: [
-  //             Expanded(
-  //               flex: 2,
-  //               child: Text(
-  //                 _translateItemName(entry.key),
-  //                 style: TextStyle(
-  //                   fontSize: 14,
-  //                   fontWeight: FontWeight.w500,
-  //                   color: Theme.of(context).brightness == Brightness.dark
-  //                       ? Colors.grey[300]
-  //                       : const Color(0xFF64748B),
-  //                 ),
-  //               ),
-  //             ),
-  //             const SizedBox(width: 8),
-  //             Expanded(
-  //               flex: 1,
-  //               child: Text(
-  //                 entry.value,
-  //                 style: TextStyle(
-  //                   fontSize: 14,
-  //                   color: Theme.of(context).brightness == Brightness.dark
-  //                       ? Colors.white
-  //                       : const Color(0xFF1E293B),
-  //                 ),
-  //               ),
-  //             ),
-  //           ],
-  //         ),
-  //       );
-  //     }).toList(),
-  //   );
-  // }
-
-  // Widget _buildPhotosSection(Map<String, List<String>> sectionPhotos) {
-  //   final isDark = Theme.of(context).brightness == Brightness.dark;
-
-  //   return Column(
-  //     children: sectionPhotos.entries.map((entry) {
-  //       if (entry.value.isEmpty) return const SizedBox.shrink();
-
-  //       return Container(
-  //         margin: const EdgeInsets.only(bottom: 20),
-  //         padding: const EdgeInsets.all(16),
-  //         decoration: BoxDecoration(
-  //           gradient: LinearGradient(
-  //             colors: [
-  //               const Color(0xFF06B6D4).withOpacity(0.08),
-  //               const Color(0xFF0891B2).withOpacity(0.03),
-  //             ],
-  //             begin: Alignment.topLeft,
-  //             end: Alignment.bottomRight,
-  //           ),
-  //           borderRadius: BorderRadius.circular(16),
-  //           border: Border.all(
-  //             color: const Color(0xFF06B6D4).withOpacity(0.2),
-  //           ),
-  //         ),
-  //         child: Column(
-  //           crossAxisAlignment: CrossAxisAlignment.start,
-  //           children: [
-  //             Row(
-  //               children: [
-  //                 Container(
-  //                   padding: const EdgeInsets.all(8),
-  //                   decoration: BoxDecoration(
-  //                     color: const Color(0xFF06B6D4).withOpacity(0.15),
-  //                     borderRadius: BorderRadius.circular(10),
-  //                   ),
-  //                   child: const Icon(
-  //                     Icons.photo_library_rounded,
-  //                     color: Color(0xFF06B6D4),
-  //                     size: 18,
-  //                   ),
-  //                 ),
-  //                 const SizedBox(width: 12),
-  //                 Expanded(
-  //                   child: Text(
-  //                     _translateSectionName(entry.key),
-  //                     style: TextStyle(
-  //                       fontSize: 16,
-  //                       fontWeight: FontWeight.w700,
-  //                       color: isDark ? Colors.white : const Color(0xFF1E293B),
-  //                     ),
-  //                   ),
-  //                 ),
-  //                 Container(
-  //                   padding:
-  //                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-  //                   decoration: BoxDecoration(
-  //                     color: const Color(0xFF06B6D4),
-  //                     borderRadius: BorderRadius.circular(12),
-  //                   ),
-  //                   child: Text(
-  //                     '${entry.value.length}',
-  //                     style: const TextStyle(
-  //                       fontSize: 12,
-  //                       fontWeight: FontWeight.w700,
-  //                       color: Colors.white,
-  //                     ),
-  //                   ),
-  //                 ),
-  //               ],
-  //             ),
-  //             const SizedBox(height: 16),
-  //             SizedBox(
-  //               height: 100,
-  //               child: ListView.builder(
-  //                 scrollDirection: Axis.horizontal,
-  //                 itemCount: entry.value.length,
-  //                 itemBuilder: (context, index) {
-  //                   return Container(
-  //                     margin: const EdgeInsets.only(right: 12),
-  //                     width: 100,
-  //                     height: 100,
-  //                     decoration: BoxDecoration(
-  //                       borderRadius: BorderRadius.circular(12),
-  //                       border: Border.all(
-  //                         color: const Color(0xFF06B6D4).withOpacity(0.3),
-  //                         width: 2,
-  //                       ),
-  //                       boxShadow: [
-  //                         BoxShadow(
-  //                           color: const Color(0xFF06B6D4).withOpacity(0.2),
-  //                           blurRadius: 8,
-  //                           spreadRadius: 0,
-  //                           offset: const Offset(0, 4),
-  //                         ),
-  //                       ],
-  //                     ),
-  //                     child: ClipRRect(
-  //                       borderRadius: BorderRadius.circular(10),
-  //                       child: Image.network(
-  //                         entry.value[index],
-  //                         fit: BoxFit.cover,
-  //                         loadingBuilder: (context, child, loadingProgress) {
-  //                           if (loadingProgress == null) return child;
-  //                           return Container(
-  //                             color: isDark
-  //                                 ? const Color(0xFF1E293B)
-  //                                 : Colors.grey[100],
-  //                             child: const Center(
-  //                               child: CircularProgressIndicator(
-  //                                 strokeWidth: 2,
-  //                                 color: Color(0xFF06B6D4),
-  //                               ),
-  //                             ),
-  //                           );
-  //                         },
-  //                         errorBuilder: (context, error, stackTrace) {
-  //                           return Container(
-  //                             color: isDark
-  //                                 ? const Color(0xFF1E293B)
-  //                                 : Colors.grey[100],
-  //                             child: const Icon(
-  //                               Icons.error_outline_rounded,
-  //                               color: Color(0xFF06B6D4),
-  //                               size: 24,
-  //                             ),
-  //                           );
-  //                         },
-  //                       ),
-  //                     ),
-  //                   );
-  //                 },
-  //               ),
-  //             ),
-  //           ],
-  //         ),
-  //       );
-  //     }).toList(),
-  //   );
-  // }
-
-  // Widget _buildMaintenanceNotes(Map<String, String> maintenanceNotes) {
-  //   final isDark = Theme.of(context).brightness == Brightness.dark;
-  //   final notesWithContent = maintenanceNotes.entries
-  //       .where((entry) => entry.value.isNotEmpty)
-  //       .toList();
-
-  //   if (notesWithContent.isEmpty) {
-  //     return Container(
-  //       padding: const EdgeInsets.all(20),
-  //       decoration: BoxDecoration(
-  //         gradient: LinearGradient(
-  //           colors: [
-  //             const Color(0xFF84CC16).withOpacity(0.05),
-  //             const Color(0xFF65A30D).withOpacity(0.02),
-  //           ],
-  //           begin: Alignment.topLeft,
-  //           end: Alignment.bottomRight,
-  //         ),
-  //         borderRadius: BorderRadius.circular(12),
-  //         border: Border.all(
-  //           color: const Color(0xFF84CC16).withOpacity(0.2),
-  //         ),
-  //       ),
-  //       child: Row(
-  //         children: [
-  //           Container(
-  //             padding: const EdgeInsets.all(8),
-  //             decoration: BoxDecoration(
-  //               color: const Color(0xFF84CC16).withOpacity(0.15),
-  //               borderRadius: BorderRadius.circular(10),
-  //             ),
-  //             child: const Icon(
-  //               Icons.note_outlined,
-  //               color: Color(0xFF84CC16),
-  //               size: 18,
-  //             ),
-  //           ),
-  //           const SizedBox(width: 12),
-  //           Text(
-  //             'لا توجد ملاحظات',
-  //             style: TextStyle(
-  //               fontSize: 14,
-  //               fontWeight: FontWeight.w600,
-  //               color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
-  //             ),
-  //           ),
-  //         ],
-  //       ),
-  //     );
-  //   }
-
-  //   return Column(
-  //     children: notesWithContent.map((entry) {
-  //       return AnimatedContainer(
-  //         duration: const Duration(milliseconds: 300),
-  //         margin: const EdgeInsets.only(bottom: 16),
-  //         padding: const EdgeInsets.all(16),
-  //         decoration: BoxDecoration(
-  //           gradient: LinearGradient(
-  //             colors: [
-  //               const Color(0xFF84CC16).withOpacity(0.08),
-  //               const Color(0xFF65A30D).withOpacity(0.03),
-  //             ],
-  //             begin: Alignment.topLeft,
-  //             end: Alignment.bottomRight,
-  //           ),
-  //           borderRadius: BorderRadius.circular(12),
-  //           border: Border.all(
-  //             color: const Color(0xFF84CC16).withOpacity(0.3),
-  //             width: 1,
-  //           ),
-  //           boxShadow: [
-  //             BoxShadow(
-  //               color: const Color(0xFF84CC16).withOpacity(0.1),
-  //               blurRadius: 8,
-  //               spreadRadius: 0,
-  //               offset: const Offset(0, 2),
-  //             ),
-  //           ],
-  //         ),
-  //         child: Column(
-  //           crossAxisAlignment: CrossAxisAlignment.start,
-  //           children: [
-  //             Row(
-  //               children: [
-  //                 Container(
-  //                   padding: const EdgeInsets.all(6),
-  //                   decoration: BoxDecoration(
-  //                     color: const Color(0xFF84CC16).withOpacity(0.15),
-  //                     borderRadius: BorderRadius.circular(8),
-  //                   ),
-  //                   child: const Icon(
-  //                     Icons.sticky_note_2_rounded,
-  //                     color: Color(0xFF84CC16),
-  //                     size: 16,
-  //                   ),
-  //                 ),
-  //                 const SizedBox(width: 10),
-  //                 Expanded(
-  //                   child: Text(
-  //                     _translateItemName(entry.key),
-  //                     style: TextStyle(
-  //                       fontSize: 14,
-  //                       fontWeight: FontWeight.w700,
-  //                       color: isDark ? Colors.white : const Color(0xFF1E293B),
-  //                     ),
-  //                   ),
-  //                 ),
-  //               ],
-  //             ),
-  //             const SizedBox(height: 12),
-  //             Container(
-  //               padding: const EdgeInsets.all(12),
-  //               decoration: BoxDecoration(
-  //                 color: isDark
-  //                     ? const Color(0xFF0F172A).withOpacity(0.3)
-  //                     : Colors.white.withOpacity(0.7),
-  //                 borderRadius: BorderRadius.circular(8),
-  //                 border: Border.all(
-  //                   color: const Color(0xFF84CC16).withOpacity(0.2),
-  //                 ),
-  //               ),
-  //               child: Text(
-  //                 entry.value,
-  //                 style: TextStyle(
-  //                   fontSize: 14,
-  //                   height: 1.5,
-  //                   color: isDark ? Colors.grey[300] : const Color(0xFF475569),
-  //                 ),
-  //               ),
-  //             ),
-  //           ],
-  //         ),
-  //       );
-  //     }).toList(),
-  //   );
-  // }
-
   // Helper methods
   Color _getStatusColor(String status) {
     switch (status) {
@@ -1423,19 +765,25 @@ class _MaintenanceCountDetailScreenState
     } else {
       // Fallback to old structure
       final mechanicalKeys = [
-        'bathroom_heaters',
-        'cafeteria_heaters',
-        'sinks',
+        'bathroom_heaters_1',
+        'bathroom_heaters_2',
+        'cafeteria_heaters_1',
+        'hand_sink',
+        'basin_sink',
         'western_toilet',
         'arabic_toilet',
-        'siphons',
+        'arabic_siphon',
+        'english_siphon',
         'bidets',
         'wall_exhaust_fans',
         'central_exhaust_fans',
         'cafeteria_exhaust_fans',
         'wall_water_coolers',
         'corridor_water_coolers',
-        'water_pumps'
+        'water_pumps',
+        'sink_mirrors',
+        'wall_tap',
+        'sink_tap'
       ];
 
       // Add mechanical item counts
@@ -1469,7 +817,8 @@ class _MaintenanceCountDetailScreenState
       'speakers',
       'microphone_system',
       'ac_panel',
-      'split_ac',
+      'split_concealed_ac',
+      'hidden_ducts_ac',
       'window_ac',
       'cabinet_ac',
       'package_ac',
@@ -1479,7 +828,12 @@ class _MaintenanceCountDetailScreenState
       'main_breaker',
       'concealed_ac_breaker',
       'package_ac_breaker',
-      'electrical_panels'
+      'electrical_panels',
+      'breakers',
+      'bells',
+      'smoke_detectors',
+      'heat_detectors',
+      'camera'
     ];
 
     int itemCount = 0;
@@ -1512,7 +866,10 @@ class _MaintenanceCountDetailScreenState
     final civilKeys = [
       'blackboard',
       'internal_windows',
-      'external_windows'
+      'external_windows',
+      'emergency_signs',
+      'single_door',
+      'double_door'
     ];
 
     int itemCount = 0;
@@ -1555,11 +912,37 @@ class _MaintenanceCountDetailScreenState
       'electrical_panels': 'اللوحات الكهربائية',
       'fire_extinguishers': 'طفايات الحريق',
 
-      // AC types
-      'split_ac': 'مكيف سبليت',
+      // Updated AC types
+      'split_concealed_ac': 'مكيف سبليت مخفي',
+      'hidden_ducts_ac': 'مكيف مخفي بقنوات',
       'window_ac': 'مكيف نافذة',
       'cabinet_ac': 'مكيف خزانة',
       'package_ac': 'مكيف حزمة',
+
+      // Updated sink types
+      'hand_sink': 'حوض غسيل اليدين',
+      'basin_sink': 'حوض الحوض',
+
+      // Updated siphon types
+      'arabic_siphon': 'سيفون عربي',
+      'english_siphon': 'سيفون إنجليزي',
+
+      // Updated breaker and bell types
+      'breakers': 'قواطع كهربائية',
+      'bells': 'أجراس',
+
+      // Updated detector types
+      'smoke_detectors': 'أجهزة استشعار الدخان',
+      'heat_detectors': 'أجهزة استشعار الحرارة',
+
+      // New item types
+      'camera': 'كاميرات',
+      'emergency_signs': 'علامات الطوارئ',
+      'sink_mirrors': 'مرايا الحوض',
+      'wall_tap': 'صنبور الحائط',
+      'sink_tap': 'صنبور الحوض',
+      'single_door': 'أبواب مفردة',
+      'double_door': 'أبواب مزدوجة',
 
       // Survey answers
       'fire_alarm_system': 'نظام إنذار الحريق',
@@ -2442,40 +1825,72 @@ class _MaintenanceCountDetailScreenState
             ],
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            height: 100,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
+          if (photos.isNotEmpty) ...[
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: 1,
+              ),
               itemCount: photos.length,
               itemBuilder: (context, index) {
-                return Container(
-                  margin: const EdgeInsets.only(right: 12),
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: color.withOpacity(0.3)),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
-                      photos[index],
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          color: color.withOpacity(0.1),
-                          child: Icon(
-                            Icons.error_outline,
-                            color: color,
-                          ),
-                        );
-                      },
+                return GestureDetector(
+                  onTap: () => _showPhotoDialog(context, photos[index]),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: color.withOpacity(0.3)),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        photos[index],
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: color.withOpacity(0.1),
+                            child: Icon(
+                              Icons.error_outline,
+                              color: color,
+                            ),
+                          );
+                        },
+                      ),
                     ),
                   ),
                 );
               },
             ),
-          ),
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: color.withOpacity(0.2)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.photo_library_outlined,
+                    color: color.withOpacity(0.6),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'لا توجد صور لهذا القسم',
+                    style: TextStyle(
+                      color: color.withOpacity(0.6),
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -2613,6 +2028,37 @@ class _MaintenanceCountDetailScreenState
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showPhotoDialog(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: InteractiveViewer(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              imageUrl,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  height: 200,
+                  color: Colors.grey[200],
+                  child: const Center(
+                    child: Icon(
+                      Icons.error_outline,
+                      size: 48,
+                      color: Colors.grey,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
       ),
     );
   }

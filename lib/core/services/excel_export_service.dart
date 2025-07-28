@@ -11,6 +11,7 @@ import '../../data/repositories/maintenance_count_repository.dart';
 import '../../data/repositories/damage_count_repository.dart';
 // Web-specific imports - conditional
 import 'dart:html' as html;
+// Conditional import for Syncfusion - only import if available
 import 'package:syncfusion_flutter_xlsio/xlsio.dart' as syncfusion;
 
 class ExcelExportService {
@@ -25,6 +26,17 @@ class ExcelExportService {
       : _damageRepository = damageRepository;
 
   Future<void> exportAllMaintenanceCounts() async {
+    // Prevent multiple simultaneous downloads
+    if (_isDownloading) {
+      throw Exception('Download already in progress. Please wait.');
+    }
+    
+    _isDownloading = true;
+    
+    // Performance monitoring
+    final stopwatch = Stopwatch()..start();
+    print('⏱️ Starting maintenance counts export at ${DateTime.now()}');
+    
     try {
       // Request storage permission for Android (not needed on web)
       if (!kIsWeb) {
@@ -37,12 +49,20 @@ class ExcelExportService {
           }
         } catch (e) {
           // Platform check failed, likely on web - continue without permission check
+          print('Platform check failed: $e');
         }
       }
 
-      // Get all maintenance counts and school names
-      final allCounts = await _getAllMaintenanceCounts();
-      final schoolNames = await _getSchoolNamesMap();
+      // Get all maintenance counts and school names with timeout
+      final allCounts = await _getAllMaintenanceCounts()
+          .timeout(const Duration(seconds: 30), onTimeout: () {
+        throw Exception('Database query timeout - taking too long to fetch data');
+      });
+      
+      final schoolNames = await _getSchoolNamesMap()
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        throw Exception('School names query timeout');
+      });
 
       print('Total maintenance counts: ${allCounts.length}'); // Debug
       for (final count in allCounts) {
@@ -53,12 +73,80 @@ class ExcelExportService {
         throw Exception('No maintenance counts found');
       }
 
+      // Check if dataset is too large and suggest simplified export
+      if (allCounts.length > 100) {
+        print('⚠️ Large dataset detected: ${allCounts.length} records');
+        print('💡 Consider using simplified export for better performance');
+      }
+
+      // Check if Syncfusion is available and try it first
+      bool syncfusionAvailable = false;
+      try {
+        // Test if Syncfusion is available by creating a workbook
+        final testWorkbook = syncfusion.Workbook();
+        testWorkbook.dispose();
+        syncfusionAvailable = true;
+        print('✅ Syncfusion is available and working');
+      } catch (e) {
+        print('❌ Syncfusion not available: $e');
+        print('📋 This could be due to:');
+        print('   - Library not properly installed');
+        print('   - Version compatibility issues');
+        print('   - Platform-specific problems');
+        syncfusionAvailable = false;
+      }
+
+      if (syncfusionAvailable) {
+        try {
+          // Add timeout to prevent hanging
+          await _exportMaintenanceCountsSyncfusion(allCounts, schoolNames)
+              .timeout(const Duration(minutes: 2), onTimeout: () {
+            throw Exception('Export timeout - taking too long to generate file');
+          });
+        } catch (syncfusionError) {
+          print('Syncfusion export failed: $syncfusionError');
+          print('Falling back to excel package...');
+          await _exportMaintenanceCountsExcelPackage(allCounts, schoolNames)
+              .timeout(const Duration(minutes: 1), onTimeout: () {
+            throw Exception('Export timeout - taking too long to generate file');
+          });
+        }
+      } else {
+        // Use excel package directly if Syncfusion is not available
+        print('Using excel package fallback...');
+        await _exportMaintenanceCountsExcelPackage(allCounts, schoolNames)
+            .timeout(const Duration(minutes: 1), onTimeout: () {
+          throw Exception('Export timeout - taking too long to generate file');
+        });
+      }
+    } catch (e) {
+      print('❌ Export error: $e');
+      throw Exception('Failed to export Excel: ${e.toString()}');
+    } finally {
+      stopwatch.stop();
+      print('⏱️ Export completed in ${stopwatch.elapsed.inSeconds} seconds');
+      // Always reset the downloading state, even on error
+      _isDownloading = false;
+    }
+  }
+
+  Future<void> _exportMaintenanceCountsSyncfusion(List<MaintenanceCount> allCounts, Map<String, String> schoolNames) async {
+    try {
+      print('🚀 Starting Syncfusion export...');
+      print('📊 Data to export:');
+      print('   - Total counts: ${allCounts.length}');
+      print('   - Schools: ${schoolNames.length}');
+      print('   - Platform: ${kIsWeb ? 'Web' : 'Mobile'}');
+      
       // Use Syncfusion for all platforms
       final workbook = syncfusion.Workbook();
+      print('✅ Workbook created successfully');
 
       // Safety Sheet
+      print('📋 Creating Safety Sheet...');
       final safetySheet = workbook.worksheets[0];
       safetySheet.name = 'أمن وسلامة';
+      print('✅ Safety Sheet created');
       
       // Title
       final titleRange = safetySheet.getRangeByIndex(1, 1, 1, 23);
@@ -103,8 +191,15 @@ class ExcelExportService {
       }
       
       // Data rows
+      print('📝 Adding Safety Sheet data rows (${allCounts.length} rows)...');
       for (int row = 0; row < allCounts.length; row++) {
         final count = allCounts[row];
+        
+        // Progress logging every 10 rows
+        if (row % 10 == 0) {
+          print('   📊 Processing Safety row ${row + 1}/${allCounts.length}');
+        }
+        
         final rowData = [
           schoolNames[count.schoolId] ?? 'مدرسة ${count.schoolId}',
           _formatDate(count.createdAt),
@@ -574,17 +669,112 @@ class ExcelExportService {
       footerRange2.cellStyle.bold = true;
 
       // Save and download
+      print('💾 Saving workbook...');
       final List<int> bytes = workbook.saveAsStream();
+      print('✅ Workbook saved, size: ${bytes.length} bytes');
+      
+      print('🧹 Disposing workbook...');
       workbook.dispose();
+      print('✅ Workbook disposed');
 
-      final blob = html.Blob([Uint8List.fromList(bytes)]);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute('download', 'حصر الاعداد والحالة.xlsx')
-        ..click();
-      html.Url.revokeObjectUrl(url);
+      if (kIsWeb) {
+        print('🌐 Creating web download...');
+        try {
+          final blob = html.Blob([Uint8List.fromList(bytes)]);
+          final url = html.Url.createObjectUrlFromBlob(blob);
+          final anchor = html.AnchorElement(href: url)
+            ..setAttribute('download', 'حصر الاعداد والحالة.xlsx')
+            ..click();
+          html.Url.revokeObjectUrl(url);
+          print('✅ Web download initiated');
+        } catch (webError) {
+          print('❌ Web download failed: $webError');
+          rethrow;
+        }
+      } else {
+        print('📱 Creating mobile download...');
+        try {
+          final directory = await getApplicationDocumentsDirectory();
+          final path = '${directory.path}/حصر الاعداد والحالة.xlsx';
+          final file = File(path);
+          await file.writeAsBytes(bytes, flush: true);
+          await Share.shareXFiles([XFile(path)], text: 'حصر الاعداد والحالة');
+          print('✅ Mobile download completed');
+        } catch (mobileError) {
+          print('❌ Mobile download failed: $mobileError');
+          rethrow;
+        }
+      }
     } catch (e) {
-      throw Exception('Failed to export Excel: ${e.toString()}');
+      print('Syncfusion export error: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> _exportMaintenanceCountsExcelPackage(List<MaintenanceCount> allCounts, Map<String, String> schoolNames) async {
+    try {
+      print('🔄 Using Excel package fallback...');
+      
+      // Fallback to excel package
+      final excel = Excel.createExcel();
+      excel.delete('Sheet1');
+      
+      // Create a simple summary sheet as fallback
+      final sheet = excel['ملخص حصر الصيانة'];
+      print('✅ Excel package sheet created');
+      
+      // Headers
+      final headers = [
+        'اسم المدرسة',
+        'تاريخ الحصر',
+        'الحالة',
+        'عدد العناصر',
+      ];
+      
+      for (int i = 0; i < headers.length; i++) {
+        final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+        cell.value = headers[i];
+      }
+      
+      // Data rows
+      for (int row = 0; row < allCounts.length; row++) {
+        final count = allCounts[row];
+        final rowData = [
+          schoolNames[count.schoolId] ?? 'مدرسة ${count.schoolId}',
+          _formatDate(count.createdAt),
+          count.status == 'submitted' ? 'مرسل' : 'مسودة',
+          count.itemCounts.length,
+        ];
+        
+        for (int i = 0; i < rowData.length; i++) {
+          _setCellValue(sheet, i, row + 1, rowData[i]);
+        }
+      }
+      
+      // Save and download
+      final bytes = excel.encode();
+      if (bytes == null) {
+        throw Exception('Failed to generate Excel file');
+      }
+      
+      if (kIsWeb) {
+        final blob = html.Blob([Uint8List.fromList(bytes)]);
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement(href: url)
+          ..setAttribute('download', 'حصر الاعداد والحالة_مبسط.xlsx')
+          ..click();
+        html.Url.revokeObjectUrl(url);
+      } else {
+        // For mobile platforms, save to file and share
+        final directory = await getApplicationDocumentsDirectory();
+        final path = '${directory.path}/حصر الاعداد والحالة_مبسط.xlsx';
+        final file = File(path);
+        await file.writeAsBytes(bytes, flush: true);
+        await Share.shareXFiles([XFile(path)], text: 'حصر الاعداد والحالة');
+      }
+    } catch (e) {
+      print('Excel package fallback error: $e');
+      rethrow;
     }
   }
 
@@ -1515,6 +1705,124 @@ class ExcelExportService {
     }
   }
 
+  Future<void> exportAllMaintenanceCountsSimplified() async {
+    // Prevent multiple simultaneous downloads
+    if (_isDownloading) {
+      throw Exception('Download already in progress. Please wait.');
+    }
+    
+    _isDownloading = true;
+    
+    try {
+      print('🚀 Starting simplified maintenance counts export...');
+      
+      // Get all maintenance counts and school names with timeout
+      final allCounts = await _getAllMaintenanceCounts()
+          .timeout(const Duration(seconds: 30), onTimeout: () {
+        throw Exception('Database query timeout - taking too long to fetch data');
+      });
+      
+      final schoolNames = await _getSchoolNamesMap()
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        throw Exception('School names query timeout');
+      });
 
+      print('📊 Data to export: ${allCounts.length} records');
+
+      if (allCounts.isEmpty) {
+        throw Exception('No maintenance counts found');
+      }
+
+      // Use excel package for simplified export
+      final excel = Excel.createExcel();
+      excel.delete('Sheet1');
+      
+      // Create a comprehensive summary sheet
+      final sheet = excel['حصر الصيانة المبسط'];
+      
+      // Headers for simplified export
+      final headers = [
+        'اسم المدرسة',
+        'تاريخ الحصر',
+        'الحالة',
+        'عدد العناصر',
+        'عدد الإجابات النصية',
+        'عدد الإجابات نعم/لا',
+        'ملاحظات الصيانة',
+        'بيانات لوحة الإنذار',
+        'بيانات التكييف',
+        'بيانات السخانات',
+      ];
+      
+      // Add headers
+      for (int i = 0; i < headers.length; i++) {
+        final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+        cell.value = headers[i];
+      }
+      
+      // Add data rows
+      print('📝 Adding data rows...');
+      for (int row = 0; row < allCounts.length; row++) {
+        final count = allCounts[row];
+        
+        // Progress logging every 20 rows
+        if (row % 20 == 0) {
+          print('   📊 Processing row ${row + 1}/${allCounts.length}');
+        }
+        
+        final rowData = [
+          schoolNames[count.schoolId] ?? 'مدرسة ${count.schoolId}',
+          _formatDate(count.createdAt),
+          count.status == 'submitted' ? 'مرسل' : 'مسودة',
+          count.itemCounts.length,
+          count.textAnswers.length,
+          count.yesNoAnswers.length,
+          count.maintenanceNotes.isNotEmpty ? 'نعم' : 'لا',
+          count.fireSafetyAlarmPanelData.isNotEmpty ? 'نعم' : 'لا',
+          count.fireSafetyConditionOnlyData.isNotEmpty ? 'نعم' : 'لا',
+          count.heaterEntries.isNotEmpty ? 'نعم' : 'لا',
+        ];
+        
+        for (int i = 0; i < rowData.length; i++) {
+          _setCellValue(sheet, i, row + 1, rowData[i]);
+        }
+      }
+      
+      // Save and download
+      print('💾 Saving simplified export...');
+      final bytes = excel.encode();
+      if (bytes == null) {
+        throw Exception('Failed to generate simplified Excel file');
+      }
+      
+      print('✅ Simplified export saved, size: ${bytes.length} bytes');
+      
+      if (kIsWeb) {
+        print('🌐 Creating web download for simplified export...');
+        final blob = html.Blob([Uint8List.fromList(bytes)]);
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement(href: url)
+          ..setAttribute('download', 'حصر الصيانة المبسط.xlsx')
+          ..click();
+        html.Url.revokeObjectUrl(url);
+        print('✅ Simplified web download completed');
+      } else {
+        print('📱 Creating mobile download for simplified export...');
+        final directory = await getApplicationDocumentsDirectory();
+        final path = '${directory.path}/حصر الصيانة المبسط.xlsx';
+        final file = File(path);
+        await file.writeAsBytes(bytes, flush: true);
+        await Share.shareXFiles([XFile(path)], text: 'حصر الصيانة المبسط');
+        print('✅ Simplified mobile download completed');
+      }
+      
+    } catch (e) {
+      print('❌ Simplified export error: $e');
+      throw Exception('Failed to export simplified Excel: ${e.toString()}');
+    } finally {
+      // Always reset the downloading state, even on error
+      _isDownloading = false;
+    }
+  }
 
 }

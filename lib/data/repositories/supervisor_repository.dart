@@ -339,4 +339,42 @@ class SupervisorRepository {
       return {for (final id in supervisorIds) id: 0};
     }
   }
+
+  /// Get supervisor by ID
+  Future<Supervisor?> getSupervisorById(String supervisorId) async {
+    try {
+      final response = await _client
+          .from('supervisors')
+          .select('*')
+          .eq('id', supervisorId)
+          .maybeSingle();
+
+      if (response != null) {
+        return Supervisor.fromMap(response);
+      }
+      return null;
+    } catch (e) {
+      print('Error fetching supervisor by ID: $e');
+      return null;
+    }
+  }
+
+  /// Get multiple supervisors by IDs
+  Future<List<Supervisor>> getSupervisorsByIds(List<String> supervisorIds) async {
+    try {
+      if (supervisorIds.isEmpty) return [];
+      
+      final response = await _client
+          .from('supervisors')
+          .select('*')
+          .inFilter('id', supervisorIds);
+
+      return (response as List)
+          .map((data) => Supervisor.fromMap(data))
+          .toList();
+    } catch (e) {
+      print('Error fetching supervisors by IDs: $e');
+      return [];
+    }
+  }
 }

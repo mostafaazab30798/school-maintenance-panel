@@ -30,21 +30,30 @@ class MaintenanceFormBloc extends Bloc<MaintenanceFormEvent, MaintenanceFormStat
     SchoolNameChanged event,
     Emitter<MaintenanceFormState> emit,
   ) {
-    emit(state.copyWith(schoolName: event.schoolName));
+    emit(state.copyWith(
+      schoolName: event.schoolName,
+      hasInteractedWithForm: true,
+    ));
   }
 
   void _onNotesChanged(
     NotesChanged event,
     Emitter<MaintenanceFormState> emit,
   ) {
-    emit(state.copyWith(notes: event.notes));
+    emit(state.copyWith(
+      notes: event.notes,
+      hasInteractedWithForm: true,
+    ));
   }
 
   void _onScheduledDateChanged(
     ScheduledDateChanged event,
     Emitter<MaintenanceFormState> emit,
   ) {
-    emit(state.copyWith(scheduledDate: event.scheduledDate));
+    emit(state.copyWith(
+      scheduledDate: event.scheduledDate,
+      hasInteractedWithForm: true,
+    ));
   }
 
   Future<void> _onImagesPickRequested(

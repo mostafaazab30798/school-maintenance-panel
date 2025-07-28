@@ -2,9 +2,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import '../../../data/repositories/maintenance_count_repository.dart';
 import '../../../data/repositories/damage_count_repository.dart';
+import '../../../data/repositories/supervisor_repository.dart';
 import '../../../data/models/damage_count.dart';
 import '../../../data/models/maintenance_count.dart';
+import '../../../data/models/supervisor.dart';
 import '../../../core/services/admin_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 part 'maintenance_counts_event.dart';
 part 'maintenance_counts_state.dart';
@@ -13,6 +16,7 @@ class MaintenanceCountsBloc
     extends Bloc<MaintenanceCountsEvent, MaintenanceCountsState> {
   final MaintenanceCountRepository _repository;
   final DamageCountRepository _damageRepository;
+  final SupervisorRepository _supervisorRepository;
   final AdminService _adminService;
 
   MaintenanceCountsBloc({
@@ -21,6 +25,7 @@ class MaintenanceCountsBloc
     required AdminService adminService,
   })  : _repository = repository,
         _damageRepository = damageRepository,
+        _supervisorRepository = SupervisorRepository(Supabase.instance.client),
         _adminService = adminService,
         super(MaintenanceCountsInitial()) {
     on<LoadSchoolsWithCounts>(_onLoadSchoolsWithCounts);
@@ -98,20 +103,45 @@ class MaintenanceCountsBloc
       // For super admins, supervisorIds remains empty (no filtering - can see all data)
       print('🔍 DEBUG: Final supervisor IDs: $supervisorIds');
 
-      print('🔍 DEBUG: Calling repository.getAllMaintenanceCountRecords');
-      final records = await _repository.getAllMaintenanceCountRecords(
+      print('🔍 DEBUG: Calling repository.getMergedMaintenanceCountRecords');
+      final records = await _repository.getMergedMaintenanceCountRecords(
         supervisorIds: supervisorIds, // Pass all supervisor IDs
         schoolId: event.schoolId,
         status: event.status,
       );
 
-      print('🔍 DEBUG: Repository returned ${records.length} records');
+      print('🔍 DEBUG: Repository returned ${records.length} merged records');
       if (records.isNotEmpty) {
         print('🔍 DEBUG: First record school: ${records.first.schoolName}');
         print('🔍 DEBUG: First record status: ${records.first.status}');
       }
 
-      emit(MaintenanceCountRecordsLoaded(records: records));
+      // Fetch supervisor names for all records
+      Map<String, String> supervisorNames = {};
+      try {
+        // Extract individual supervisor IDs from merged records
+        final Set<String> uniqueSupervisorIds = {};
+        for (final record in records) {
+          // Split supervisor IDs (they are joined with ', ' in merged records)
+          final supervisorIdList = record.supervisorId.split(', ');
+          uniqueSupervisorIds.addAll(supervisorIdList);
+        }
+        
+        if (uniqueSupervisorIds.isNotEmpty) {
+          final supervisors = await _supervisorRepository.getSupervisorsByIds(uniqueSupervisorIds.toList());
+          for (final supervisor in supervisors) {
+            supervisorNames[supervisor.id] = supervisor.username;
+          }
+          print('🔍 DEBUG: Fetched ${supervisorNames.length} supervisor names');
+        }
+      } catch (e) {
+        print('⚠️ WARNING: Failed to fetch supervisor names: $e');
+      }
+
+      emit(MaintenanceCountRecordsLoaded(
+        records: records,
+        supervisorNames: supervisorNames,
+      ));
     } catch (e, stackTrace) {
       print('❌ ERROR: Failed to load maintenance count records: $e');
       print('❌ ERROR: Stack trace: $stackTrace');
@@ -148,7 +178,25 @@ class MaintenanceCountsBloc
         status: event.status,
       );
 
-      emit(DamageCountRecordsLoaded(records: records));
+      // Fetch supervisor names for all records
+      Map<String, String> supervisorNames = {};
+      try {
+        final uniqueSupervisorIds = records.map((r) => r.supervisorId).toSet().toList();
+        if (uniqueSupervisorIds.isNotEmpty) {
+          final supervisors = await _supervisorRepository.getSupervisorsByIds(uniqueSupervisorIds);
+          for (final supervisor in supervisors) {
+            supervisorNames[supervisor.id] = supervisor.username;
+          }
+          print('🔍 DEBUG: Fetched ${supervisorNames.length} supervisor names for damage counts');
+        }
+      } catch (e) {
+        print('⚠️ WARNING: Failed to fetch supervisor names for damage counts: $e');
+      }
+
+      emit(DamageCountRecordsLoaded(
+        records: records,
+        supervisorNames: supervisorNames,
+      ));
     } catch (e) {
       emit(MaintenanceCountsError('Failed to load damage count records: $e'));
     }
@@ -181,7 +229,48 @@ class MaintenanceCountsBloc
         supervisorIds: supervisorIds, // Pass all supervisor IDs
       );
 
-      emit(SchoolsWithDamageLoaded(schools: schools));
+      // Fetch supervisor names for all unique supervisor IDs
+      final Map<String, String> supervisorNames = {};
+      final Set<String> uniqueSupervisorIds = {};
+      
+      for (final school in schools) {
+        final supervisorId = school['supervisor_id']?.toString();
+        if (supervisorId != null && supervisorId.isNotEmpty) {
+          uniqueSupervisorIds.add(supervisorId);
+        }
+      }
+
+      print('🔍 DEBUG: Found ${uniqueSupervisorIds.length} unique supervisor IDs: $uniqueSupervisorIds');
+
+      // Fetch supervisor names from the supervisors table
+      if (uniqueSupervisorIds.isNotEmpty) {
+        try {
+          final supervisorsResponse = await Supabase.instance.client
+              .from('supervisors')
+              .select('id, username')
+              .inFilter('id', uniqueSupervisorIds.toList());
+
+          print('🔍 DEBUG: Supervisors query response: $supervisorsResponse');
+
+          for (final supervisor in supervisorsResponse) {
+            final id = supervisor['id']?.toString();
+            final username = supervisor['username']?.toString();
+            if (id != null && username != null) {
+              supervisorNames[id] = username;
+              print('🔍 DEBUG: Mapped supervisor $id -> $username');
+            }
+          }
+        } catch (e) {
+          print('⚠️ WARNING: Failed to fetch supervisor names: $e');
+        }
+      }
+
+      print('🔍 DEBUG: Final supervisor names map: $supervisorNames');
+
+      emit(SchoolsWithDamageLoaded(
+        schools: schools,
+        supervisorNames: supervisorNames,
+      ));
     } catch (e) {
       emit(MaintenanceCountsError('Failed to load schools with damage: $e'));
     }
@@ -302,7 +391,22 @@ class MaintenanceCountsBloc
 
       if (damageCount != null) {
         print('🔍 DEBUG: Successfully found damage count: ${damageCount.id}');
-        emit(DamageCountDetailsLoaded(damageCount: damageCount));
+        
+        // Fetch supervisor name
+        String? supervisorName;
+        try {
+          final supervisor = await _supervisorRepository.getSupervisorById(damageCount.supervisorId);
+          supervisorName = supervisor?.username;
+          print('🔍 DEBUG: Found supervisor name: $supervisorName');
+        } catch (e) {
+          print('⚠️ WARNING: Failed to fetch supervisor name: $e');
+          supervisorName = null;
+        }
+        
+        emit(DamageCountDetailsLoaded(
+          damageCount: damageCount,
+          supervisorName: supervisorName,
+        ));
       } else {
         print('🔍 DEBUG: No damage count found for school: ${event.schoolId}');
         emit(const MaintenanceCountsError(

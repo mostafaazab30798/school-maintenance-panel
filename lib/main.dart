@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'data/repositories/report_repository.dart';
 import 'data/repositories/supervisor_repository.dart';
 import 'data/repositories/maintenance_repository.dart';
 import 'data/repositories/maintenance_count_repository.dart';
 import 'data/repositories/damage_count_repository.dart';
+import 'data/repositories/fci_assessment_repository.dart';
 import 'logic/blocs/reports/report_bloc.dart';
 import 'logic/blocs/reports/report_event.dart';
 import 'logic/blocs/dashboard/dashboard_bloc.dart';
@@ -25,16 +27,20 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Arabic locale data for DateFormat
+  await initializeDateFormatting('ar', null);
+  
   try {
     await dotenv.load(fileName: ".env"); // Load environment variables
   } catch (e) {
     throw Exception('Error loading .env file: $e'); // Print error if any
   }
-final String baseUrl = dotenv.env['SUPBASE_URL'] ?? 'default_url';
-  final String apiKey = dotenv.env['SUPBASE_ANONKEY'] ?? 'default_key';
+// final String baseUrl = dotenv.env['SUPBASE_URL'] ?? 'default_url';
+//   final String apiKey = dotenv.env['SUPBASE_ANONKEY'] ?? 'default_key';
  // ✅ Load env vars injected during build
-  // const String baseUrl = String.fromEnvironment('SUPBASE_URL');
-  // const String apiKey = String.fromEnvironment('SUPBASE_ANONKEY');
+  const String baseUrl = String.fromEnvironment('SUPBASE_URL');
+  const String apiKey = String.fromEnvironment('SUPBASE_ANONKEY');
 
   // ✅ Optional: debug log to verify values
   // print("Supabase URL: $baseUrl");
@@ -59,6 +65,7 @@ class MyApp extends StatelessWidget {
     final maintenanceRepo = MaintenanceReportRepository(supabase);
     final maintenanceCountRepo = MaintenanceCountRepository(supabase);
     final damageCountRepo = DamageCountRepository(supabase);
+    final fciAssessmentRepo = FciAssessmentRepository(supabase);
     final adminService = AdminService(supabase);
     final adminManagementService = AdminManagementService(supabase);
 
@@ -91,6 +98,7 @@ class MyApp extends StatelessWidget {
               maintenanceRepository: maintenanceRepo,
               maintenanceCountRepository: maintenanceCountRepo,
               damageCountRepository: damageCountRepo,
+              fciAssessmentRepository: fciAssessmentRepo,
               adminService: adminService,
             )..add(LoadDashboardData()),
           ),

@@ -13,6 +13,7 @@ import '../common/weekly_report_dialog.dart';
 import '../common/user_info_widget.dart';
 import '../common/shared_back_button.dart';
 import '../../../core/services/admin_service.dart';
+import '../../../core/utils/maintenance_counts_test.dart';
 
 class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onCreateAdmin;
@@ -567,27 +568,62 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
       final repository = MaintenanceCountRepository(Supabase.instance.client);
       final excelService = ExcelExportService(repository);
       
-      // Export with retry mechanism
+      // Export with retry mechanism and better error handling
       int retryCount = 0;
       const maxRetries = 3;
+      Exception? lastError;
       
       while (retryCount < maxRetries) {
         try {
           await excelService.exportAllMaintenanceCounts();
           break; // Success, exit retry loop
         } catch (e) {
+          lastError = e is Exception ? e : Exception(e.toString());
           retryCount++;
+          print('Maintenance counts export attempt $retryCount failed: $e');
+          
           if (retryCount >= maxRetries) {
-            rethrow; // Re-throw if all retries failed
+            break; // Exit retry loop
           }
-          // Wait before retry
-          await Future.delayed(Duration(milliseconds: 500 * retryCount));
+          
+          // Update loading dialog with retry information
+          if (context.mounted) {
+            Navigator.of(context).pop();
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => AlertDialog(
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(color: Color(0xFFF59E0B)),
+                    const SizedBox(height: 16),
+                    Text(
+                      'إعادة المحاولة... ($retryCount/$maxRetries)',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).textTheme.bodyLarge?.color,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+          
+          // Wait before retry with exponential backoff
+          await Future.delayed(Duration(milliseconds: 1000 * retryCount));
         }
       }
       
       // Close loading dialog
-      if (context.mounted) {
+      if (context.mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
+      }
+      
+      if (lastError != null) {
+        // All retries failed
+        throw lastError;
       }
       
       if (context.mounted) {
@@ -608,8 +644,24 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
       }
     } catch (e) {
       // Close loading dialog if still open
-      if (context.mounted) {
+      if (context.mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
+      }
+      
+      // Provide more specific error messages
+      String errorMessage = 'حدث خطأ أثناء التحميل';
+      if (e.toString().contains('No maintenance counts found')) {
+        errorMessage = 'لا توجد بيانات حصر صيانة للتحميل';
+      } else if (e.toString().contains('Storage permission denied')) {
+        errorMessage = 'تم رفض إذن التخزين. يرجى السماح بالوصول للملفات';
+      } else if (e.toString().contains('Download already in progress')) {
+        errorMessage = 'تحميل قيد التنفيذ بالفعل. يرجى الانتظار';
+      } else if (e.toString().contains('Export timeout')) {
+        errorMessage = 'استغرق التصدير وقتاً طويلاً. يرجى المحاولة مرة أخرى';
+      } else if (e.toString().contains('Failed to export Excel')) {
+        errorMessage = 'فشل في إنشاء ملف Excel. يرجى المحاولة مرة أخرى';
+      } else {
+        errorMessage = 'حدث خطأ أثناء التحميل: ${e.toString().split(':').last.trim()}';
       }
       
       if (context.mounted) {
@@ -619,12 +671,18 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
               children: [
                 const Icon(Icons.error_outline, color: Colors.white),
                 const SizedBox(width: 12),
-                Expanded(child: Text('حدث خطأ أثناء التحميل: $e')),
+                Expanded(child: Text(errorMessage)),
               ],
             ),
             backgroundColor: const Color(0xFFEF4444),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'إعادة المحاولة',
+              textColor: Colors.white,
+              onPressed: () => _downloadMaintenanceCounts(context),
+            ),
           ),
         );
       }
@@ -724,4 +782,5 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
       }
     }
   }
+
 }

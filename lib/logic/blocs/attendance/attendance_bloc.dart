@@ -14,6 +14,8 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
     on<UpdateAttendance>(_onUpdateAttendance);
     on<DeleteAttendance>(_onDeleteAttendance);
     on<LoadAttendanceStats>(_onLoadAttendanceStats);
+    on<UpdateLeaveInfo>(_onUpdateLeaveInfo);
+    on<CreateAttendanceWithLeave>(_onCreateAttendanceWithLeave);
   }
 
   Future<void> _onLoadAttendanceForSupervisor(
@@ -85,6 +87,42 @@ class AttendanceBloc extends Bloc<AttendanceEvent, AttendanceState> {
     try {
       final stats = await _attendanceRepository.getAttendanceStats(event.supervisorId);
       emit(AttendanceStatsLoaded(stats: stats));
+    } catch (e) {
+      emit(AttendanceError(message: e.toString()));
+    }
+  }
+
+  Future<void> _onUpdateLeaveInfo(
+    UpdateLeaveInfo event,
+    Emitter<AttendanceState> emit,
+  ) async {
+    try {
+      final updates = <String, dynamic>{};
+      if (event.leavePhotoUrl != null) {
+        updates['leave_photo_url'] = event.leavePhotoUrl;
+      }
+      if (event.leaveTime != null) {
+        updates['leave_time'] = event.leaveTime!.toIso8601String();
+      }
+      
+      await _attendanceRepository.updateAttendance(event.attendanceId, updates);
+      add(LoadAttendanceForSupervisor(supervisorId: event.supervisorId));
+    } catch (e) {
+      emit(AttendanceError(message: e.toString()));
+    }
+  }
+
+  Future<void> _onCreateAttendanceWithLeave(
+    CreateAttendanceWithLeave event,
+    Emitter<AttendanceState> emit,
+  ) async {
+    try {
+      final attendanceWithLeave = event.attendance.copyWith(
+        leavePhotoUrl: event.leavePhotoUrl,
+        leaveTime: event.leaveTime,
+      );
+      await _attendanceRepository.createAttendance(attendanceWithLeave);
+      add(LoadAttendanceForSupervisor(supervisorId: event.attendance.supervisorId));
     } catch (e) {
       emit(AttendanceError(message: e.toString()));
     }

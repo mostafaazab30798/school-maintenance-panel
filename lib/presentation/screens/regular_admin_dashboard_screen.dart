@@ -18,6 +18,7 @@ import '../../data/repositories/supervisor_repository.dart';
 import '../../data/repositories/maintenance_repository.dart';
 import '../../data/repositories/maintenance_count_repository.dart';
 import '../../data/repositories/damage_count_repository.dart';
+import '../../data/repositories/fci_assessment_repository.dart';
 import '../widgets/dashboard/dashboard_grid.dart';
 import '../widgets/dashboard/supervisor_card.dart';
 import '../widgets/common/esc_dismissible_dialog.dart';
@@ -66,6 +67,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             maintenanceRepository: MaintenanceReportRepository(supabase),
             maintenanceCountRepository: MaintenanceCountRepository(supabase),
             damageCountRepository: DamageCountRepository(supabase),
+            fciAssessmentRepository: FciAssessmentRepository(supabase),
             adminService: AdminService(supabase),
           )..add(const LoadDashboardData()), // 🚀 Trigger loading immediately
         ),
@@ -855,6 +857,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       // Schools data
                       totalSchools: state.totalSchools,
                       schoolsWithAchievements: state.schoolsWithAchievements,
+                      // FCI Assessment data
+                      totalFciAssessments: state.totalFciAssessments,
+                      submittedFciAssessments: state.submittedFciAssessments,
+                      draftFciAssessments: state.draftFciAssessments,
+                      schoolsWithFciAssessments: state.schoolsWithFciAssessments,
                       onTapTotalReports: () => context.push('/reports'),
                       onTapEmergencyReports: () => context.push(
                           '/reports?title=البلاغات الطارئة&priority=Emergency'),

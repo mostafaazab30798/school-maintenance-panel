@@ -9,6 +9,7 @@ import '../../../data/repositories/supervisor_repository.dart';
 import '../../../data/repositories/maintenance_repository.dart';
 import '../../../data/repositories/maintenance_count_repository.dart';
 import '../../../data/repositories/damage_count_repository.dart';
+import '../../../data/repositories/fci_assessment_repository.dart';
 import '../../../data/models/supervisor.dart';
 import '../../../data/models/report.dart';
 import '../../../data/models/maintenance_report.dart';
@@ -20,6 +21,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   final MaintenanceReportRepository maintenanceRepository;
   final MaintenanceCountRepository maintenanceCountRepository;
   final DamageCountRepository damageCountRepository;
+  final FciAssessmentRepository fciAssessmentRepository;
   final AdminService adminService;
   final CacheService _cacheService = CacheService();
   // 🚀 PERFORMANCE OPTIMIZATION: Add performance optimization service
@@ -31,6 +33,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
     required this.maintenanceRepository,
     required this.maintenanceCountRepository,
     required this.damageCountRepository,
+    required this.fciAssessmentRepository,
     required this.adminService,
   }) : super(DashboardInitial()) {
     on<LoadDashboardData>(_onLoadDashboardData);
@@ -50,7 +53,6 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
   Future<void> _onLoadDashboardData(
       LoadDashboardData event, Emitter<DashboardState> emit) async {
     try {
-      print('🚀 Starting optimized dashboard data fetch...');
       emit(DashboardLoading());
 
       // Check if current user is admin
@@ -62,54 +64,27 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       }
 
       // Get current admin's supervisor IDs
-      print('🔍 Getting supervisor IDs...');
       final supervisorIds = await adminService.getCurrentAdminSupervisorIds();
-      print('📊 Found ${supervisorIds.length} supervisor IDs: $supervisorIds');
+      print('🔍 Dashboard Debug: Admin has ${supervisorIds.length} assigned supervisors: $supervisorIds');
 
-      // If no supervisors assigned to this admin, return empty data
-      if (supervisorIds.isEmpty) {
-        print('⚠️ No supervisors found, returning empty data');
-        final emptyData = DashboardLoaded(
-          pendingReports: 0,
-          routineReports: 0,
-          totalReports: 0,
-          emergencyReports: 0,
-          completedReports: 0,
-          overdueReports: 0,
-          lateCompletedReports: 0,
-          totalSupervisors: 0,
-          completionRate: 0.0,
-          reports: [],
-          supervisors: [],
-          totalMaintenanceReports: 0,
-          completedMaintenanceReports: 0,
-          pendingMaintenanceReports: 0,
-          maintenanceReports: [],
-          schoolsWithCounts: 0,
-          schoolsWithDamage: 0,
-          totalSchools: 0,
-          schoolsWithAchievements: 0,
-        );
-        emit(emptyData);
-        return;
-      }
+      // 🚀 DEBUG: Check all FCI assessments in database
+      await fciAssessmentRepository.debugAllFciAssessments();
 
-      // 🚀 PERFORMANCE OPTIMIZATION: Load all data in parallel for faster dashboard loading
-      print('🚀 Loading dashboard data in parallel...');
-      
-      final results = await Future.wait([
-        // Get supervisors
+      // 🚀 PERFORMANCE OPTIMIZATION: Load all data in parallel to reduce total time
+      print('🚀 Starting parallel data loading...');
+      final results = await Future.wait<dynamic>([
+        // Get all supervisors (we'll filter by admin later)
         supervisorRepository.fetchSupervisors(),
-        // Get reports using dashboard-optimized method
+        // Get all reports for this admin's supervisors
         reportRepository.fetchReportsForDashboard(
           supervisorIds: supervisorIds,
           forceRefresh: event.forceRefresh,
-          limit: 50, // Limit for dashboard
+          limit: 50,
         ),
-        // Get maintenance reports using dashboard-optimized method
+        // Get all maintenance reports for this admin's supervisors
         maintenanceRepository.fetchMaintenanceReportsForDashboard(
           supervisorIds: supervisorIds,
-          limit: 20, // Smaller limit for dashboard
+          limit: 20,
         ),
         // Get maintenance count summary
         maintenanceCountRepository.getDashboardSummary(
@@ -119,6 +94,10 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         damageCountRepository.getDashboardSummary(
           supervisorIds: supervisorIds,
         ),
+        // Get FCI assessment summary
+        fciAssessmentRepository.getDashboardSummaryForceRefresh(
+          supervisorIds: supervisorIds,
+        ),
       ]);
 
       final allSupervisors = results[0] as List<Supervisor>;
@@ -126,38 +105,36 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
       final maintenanceReports = results[2] as List<MaintenanceReport>;
       final maintenanceCountSummary = results[3] as Map<String, int>;
       final damageCountSummary = results[4] as Map<String, int>;
+      final fciAssessmentSummary = results[5] as Map<String, int>;
 
-      print('📊 Parallel loading completed:');
-      print('  - Supervisors: ${allSupervisors.length}');
-      print('  - Reports: ${reports.length}');
-      print('  - Maintenance: ${maintenanceReports.length}');
+      // 🚀 DEBUG: Log FCI assessment data
+      print('🔍 FCI Assessment Debug: Raw summary data: $fciAssessmentSummary');
+      print('🔍 FCI Assessment Debug: Total assessments: ${fciAssessmentSummary['total_assessments']}');
+      print('🔍 FCI Assessment Debug: Submitted assessments: ${fciAssessmentSummary['submitted_assessments']}');
+      print('🔍 FCI Assessment Debug: Draft assessments: ${fciAssessmentSummary['draft_assessments']}');
+      print('🔍 FCI Assessment Debug: Schools with assessments: ${fciAssessmentSummary['schools_with_assessments']}');
 
       // Filter supervisors for current admin
       final rawSupervisors = allSupervisors
           .where((supervisor) => supervisorIds.contains(supervisor.id))
           .toList();
-      print('📊 Filtered to ${rawSupervisors.length} supervisors for current admin');
 
       // 🚀 PERFORMANCE OPTIMIZATION: Get schools counts in parallel with supervisor enrichment
       final supervisors = <Supervisor>[];
       
       // 🚀 PERFORMANCE OPTIMIZATION: Use optimized service for schools count
-      print('🔍 Getting schools counts...');
       Map<String, int> schoolsCounts = {};
       try {
         schoolsCounts = await _performanceService.getSupervisorsSchoolsCountOptimized(
           rawSupervisors.map((s) => s.id).toList(),
         );
-        print('📊 Schools counts: $schoolsCounts');
       } catch (e) {
-        print('❌ Error getting schools counts: $e');
         // Fallback: set all counts to 0
         schoolsCounts = {for (final s in rawSupervisors) s.id: 0};
       }
       
       for (final supervisor in rawSupervisors) {
         final schoolCount = schoolsCounts[supervisor.id] ?? 0;
-        print('📊 Supervisor ${supervisor.id} has $schoolCount schools');
 
         // Create enriched supervisor with school count
         final enrichedSupervisor = supervisor.copyWith(
@@ -198,6 +175,12 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           maintenanceCountSummary['schools_with_counts'] ?? 0;
       final schoolsWithDamage = damageCountSummary['schools_with_damage'] ?? 0;
 
+      // Get FCI assessment counts from parallel results
+      final totalFciAssessments = fciAssessmentSummary['total_assessments'] ?? 0;
+      final submittedFciAssessments = fciAssessmentSummary['submitted_assessments'] ?? 0;
+      final draftFciAssessments = fciAssessmentSummary['draft_assessments'] ?? 0;
+      final schoolsWithFciAssessments = fciAssessmentSummary['schools_with_assessments'] ?? 0;
+
       // 🚀 PERFORMANCE OPTIMIZATION: Get schools data efficiently
       int totalSchools = 0;
       int schoolsWithAchievements = 0;
@@ -225,7 +208,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
             schoolsWithAchievements = await _performanceService.getSchoolsWithAchievementsOptimized(adminSchoolIds);
           }
         } catch (e) {
-          print('Warning: Failed to fetch schools with achievements: $e');
+          // Fallback: set all counts to 0
           schoolsWithAchievements = 0;
         }
       }
@@ -250,12 +233,14 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
         schoolsWithDamage: schoolsWithDamage,
         totalSchools: totalSchools,
         schoolsWithAchievements: schoolsWithAchievements,
+        totalFciAssessments: totalFciAssessments,
+        submittedFciAssessments: submittedFciAssessments,
+        draftFciAssessments: draftFciAssessments,
+        schoolsWithFciAssessments: schoolsWithFciAssessments,
       );
 
-      print('✅ Dashboard data loaded successfully in parallel');
       emit(dashboardData);
     } catch (e) {
-      print('❌ Dashboard loading error: $e');
       emit(DashboardError(e.toString()));
     }
   }

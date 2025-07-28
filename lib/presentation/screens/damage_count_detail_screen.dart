@@ -76,7 +76,7 @@ class DamageCountDetailView extends StatelessWidget {
             }
 
             if (state is DamageCountDetailsLoaded) {
-              return _buildDamageDetails(context, state.damageCount);
+              return _buildDamageDetails(context, state.damageCount, state.supervisorName);
             }
 
             return _buildEmptyState(context);
@@ -209,20 +209,26 @@ class DamageCountDetailView extends StatelessWidget {
     );
   }
 
-  Widget _buildDamageDetails(BuildContext context, DamageCount damageCount) {
+  Widget _buildDamageDetails(BuildContext context, DamageCount damageCount, String? supervisorName) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return CustomScrollView(
       slivers: [
         // Summary header
         SliverToBoxAdapter(
-          child: _buildSummaryHeader(context, damageCount, isDark),
+          child: _buildSummaryHeader(context, damageCount, isDark, supervisorName),
         ),
 
         // Category sections
         SliverToBoxAdapter(
           child: _buildCategorySections(context, damageCount, isDark),
         ),
+
+        // Fallback: Show all photos if no section-specific photos found
+        if (damageCount.allPhotos.isNotEmpty && damageCount.sectionPhotos.isEmpty)
+          SliverToBoxAdapter(
+            child: _buildAllPhotosFallback(context, damageCount, isDark),
+          ),
 
         // Bottom padding
         const SliverToBoxAdapter(
@@ -233,7 +239,7 @@ class DamageCountDetailView extends StatelessWidget {
   }
 
   Widget _buildSummaryHeader(
-      BuildContext context, DamageCount damageCount, bool isDark) {
+      BuildContext context, DamageCount damageCount, bool isDark, String? supervisorName) {
     final damagedItems = damageCount.itemCounts.entries
         .where((entry) => entry.value > 0)
         .toList();
@@ -354,21 +360,66 @@ class DamageCountDetailView extends StatelessWidget {
                   : const Color(0xFFF1F5F9),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.schedule_rounded,
-                  size: 14,
-                  color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.schedule_rounded,
+                      size: 14,
+                      color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'تاريخ التسجيل: ${_formatDate(damageCount.createdAt)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 6),
-                Text(
-                  'تاريخ التسجيل: ${_formatDate(damageCount.createdAt)}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                if (supervisorName != null) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.person_rounded,
+                        size: 14,
+                        color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'المشرف: $supervisorName',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
+                ],
+                if (damageCount.totalPhotoCount > 0) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.photo_library_rounded,
+                        size: 14,
+                        color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'الصور المرفقة: ${damageCount.totalPhotoCount} صورة',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.grey[400] : const Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -381,13 +432,13 @@ class DamageCountDetailView extends StatelessWidget {
       BuildContext context, DamageCount damageCount, bool isDark) {
     final categories = [
       {
-        'key': 'fire_safety',
+        'key': 'safety_security',
         'title': 'أمن وسلامة',
         'icon': Icons.local_fire_department_rounded,
         'color': const Color(0xFFDC2626),
       },
       {
-        'key': 'mechanical',
+        'key': 'mechanical_plumbing',
         'title': 'سباكة وميكانيكا',
         'icon': Icons.plumbing_rounded,
         'color': const Color(0xFF2563EB),
@@ -418,6 +469,7 @@ class DamageCountDetailView extends StatelessWidget {
         final categoryItems = _getCategoryDamageItems(damageCount, categoryKey);
         final categoryPhotos = damageCount.sectionPhotos[categoryKey] ?? [];
 
+        // Show section if it has either damaged items OR photos
         if (categoryItems.isEmpty && categoryPhotos.isEmpty) {
           return const SizedBox.shrink();
         }
@@ -546,6 +598,40 @@ class DamageCountDetailView extends StatelessWidget {
                       ),
                     ),
                   ),
+                if (photos.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: color.withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.photo_library_rounded,
+                          size: 12,
+                          color: color,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${photos.length} صورة',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -622,16 +708,77 @@ class DamageCountDetailView extends StatelessWidget {
 
                 // Photos section
                 if (photos.isNotEmpty) ...[
-                  Text(
-                    'الصور المرفقة (${photos.length}):',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : const Color(0xFF1E293B),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          color.withOpacity(0.1),
+                          color.withOpacity(0.05),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: color.withOpacity(0.2),
+                        width: 1,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: color.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: color.withOpacity(0.3),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Icon(
+                                Icons.photo_library_rounded,
+                                color: color,
+                                size: 16,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'الصور المرفقة',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white : const Color(0xFF1E293B),
+                              ),
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: color,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '${photos.length} صورة',
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        _buildPhotosGrid(context, photos, color, isDark),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  _buildPhotosGrid(context, photos, color, isDark),
                 ],
               ],
             ),
@@ -735,16 +882,131 @@ class DamageCountDetailView extends StatelessWidget {
     );
   }
 
+  Widget _buildAllPhotosFallback(BuildContext context, DamageCount damageCount, bool isDark) {
+    final photos = damageCount.allPhotos;
+    if (photos.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [
+                  const Color(0xFF1E293B).withOpacity(0.95),
+                  const Color(0xFF334155).withOpacity(0.8),
+                ]
+              : [
+                  Colors.white.withOpacity(0.95),
+                  const Color(0xFFF8FAFC).withOpacity(0.9),
+                ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFEF4444).withOpacity(0.3),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.3)
+                : const Color(0xFF64748B).withOpacity(0.08),
+            offset: const Offset(0, 4),
+            blurRadius: 16,
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFFEF4444).withOpacity(0.15),
+                  const Color(0xFFDC2626).withOpacity(0.1),
+                ],
+              ),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(16),
+                topRight: Radius.circular(16),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFFEF4444).withOpacity(0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.photo_library_rounded,
+                    color: Color(0xFFEF4444),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'صور عامة',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white : const Color(0xFF1E293B),
+                    ),
+                  ),
+                ),
+                if (photos.isNotEmpty)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: const Color(0xFFEF4444).withOpacity(0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      '${photos.length} صورة',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFFEF4444),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: _buildPhotosGrid(context, photos, const Color(0xFFEF4444), isDark),
+          ),
+        ],
+      ),
+    );
+  }
+
   Map<String, int> _getCategoryDamageItems(
       DamageCount damageCount, String category) {
     final categoryItems = <String, int>{};
 
-    // This is a simplified mapping - you may need to adjust based on your actual data structure
-    // For now, we'll include all damaged items for each category
-    // In a real implementation, you'd filter based on item categories
-
     switch (category) {
-      case 'fire_safety':
+      case 'safety_security':
         // Filter fire safety related items
         damageCount.itemCounts.forEach((key, value) {
           if (value > 0 && _isFireSafetyItem(key)) {
@@ -752,7 +1014,7 @@ class DamageCountDetailView extends StatelessWidget {
           }
         });
         break;
-      case 'mechanical':
+      case 'mechanical_plumbing':
         // Filter mechanical related items
         damageCount.itemCounts.forEach((key, value) {
           if (value > 0 && _isMechanicalItem(key)) {
@@ -817,6 +1079,10 @@ class DamageCountDetailView extends StatelessWidget {
       'electric_water_heater_100l',
       'feeding_pipes',
       'external_drainage_pipes',
+      'plastic_chair', // كرسي شرقي (Eastern Toilet)
+      'plastic_chair_external', // كرسي افرنجي (Western Toilet)
+      'hidden_boxes', // صناديق طرد مخفي-للكرسي العربي
+      'low_boxes', // صناديق طرد واطي-للكرسي الافرنجي
     ];
     return mechanicalItems.contains(itemKey);
   }
@@ -836,10 +1102,6 @@ class DamageCountDetailView extends StatelessWidget {
 
   bool _isCivilItem(String itemKey) {
     final civilItems = [
-      'low_boxes',
-      'hidden_boxes',
-      'plastic_chair',
-      'plastic_chair_external',
       'site_tile_damage',
       'external_facade_paint',
       'internal_wall_ceiling_paint',

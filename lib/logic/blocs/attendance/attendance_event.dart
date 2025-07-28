@@ -65,4 +65,36 @@ class LoadAttendanceStats extends AttendanceEvent {
 
   @override
   List<Object?> get props => [supervisorId];
+}
+
+class UpdateLeaveInfo extends AttendanceEvent {
+  final String attendanceId;
+  final String supervisorId;
+  final String? leavePhotoUrl;
+  final DateTime? leaveTime;
+
+  const UpdateLeaveInfo({
+    required this.attendanceId,
+    required this.supervisorId,
+    this.leavePhotoUrl,
+    this.leaveTime,
+  });
+
+  @override
+  List<Object?> get props => [attendanceId, supervisorId, leavePhotoUrl, leaveTime];
+}
+
+class CreateAttendanceWithLeave extends AttendanceEvent {
+  final SupervisorAttendance attendance;
+  final String? leavePhotoUrl;
+  final DateTime? leaveTime;
+
+  const CreateAttendanceWithLeave({
+    required this.attendance,
+    this.leavePhotoUrl,
+    this.leaveTime,
+  });
+
+  @override
+  List<Object?> get props => [attendance, leavePhotoUrl, leaveTime];
 } 

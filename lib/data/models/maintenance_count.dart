@@ -224,6 +224,36 @@ class MaintenanceCount extends Equatable {
   List<String> getPhotosBySection(String section) =>
       sectionPhotos[section] ?? [];
 
+  // New utility methods for the updated item structure
+  bool get hasUpdatedACData =>
+      itemCounts.containsKey('split_concealed_ac') ||
+      itemCounts.containsKey('hidden_ducts_ac');
+
+  bool get hasUpdatedSinkData =>
+      itemCounts.containsKey('hand_sink') ||
+      itemCounts.containsKey('basin_sink');
+
+  bool get hasUpdatedSiphonData =>
+      itemCounts.containsKey('arabic_siphon') ||
+      itemCounts.containsKey('english_siphon');
+
+  bool get hasUpdatedBreakerData =>
+      itemCounts.containsKey('breakers') ||
+      itemCounts.containsKey('bells');
+
+  bool get hasUpdatedDetectorData =>
+      itemCounts.containsKey('smoke_detectors') ||
+      itemCounts.containsKey('heat_detectors');
+
+  bool get hasNewData =>
+      itemCounts.containsKey('camera') ||
+      itemCounts.containsKey('emergency_signs') ||
+      itemCounts.containsKey('sink_mirrors') ||
+      itemCounts.containsKey('wall_tap') ||
+      itemCounts.containsKey('sink_tap') ||
+      itemCounts.containsKey('single_door') ||
+      itemCounts.containsKey('double_door');
+
   @override
   List<Object?> get props => [
         id,
@@ -264,4 +294,100 @@ class MaintenanceConditions {
     'conventional', // Traditional
     'addressable', // Addressable
   ];
+}
+
+// New constants for updated item structure
+class MaintenanceItemTypes {
+  // Updated AC types
+  static const List<String> acTypes = [
+    'split_concealed_ac',
+    'hidden_ducts_ac',
+    'window_ac',
+    'cabinet_ac',
+    'package_ac',
+  ];
+
+  // Updated sink types
+  static const List<String> sinkTypes = [
+    'hand_sink',
+    'basin_sink',
+  ];
+
+  // Updated siphon types
+  static const List<String> siphonTypes = [
+    'arabic_siphon',
+    'english_siphon',
+  ];
+
+  // Updated breaker and bell types
+  static const List<String> breakerTypes = [
+    'breakers',
+    'bells',
+  ];
+
+  // Updated detector types
+  static const List<String> detectorTypes = [
+    'smoke_detectors',
+    'heat_detectors',
+  ];
+
+  // New item types
+  static const List<String> newItemTypes = [
+    'camera',
+    'emergency_signs',
+    'sink_mirrors',
+    'wall_tap',
+    'sink_tap',
+    'single_door',
+    'double_door',
+  ];
+
+  // All item types combined
+  static List<String> getAllItemTypes() {
+    return [
+      ...acTypes,
+      ...sinkTypes,
+      ...siphonTypes,
+      ...breakerTypes,
+      ...detectorTypes,
+      ...newItemTypes,
+      // Legacy items
+      'lamps',
+      'bidets',
+      'ac_panel',
+      'speakers',
+      'fire_hose',
+      'projector',
+      'blackboard',
+      'class_bell',
+      'fire_boxes',
+      'diesel_pump',
+      'power_panel',
+      'water_pumps',
+      'main_breaker',
+      'arabic_toilet',
+      'electric_pump',
+      'auxiliary_pump',
+      'lighting_panel',
+      'western_toilet',
+      'emergency_exits',
+      'emergency_lights',
+      'external_windows',
+      'internal_windows',
+      'alarm_panel_count',
+      'microphone_system',
+      'wall_exhaust_fans',
+      'bathroom_heaters_1',
+      'bathroom_heaters_2',
+      'fire_extinguishers',
+      'package_ac_breaker',
+      'wall_water_coolers',
+      'cafeteria_heaters_1',
+      'central_exhaust_fans',
+      'concealed_ac_breaker',
+      'cafeteria_exhaust_fans',
+      'corridor_water_coolers',
+      'main_distribution_panel',
+    ];
+  }
 }

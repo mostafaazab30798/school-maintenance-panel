@@ -38,6 +38,11 @@ class DashboardGrid extends StatefulWidget {
     // Schools parameters
     required this.totalSchools,
     required this.schoolsWithAchievements,
+    // FCI Assessment parameters
+    required this.totalFciAssessments,
+    required this.submittedFciAssessments,
+    required this.draftFciAssessments,
+    required this.schoolsWithFciAssessments,
   });
 
   final int totalReports;
@@ -62,6 +67,12 @@ class DashboardGrid extends StatefulWidget {
   // Schools data
   final int totalSchools;
   final int schoolsWithAchievements;
+
+  // FCI Assessment data
+  final int totalFciAssessments;
+  final int submittedFciAssessments;
+  final int draftFciAssessments;
+  final int schoolsWithFciAssessments;
 
   final VoidCallback onTapTotalReports;
   final VoidCallback onTapRoutineReports;
@@ -836,6 +847,8 @@ class _DashboardGridState extends State<DashboardGrid>
     );
   }
 
+
+
   Widget _buildSchoolsSection(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -938,14 +951,23 @@ class _DashboardGridState extends State<DashboardGrid>
           context.push('/schools-with-achievements');
         },
       ),
+      IndicatorCard(
+        label: 'تقييمات FCI',
+        count: widget.totalFciAssessments,
+        color: const Color(0xFF8B5CF6),
+        icon: Icons.assessment_outlined,
+        onTap: () {
+          context.push('/fci-assessments');
+        },
+      ),
     ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Use same breakpoints for schools cards
+        // Use responsive layout for schools cards
         if (constraints.maxWidth >= 600) {
-          // 2 columns for medium screens and above
-          return _buildFixedRowsLayout(schoolsCards, 2);
+          // 3 columns for medium screens and above
+          return _buildFixedRowsLayout(schoolsCards, 3);
         } else {
           // 1 column for small screens
           return _buildFixedRowsLayout(schoolsCards, 1);

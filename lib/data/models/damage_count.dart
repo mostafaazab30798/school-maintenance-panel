@@ -129,6 +129,18 @@ class DamageCount extends Equatable {
       .map((entry) => entry.key)
       .toList();
 
+  // Get all photos from all sections
+  List<String> get allPhotos {
+    final allPhotos = <String>[];
+    for (final photos in sectionPhotos.values) {
+      allPhotos.addAll(photos);
+    }
+    return allPhotos;
+  }
+
+  // Get total photo count
+  int get totalPhotoCount => allPhotos.length;
+
   // Get item display names in Arabic
   String getItemDisplayName(String itemKey) {
     const itemNames = {

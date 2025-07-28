@@ -659,37 +659,71 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
   }
 
   Widget _buildPhotosSection(BuildContext context, List<String> photos) {
-    return SizedBox(
-      height: 100,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: photos.length,
-        itemBuilder: (context, index) {
-          return Container(
-            width: 100,
-            margin: const EdgeInsets.only(right: 12),
-            child: GestureDetector(
-              onTap: () => _showPhotoDialog(context, photos[index]),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  photos[index],
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      color: Colors.grey[200],
-                      child: const Icon(
-                        Icons.error_outline,
-                        color: Colors.grey,
-                      ),
-                    );
-                  },
-                ),
+    if (photos.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.grey.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.grey.withOpacity(0.2)),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.photo_library_outlined,
+              color: Colors.grey.withOpacity(0.6),
+              size: 20,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'لا توجد صور لهذا القسم',
+              style: TextStyle(
+                color: Colors.grey.withOpacity(0.6),
+                fontSize: 14,
               ),
             ),
-          );
-        },
+          ],
+        ),
+      );
+    }
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: 1,
       ),
+      itemCount: photos.length,
+      itemBuilder: (context, index) {
+        return GestureDetector(
+          onTap: () => _showPhotoDialog(context, photos[index]),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.withOpacity(0.3)),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
+                photos[index],
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    color: Colors.grey[200],
+                    child: const Icon(
+                      Icons.error_outline,
+                      color: Colors.grey,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -933,6 +967,21 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       items['emergency_lights'] = count.itemCounts['emergency_lights'];
     }
 
+    // Add new safety items with counts
+    final newSafetyItems = [
+      'breakers',
+      'bells',
+      'smoke_detectors',
+      'heat_detectors',
+      'emergency_signs'
+    ];
+
+    count.itemCounts.forEach((key, value) {
+      if (newSafetyItems.contains(key)) {
+        items[key] = value;
+      }
+    });
+
     // Add survey answers for safety systems
     final safetySurveyKeys = [
       'fire_alarm_system',
@@ -1114,17 +1163,22 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
 
     // Add simple mechanical items that don't need combination
     final simpleMechanicalKeys = [
-      'sinks',
+      'hand_sink',
+      'basin_sink',
       'western_toilet',
       'arabic_toilet',
-      'siphons',
+      'arabic_siphon',
+      'english_siphon',
       'bidets',
       'wall_exhaust_fans',
       'central_exhaust_fans',
       'cafeteria_exhaust_fans',
       'wall_water_coolers',
       'corridor_water_coolers',
-      'water_pumps'
+      'water_pumps',
+      'sink_mirrors',
+      'wall_tap',
+      'sink_tap'
     ];
 
     count.itemCounts.forEach((key, value) {
@@ -1197,9 +1251,13 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       }
     }
 
-    // Add split AC (new item)
-    if (count.itemCounts.containsKey('split_ac')) {
-      items['split_ac'] = count.itemCounts['split_ac'];
+    // Add updated AC types
+    if (count.itemCounts.containsKey('split_concealed_ac')) {
+      items['split_concealed_ac'] = count.itemCounts['split_concealed_ac'];
+    }
+
+    if (count.itemCounts.containsKey('hidden_ducts_ac')) {
+      items['hidden_ducts_ac'] = count.itemCounts['hidden_ducts_ac'];
     }
 
     // Add window AC (new item)
@@ -1332,7 +1390,12 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       'class_bell',
       'speakers',
       'microphone_system',
-      'electrical_panels'
+      'electrical_panels',
+      'breakers',
+      'bells',
+      'smoke_detectors',
+      'heat_detectors',
+      'camera'
     ];
 
     count.itemCounts.forEach((key, value) {
@@ -1397,7 +1460,10 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
     final simpleCivilKeys = [
       'blackboard',
       'internal_windows',
-      'external_windows'
+      'external_windows',
+      'emergency_signs',
+      'single_door',
+      'double_door'
     ];
 
     count.itemCounts.forEach((key, value) {
@@ -1663,7 +1729,9 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
         return Icons.mic_rounded;
       case 'ac_panel':
         return Icons.ac_unit_rounded;
-      case 'split_ac':
+      case 'split_concealed_ac':
+        return Icons.ac_unit_rounded;
+      case 'hidden_ducts_ac':
         return Icons.ac_unit_rounded;
       case 'window_ac':
         return Icons.ac_unit_rounded;
@@ -1682,6 +1750,16 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       case 'concealed_ac_breaker':
       case 'package_ac_breaker':
         return Icons.ac_unit_rounded;
+      case 'breakers':
+        return Icons.power_settings_new_rounded;
+      case 'bells':
+        return Icons.notifications_active_rounded;
+      case 'smoke_detectors':
+        return Icons.sensors_rounded;
+      case 'heat_detectors':
+        return Icons.thermostat_rounded;
+      case 'camera':
+        return Icons.videocam_rounded;
       
       // Combined electrical items
       case 'ac_panel_combined':
@@ -1699,16 +1777,19 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       case 'concealed_ac_breaker_combined':
         return Icons.ac_unit_rounded;
 
-      // Mechanical items
-      case 'bathroom_heaters':
-      case 'cafeteria_heaters':
+      // Updated Mechanical items
+      case 'bathroom_heaters_1':
+      case 'bathroom_heaters_2':
+      case 'cafeteria_heaters_1':
         return Icons.hot_tub_rounded;
-      case 'sinks':
+      case 'hand_sink':
+      case 'basin_sink':
         return Icons.wash_rounded;
       case 'western_toilet':
       case 'arabic_toilet':
         return Icons.wc_rounded;
-      case 'siphons':
+      case 'arabic_siphon':
+      case 'english_siphon':
         return Icons.water_drop_rounded;
       case 'bidets':
         return Icons.shower_rounded;
@@ -1719,6 +1800,11 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       case 'wall_water_coolers':
       case 'corridor_water_coolers':
         return Icons.local_drink_rounded;
+      case 'sink_mirrors':
+        return Icons.image_rounded;
+      case 'wall_tap':
+      case 'sink_tap':
+        return Icons.water_drop_rounded;
       
       // Combined mechanical items
       case 'bathroom_heaters_combined':
@@ -1732,12 +1818,17 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       case var heaterKey when heaterKey.startsWith('cafeteria_heaters_'):
         return Icons.hot_tub_rounded;
 
-      // Civil items
+      // Updated Civil items
       case 'blackboard':
         return Icons.edit_rounded;
       case 'internal_windows':
       case 'external_windows':
         return Icons.window_rounded;
+      case 'emergency_signs':
+        return Icons.warning_rounded;
+      case 'single_door':
+      case 'double_door':
+        return Icons.door_front_door_rounded;
       
       case 'fire_alarm_system':
       case 'fire_alarm_system_condition':
@@ -1836,8 +1927,9 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       'electrical_panels': 'اللوحات الكهربائية',
       'fire_extinguishers': 'طفايات الحريق',
 
-      // AC types
-      'split_ac': 'مكيف سبليت',
+      // Updated AC types
+      'split_concealed_ac': 'مكيف سبليت مخفي',
+      'hidden_ducts_ac': 'مكيف مخفي بقنوات',
       'window_ac': 'مكيف نافذة',
       'cabinet_ac': 'مكيف خزانة',
       'package_ac': 'مكيف حزمة',
@@ -1855,6 +1947,11 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       'main_breaker': 'القاطع الرئيسي',
       'concealed_ac_breaker': 'قاطع تكييف كونسيلد',
       'package_ac_breaker': 'قاطع تكييف باكدج',
+      'breakers': 'قواطع كهربائية',
+      'bells': 'أجراس',
+      'smoke_detectors': 'أجهزة استشعار الدخان',
+      'heat_detectors': 'أجهزة استشعار الحرارة',
+      'camera': 'كاميرات',
 
       // Combined electrical items
       'ac_panel_combined': 'لوحة تكييف',
@@ -1865,19 +1962,25 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       'package_ac_breaker_combined': 'قاطع تكييف باكدج',
       'concealed_ac_breaker_combined': 'قاطع تكييف كونسيلد',
 
-      // Mechanical items
-      'bathroom_heaters': 'سخانات حمام',
-      'cafeteria_heaters': 'سخانات مقصف',
-      'sinks': 'مغاسل',
+      // Updated Mechanical items
+      'bathroom_heaters_1': 'سخانات حمام 1',
+      'bathroom_heaters_2': 'سخانات حمام 2',
+      'cafeteria_heaters_1': 'سخانات مقصف 1',
+      'hand_sink': 'حوض غسيل اليدين',
+      'basin_sink': 'حوض الحوض',
       'western_toilet': 'كرسي افرنجي',
       'arabic_toilet': 'كرسي عربي',
-      'siphons': 'سيفونات',
+      'arabic_siphon': 'سيفون عربي',
+      'english_siphon': 'سيفون إنجليزي',
       'bidets': 'شطافات',
       'wall_exhaust_fans': 'مراوح شفط جدارية',
       'central_exhaust_fans': 'مراوح شفط مركزية',
       'cafeteria_exhaust_fans': 'مراوح شفط مقصف',
       'wall_water_coolers': 'برادات مياة جدارية',
       'corridor_water_coolers': 'برادات مياة للممرات',
+      'sink_mirrors': 'مرايا الحوض',
+      'wall_tap': 'صنبور الحائط',
+      'sink_tap': 'صنبور الحوض',
 
       // Combined mechanical items
       'bathroom_heaters_combined': 'سخانات حمام',
@@ -1887,10 +1990,13 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       'bathroom_heater_': 'سخان حمام',
       'cafeteria_heater_': 'سخان مقصف',
 
-      // Civil items
+      // Updated Civil items
       'blackboard': 'سبورة',
       'internal_windows': 'نوافذ داخلية',
       'external_windows': 'نوافذ خارجية',
+      'emergency_signs': 'علامات الطوارئ',
+      'single_door': 'أبواب مفردة',
+      'double_door': 'أبواب مزدوجة',
       
       // Combined safety items
       'fire_extinguishers_combined': 'طفايات الحريق',

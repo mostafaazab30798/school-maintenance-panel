@@ -8,6 +8,7 @@ class MaintenanceFormState extends Equatable {
   final String? scheduledDate;
   final List<String> imageUrls;
   final bool isUploadingImages;
+  final bool hasInteractedWithForm;
   
   const MaintenanceFormState({
     this.schoolName,
@@ -15,6 +16,7 @@ class MaintenanceFormState extends Equatable {
     this.scheduledDate,
     this.imageUrls = const [],
     this.isUploadingImages = false,
+    this.hasInteractedWithForm = false,
   });
   
   MaintenanceFormState copyWith({
@@ -23,6 +25,7 @@ class MaintenanceFormState extends Equatable {
     String? scheduledDate,
     List<String>? imageUrls,
     bool? isUploadingImages,
+    bool? hasInteractedWithForm,
   }) {
     return MaintenanceFormState(
       schoolName: schoolName ?? this.schoolName,
@@ -30,6 +33,7 @@ class MaintenanceFormState extends Equatable {
       scheduledDate: scheduledDate ?? this.scheduledDate,
       imageUrls: imageUrls ?? this.imageUrls,
       isUploadingImages: isUploadingImages ?? this.isUploadingImages,
+      hasInteractedWithForm: hasInteractedWithForm ?? this.hasInteractedWithForm,
     );
   }
   
@@ -48,7 +52,8 @@ class MaintenanceFormState extends Equatable {
     notes, 
     scheduledDate, 
     imageUrls, 
-    isUploadingImages
+    isUploadingImages,
+    hasInteractedWithForm,
   ];
   
   factory MaintenanceFormState.initial() => const MaintenanceFormState();

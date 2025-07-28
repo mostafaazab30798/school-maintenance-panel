@@ -111,6 +111,7 @@ class DamageCountRepository {
             school_name,
             supervisor_id,
             item_counts,
+            section_photos,
             status
           ''');
 
@@ -172,10 +173,12 @@ class DamageCountRepository {
         final schoolId = item['school_id']?.toString() ?? '';
         final schoolName = item['school_name']?.toString() ?? '';
         final itemCounts = item['item_counts'] as Map<String, dynamic>? ?? {};
+        final sectionPhotos = item['section_photos'] as Map<String, dynamic>? ?? {};
         final status = item['status']?.toString() ?? 'draft';
 
         print('🔍 DEBUG: School ID: $schoolId, Name: $schoolName');
         print('🔍 DEBUG: Item counts: $itemCounts');
+        print('🔍 DEBUG: Section photos: $sectionPhotos');
         print('🔍 DEBUG: Status: $status');
 
         if (schoolId.isNotEmpty) {
@@ -183,9 +186,11 @@ class DamageCountRepository {
             schoolData[schoolId] = {
               'school_id': schoolId,
               'school_name': schoolName,
+              'supervisor_id': item['supervisor_id']?.toString() ?? '', // Add supervisor_id
               'address': '', // Default empty address
               'damage_count': 0,
               'total_damaged_items': 0,
+              'total_photos': 0,
               'has_damage': false,
             };
             print('🔍 DEBUG: Created new school entry for: $schoolId');
@@ -205,14 +210,24 @@ class DamageCountRepository {
                 '🔍 DEBUG: Item ${entry.key}: $count (hasDamage: ${count > 0})');
           }
 
+          // Count total photos
+          int totalPhotos = 0;
+          for (var entry in sectionPhotos.entries) {
+            if (entry.value is List) {
+              totalPhotos += (entry.value as List).length;
+            }
+          }
+
           print(
-              '🔍 DEBUG: School $schoolId - Total damaged: $totalDamaged, Has damage: $hasDamage');
+              '🔍 DEBUG: School $schoolId - Total damaged: $totalDamaged, Has damage: $hasDamage, Total photos: $totalPhotos');
 
           schoolData[schoolId]!['damage_count'] =
               (schoolData[schoolId]!['damage_count'] as int) + 1;
           schoolData[schoolId]!['total_damaged_items'] =
               (schoolData[schoolId]!['total_damaged_items'] as int) +
                   totalDamaged;
+          schoolData[schoolId]!['total_photos'] =
+              (schoolData[schoolId]!['total_photos'] as int) + totalPhotos;
           schoolData[schoolId]!['has_damage'] =
               (schoolData[schoolId]!['has_damage'] as bool) || hasDamage;
         }
@@ -355,6 +370,7 @@ class DamageCountRepository {
           'total_damage_reports': 0,
           'schools_with_damage': 0,
           'total_damaged_items': 0,
+          'total_photos': 0,
           'pending_repairs': 0,
           'completed_repairs': 0,
         };
@@ -363,12 +379,14 @@ class DamageCountRepository {
       final Set<String> schoolsWithDamage = {};
       int totalDamageReports = response.length;
       int totalDamagedItems = 0;
+      int totalPhotos = 0;
       int pendingRepairs = 0;
       int completedRepairs = 0;
 
       for (final item in response) {
         final schoolId = item['school_id']?.toString() ?? '';
         final itemCounts = item['item_counts'] as Map<String, dynamic>? ?? {};
+        final sectionPhotos = item['section_photos'] as Map<String, dynamic>? ?? {};
         final repairStatus =
             item['repair_status'] as Map<String, dynamic>? ?? {};
 
@@ -381,6 +399,13 @@ class DamageCountRepository {
                 : int.tryParse(entry.value.toString()) ?? 0;
             totalDamagedItems += count;
             if (count > 0) hasDamage = true;
+          }
+
+          // Count total photos
+          for (var entry in sectionPhotos.entries) {
+            if (entry.value is List) {
+              totalPhotos += (entry.value as List).length;
+            }
           }
 
           if (hasDamage) {
@@ -403,6 +428,7 @@ class DamageCountRepository {
         'total_damage_reports': totalDamageReports,
         'schools_with_damage': schoolsWithDamage.length,
         'total_damaged_items': totalDamagedItems,
+        'total_photos': totalPhotos,
         'pending_repairs': pendingRepairs,
         'completed_repairs': completedRepairs,
       };
@@ -412,6 +438,7 @@ class DamageCountRepository {
         'total_damage_reports': 0,
         'schools_with_damage': 0,
         'total_damaged_items': 0,
+        'total_photos': 0,
         'pending_repairs': 0,
         'completed_repairs': 0,
       };

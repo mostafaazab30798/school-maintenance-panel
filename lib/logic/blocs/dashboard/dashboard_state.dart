@@ -41,6 +41,12 @@ class DashboardLoaded extends DashboardState {
   final int totalSchools;
   final int schoolsWithAchievements;
 
+  // FCI Assessment statistics
+  final int totalFciAssessments;
+  final int submittedFciAssessments;
+  final int draftFciAssessments;
+  final int schoolsWithFciAssessments;
+
   const DashboardLoaded({
     required this.totalReports,
     required this.emergencyReports,
@@ -61,6 +67,10 @@ class DashboardLoaded extends DashboardState {
     required this.schoolsWithDamage,
     required this.totalSchools,
     required this.schoolsWithAchievements,
+    required this.totalFciAssessments,
+    required this.submittedFciAssessments,
+    required this.draftFciAssessments,
+    required this.schoolsWithFciAssessments,
   });
 
   @override
@@ -84,6 +94,10 @@ class DashboardLoaded extends DashboardState {
         schoolsWithDamage,
         totalSchools,
         schoolsWithAchievements,
+        totalFciAssessments,
+        submittedFciAssessments,
+        draftFciAssessments,
+        schoolsWithFciAssessments,
       ];
 }
 
