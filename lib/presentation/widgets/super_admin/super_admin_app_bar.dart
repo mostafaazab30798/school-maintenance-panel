@@ -9,6 +9,7 @@ import '../../../logic/blocs/super_admin/super_admin_event.dart';
 import '../../../core/services/excel_export_service.dart';
 import '../../../data/repositories/maintenance_count_repository.dart';
 import '../../../data/repositories/damage_count_repository.dart';
+import '../../../data/repositories/supervisor_repository.dart';
 import '../common/weekly_report_dialog.dart';
 import '../common/user_info_widget.dart';
 import '../common/shared_back_button.dart';
@@ -566,7 +567,11 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
       await Future.delayed(const Duration(milliseconds: 100));
 
       final repository = MaintenanceCountRepository(Supabase.instance.client);
-      final excelService = ExcelExportService(repository);
+      final supervisorRepository = SupervisorRepository(Supabase.instance.client);
+      final excelService = ExcelExportService(
+        repository,
+        supervisorRepository: supervisorRepository,
+      );
       
       // Export with retry mechanism and better error handling
       int retryCount = 0;
@@ -717,7 +722,12 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
 
       final maintenanceRepo = MaintenanceCountRepository(Supabase.instance.client);
       final damageRepo = DamageCountRepository(Supabase.instance.client);
-      final excelService = ExcelExportService(maintenanceRepo, damageRepository: damageRepo);
+      final supervisorRepo = SupervisorRepository(Supabase.instance.client);
+      final excelService = ExcelExportService(
+        maintenanceRepo, 
+        damageRepository: damageRepo,
+        supervisorRepository: supervisorRepo,
+      );
       
       // Export with retry mechanism
       int retryCount = 0;

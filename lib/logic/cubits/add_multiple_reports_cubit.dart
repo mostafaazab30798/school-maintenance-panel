@@ -1,15 +1,16 @@
-import 'dart:convert';
-
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../data/models/report_form_data.dart';
 import 'add_multiple_reports_state.dart';
-import 'package:http/http.dart' as http;
+import '../../core/services/supabase_storage_service.dart';
 
 class AddMultipleReportsCubit extends Cubit<AddMultipleReportsState> {
-  AddMultipleReportsCubit(String supervisorId)
-      : super(AddMultipleReportsState.initial(supervisorId));
+  final SupabaseStorageService _storageService;
+  
+  AddMultipleReportsCubit(String supervisorId, {required SupabaseStorageService storageService})
+      : _storageService = storageService,
+        super(AddMultipleReportsState.initial(supervisorId));
 
   void addReport(String supervisorId) {
     final newReports = List<ReportFormData>.from(state.reports)
@@ -157,30 +158,8 @@ class AddMultipleReportsCubit extends Cubit<AddMultipleReportsState> {
     final picked = await picker.pickMultiImage();
     if (picked.isEmpty) return;
 
-    List<String> uploadedUrls = [];
-    for (var file in picked) {
-      final bytes = await file.readAsBytes();
-      final base64Image = base64Encode(bytes);
-      final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-      final publicId = 'image_$timestamp';
-
-      final response = await http.post(
-        Uri.parse('https://api.cloudinary.com/v1_1/dg7rsus0g/image/upload'),
-        body: {
-          'file': 'data:image/jpeg;base64,$base64Image',
-          'upload_preset': 'managment_upload',
-          'public_id': publicId,
-          'folder': 'reports'
-        },
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final url = data['secure_url'];
-        uploadedUrls.add(url);
-      }
-    }
-
+    // Upload images to Supabase storage
+    final uploadedUrls = await _storageService.uploadMultipleImages(picked);
     updateImages(index, uploadedUrls);
   }
 }

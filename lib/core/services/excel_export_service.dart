@@ -5,10 +5,13 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/models/maintenance_count.dart';
 import '../../data/models/damage_count.dart';
 import '../../data/repositories/maintenance_count_repository.dart';
 import '../../data/repositories/damage_count_repository.dart';
+import '../../data/repositories/supervisor_repository.dart';
+import '../services/admin_service.dart';
 // Web-specific imports - conditional
 import 'dart:html' as html;
 // Conditional import for Syncfusion - only import if available
@@ -17,13 +20,18 @@ import 'package:syncfusion_flutter_xlsio/xlsio.dart' as syncfusion;
 class ExcelExportService {
   final MaintenanceCountRepository _repository;
   final DamageCountRepository? _damageRepository;
+  final AdminService _adminService;
+  final SupervisorRepository _supervisorRepository;
   
   // Global state to prevent multiple simultaneous downloads
   static bool _isDownloading = false;
 
   ExcelExportService(this._repository,
-      {DamageCountRepository? damageRepository})
-      : _damageRepository = damageRepository;
+      {DamageCountRepository? damageRepository,
+      SupervisorRepository? supervisorRepository})
+      : _damageRepository = damageRepository,
+        _adminService = AdminService(Supabase.instance.client),
+        _supervisorRepository = supervisorRepository ?? SupervisorRepository(Supabase.instance.client);
 
   Future<void> exportAllMaintenanceCounts() async {
     // Prevent multiple simultaneous downloads
@@ -149,15 +157,16 @@ class ExcelExportService {
       print('✅ Safety Sheet created');
       
       // Title
-      final titleRange = safetySheet.getRangeByIndex(1, 1, 1, 23);
+      final titleRange = safetySheet.getRangeByIndex(1, 1, 1, 24);
       titleRange.setText('حصر الأمن والسلامة');
       titleRange.cellStyle.fontSize = 16;
       titleRange.cellStyle.bold = true;
-      safetySheet.getRangeByIndex(1, 1, 1, 23).merge();
+      safetySheet.getRangeByIndex(1, 1, 1, 24).merge();
 
       final safetyHeaders = [
         'اسم المدرسة',
         'تاريخ الحصر',
+        'المشرفون',
         'خرطوم الحريق',
         'صناديق الحريق',
         'حالة صناديق الحريق',
@@ -192,6 +201,35 @@ class ExcelExportService {
       
       // Data rows
       print('📝 Adding Safety Sheet data rows (${allCounts.length} rows)...');
+      
+      // Fetch supervisor names in batch for better performance
+      final Map<String, String> supervisorNames = {};
+      final Set<String> uniqueSupervisorIds = {};
+      
+      // Collect all unique supervisor IDs
+      for (final count in allCounts) {
+        if (count.supervisorId.contains(', ')) {
+          // Split merged supervisor IDs
+          final supervisorIdList = count.supervisorId.split(', ');
+          uniqueSupervisorIds.addAll(supervisorIdList.map((id) => id.trim()));
+        } else {
+          uniqueSupervisorIds.add(count.supervisorId);
+        }
+      }
+      
+      // Fetch supervisor names in batch
+      if (uniqueSupervisorIds.isNotEmpty) {
+        try {
+          final supervisors = await _supervisorRepository.getSupervisorsByIds(uniqueSupervisorIds.toList());
+          for (final supervisor in supervisors) {
+            supervisorNames[supervisor.id] = supervisor.username;
+          }
+          print('🔍 DEBUG: Fetched ${supervisorNames.length} supervisor names for detailed Excel export');
+        } catch (e) {
+          print('⚠️ WARNING: Failed to fetch supervisor names for detailed export: $e');
+        }
+      }
+      
       for (int row = 0; row < allCounts.length; row++) {
         final count = allCounts[row];
         
@@ -200,9 +238,33 @@ class ExcelExportService {
           print('   📊 Processing Safety row ${row + 1}/${allCounts.length}');
         }
         
+        // Get supervisor names for this record
+        String supervisorDisplay = 'غير محدد';
+        if (count.supervisorId.contains(', ')) {
+          // Multiple supervisors
+          final supervisorIdList = count.supervisorId.split(', ');
+          final supervisorNameList = <String>[];
+          
+          for (final id in supervisorIdList) {
+            final name = supervisorNames[id.trim()];
+            if (name != null && name.isNotEmpty) {
+              supervisorNameList.add(name);
+            }
+          }
+          
+          if (supervisorNameList.isNotEmpty) {
+            supervisorDisplay = supervisorNameList.join('، ');
+          }
+        } else {
+          // Single supervisor
+          final supervisorName = supervisorNames[count.supervisorId];
+          supervisorDisplay = supervisorName ?? 'غير محدد';
+        }
+        
         final rowData = [
           schoolNames[count.schoolId] ?? 'مدرسة ${count.schoolId}',
           _formatDate(count.createdAt),
+          supervisorDisplay,
           int.tryParse(count.itemCounts['fire_hose']?.toString() ?? '0') ?? 0,
           int.tryParse(count.itemCounts['fire_boxes']?.toString() ?? '0') ?? 0,
           count.surveyAnswers['fire_boxes_condition'] ?? '',
@@ -228,20 +290,20 @@ class ExcelExportService {
         
         safetySheet.getRangeByIndex(row + 4, 1).setText(rowData[0].toString());
         safetySheet.getRangeByIndex(row + 4, 2).setText(rowData[1].toString());
-        safetySheet.getRangeByIndex(row + 4, 3).setNumber(double.tryParse(rowData[2].toString()) ?? 0);
+        safetySheet.getRangeByIndex(row + 4, 3).setText(rowData[2].toString());
         safetySheet.getRangeByIndex(row + 4, 4).setNumber(double.tryParse(rowData[3].toString()) ?? 0);
-        safetySheet.getRangeByIndex(row + 4, 5).setText(rowData[4].toString());
-        safetySheet.getRangeByIndex(row + 4, 6).setNumber(double.tryParse(rowData[5].toString()) ?? 0);
-        safetySheet.getRangeByIndex(row + 4, 7).setText(rowData[6].toString());
-        safetySheet.getRangeByIndex(row + 4, 8).setNumber(double.tryParse(rowData[7].toString()) ?? 0);
-        safetySheet.getRangeByIndex(row + 4, 9).setText(rowData[8].toString());
-        safetySheet.getRangeByIndex(row + 4, 10).setNumber(double.tryParse(rowData[9].toString()) ?? 0);
-        safetySheet.getRangeByIndex(row + 4, 11).setText(rowData[10].toString());
-        safetySheet.getRangeByIndex(row + 4, 12).setNumber(double.tryParse(rowData[11].toString()) ?? 0);
-        safetySheet.getRangeByIndex(row + 4, 13).setText(rowData[12].toString());
+        safetySheet.getRangeByIndex(row + 4, 5).setNumber(double.tryParse(rowData[4].toString()) ?? 0);
+        safetySheet.getRangeByIndex(row + 4, 6).setText(rowData[5].toString());
+        safetySheet.getRangeByIndex(row + 4, 7).setNumber(double.tryParse(rowData[6].toString()) ?? 0);
+        safetySheet.getRangeByIndex(row + 4, 8).setText(rowData[7].toString());
+        safetySheet.getRangeByIndex(row + 4, 9).setNumber(double.tryParse(rowData[8].toString()) ?? 0);
+        safetySheet.getRangeByIndex(row + 4, 10).setText(rowData[9].toString());
+        safetySheet.getRangeByIndex(row + 4, 11).setNumber(double.tryParse(rowData[10].toString()) ?? 0);
+        safetySheet.getRangeByIndex(row + 4, 12).setText(rowData[11].toString());
+        safetySheet.getRangeByIndex(row + 4, 13).setNumber(double.tryParse(rowData[12].toString()) ?? 0);
         safetySheet.getRangeByIndex(row + 4, 14).setText(rowData[13].toString());
-        safetySheet.getRangeByIndex(row + 4, 15).setNumber(double.tryParse(rowData[14].toString()) ?? 0);
-        safetySheet.getRangeByIndex(row + 4, 16).setText(rowData[15].toString());
+        safetySheet.getRangeByIndex(row + 4, 15).setText(rowData[14].toString());
+        safetySheet.getRangeByIndex(row + 4, 16).setNumber(double.tryParse(rowData[15].toString()) ?? 0);
         safetySheet.getRangeByIndex(row + 4, 17).setText(rowData[16].toString());
         safetySheet.getRangeByIndex(row + 4, 18).setText(rowData[17].toString());
         safetySheet.getRangeByIndex(row + 4, 19).setText(rowData[18].toString());
@@ -249,6 +311,7 @@ class ExcelExportService {
         safetySheet.getRangeByIndex(row + 4, 21).setText(rowData[20].toString());
         safetySheet.getRangeByIndex(row + 4, 22).setText(rowData[21].toString());
         safetySheet.getRangeByIndex(row + 4, 23).setText(rowData[22].toString());
+        safetySheet.getRangeByIndex(row + 4, 24).setText(rowData[23].toString());
       }
 
       // Electrical Sheet
@@ -806,6 +869,28 @@ class ExcelExportService {
         throw Exception('No damage counts found');
       }
 
+      // Fetch supervisor names in batch for better performance
+      final Map<String, String> supervisorNames = {};
+      final Set<String> uniqueSupervisorIds = {};
+      
+      // Collect all unique supervisor IDs
+      for (final count in allCounts) {
+        uniqueSupervisorIds.add(count.supervisorId);
+      }
+      
+      // Fetch supervisor names in batch
+      if (uniqueSupervisorIds.isNotEmpty) {
+        try {
+          final supervisors = await _supervisorRepository.getSupervisorsByIds(uniqueSupervisorIds.toList());
+          for (final supervisor in supervisors) {
+            supervisorNames[supervisor.id] = supervisor.username;
+          }
+          print('🔍 DEBUG: Fetched ${supervisorNames.length} supervisor names for damage count Excel export');
+        } catch (e) {
+          print('⚠️ WARNING: Failed to fetch supervisor names for damage count export: $e');
+        }
+      }
+
       // Use Syncfusion for web export
       if (kIsWeb) {
         await _exportDamageCountsSyncfusionWeb(allCounts, schoolNames);
@@ -815,11 +900,11 @@ class ExcelExportService {
       // Fallback to old excel package for non-web (keep as-is for now)
       final excel = Excel.createExcel();
       excel.delete('Sheet1');
-      _createMechanicalDamageSheet(excel, allCounts, schoolNames);
-      _createElectricalDamageSheet(excel, allCounts, schoolNames);
-      _createCivilDamageSheet(excel, allCounts, schoolNames);
-      _createSafetyDamageSheet(excel, allCounts, schoolNames);
-      _createAirConditioningDamageSheet(excel, allCounts, schoolNames);
+      _createMechanicalDamageSheet(excel, allCounts, schoolNames, supervisorNames);
+      _createElectricalDamageSheet(excel, allCounts, schoolNames, supervisorNames);
+      _createCivilDamageSheet(excel, allCounts, schoolNames, supervisorNames);
+      _createSafetyDamageSheet(excel, allCounts, schoolNames, supervisorNames);
+      _createAirConditioningDamageSheet(excel, allCounts, schoolNames, supervisorNames);
       _createDamageSummarySheet(excel, allCounts, schoolNames);
     } catch (e) {
       throw Exception('Failed to export Damage Excel: ${e.toString()}');
@@ -827,34 +912,109 @@ class ExcelExportService {
   }
 
   Future<List<MaintenanceCount>> _getAllMaintenanceCounts() async {
-    final allCounts = <MaintenanceCount>[];
+    try {
+      print('🔍 DEBUG: Starting _getAllMaintenanceCounts for Excel export');
+      
+      // Check admin access and get supervisor IDs
+      final admin = await _adminService.getCurrentAdmin();
+      if (admin == null) {
+        print('❌ ERROR: Admin profile not found for Excel export');
+        throw Exception('Admin profile not found');
+      }
 
-    // Get all schools with maintenance counts
-    final schools = await _repository.getSchoolsWithMaintenanceCounts();
+      List<String> supervisorIds = [];
+      
+      // Get supervisor IDs based on admin role
+      if (admin.role == 'admin') {
+        // For regular admins, get their assigned supervisor IDs
+        supervisorIds = await _adminService.getCurrentAdminSupervisorIds();
+        print('🔍 DEBUG: Regular admin has ${supervisorIds.length} assigned supervisors: $supervisorIds');
+      } else if (admin.role == 'super_admin') {
+        // For super admins, no filtering (can see all data)
+        print('🔍 DEBUG: Super admin - no supervisor filtering applied');
+      }
 
-    for (final school in schools) {
-      final schoolId = school['school_id'] as String;
-      final counts = await _repository.getMaintenanceCounts(schoolId: schoolId);
-      allCounts.addAll(counts);
+      // Use merged records with supervisor filtering
+      final mergedCounts = await _repository.getMergedMaintenanceCountRecords(
+        supervisorIds: supervisorIds.isNotEmpty ? supervisorIds : null,
+        limit: 1000, // Get all records for export
+      );
+
+      print('🔍 DEBUG: Retrieved ${mergedCounts.length} merged maintenance counts for Excel export');
+      
+      return mergedCounts;
+    } catch (e) {
+      print('❌ ERROR: Failed to get merged maintenance counts for Excel export: $e');
+      // Fallback to old method if merged method fails
+      final allCounts = <MaintenanceCount>[];
+
+      // Get all schools with maintenance counts
+      final schools = await _repository.getSchoolsWithMaintenanceCounts();
+
+      for (final school in schools) {
+        final schoolId = school['school_id'] as String;
+        final counts = await _repository.getMaintenanceCounts(schoolId: schoolId);
+        allCounts.addAll(counts);
+      }
+
+      return allCounts;
     }
-
-    return allCounts;
   }
 
   Future<List<DamageCount>> _getAllDamageCounts() async {
-    final allCounts = <DamageCount>[];
+    try {
+      print('🔍 DEBUG: Starting _getAllDamageCounts for Excel export');
+      
+      // Check admin access and get supervisor IDs
+      final admin = await _adminService.getCurrentAdmin();
+      if (admin == null) {
+        print('❌ ERROR: Admin profile not found for damage counts Excel export');
+        throw Exception('Admin profile not found');
+      }
 
-    // Get all schools with damage counts
-    final schools = await _damageRepository!.getSchoolsWithDamageCounts();
+      List<String> supervisorIds = [];
+      
+      // Get supervisor IDs based on admin role
+      if (admin.role == 'admin') {
+        // For regular admins, get their assigned supervisor IDs
+        supervisorIds = await _adminService.getCurrentAdminSupervisorIds();
+        print('🔍 DEBUG: Regular admin has ${supervisorIds.length} assigned supervisors for damage counts: $supervisorIds');
+      } else if (admin.role == 'super_admin') {
+        // For super admins, no filtering (can see all data)
+        print('🔍 DEBUG: Super admin - no supervisor filtering applied for damage counts');
+      }
 
-    for (final school in schools) {
-      final schoolId = school['school_id'] as String;
-      final counts =
-          await _damageRepository!.getDamageCounts(schoolId: schoolId);
-      allCounts.addAll(counts);
+      final allCounts = <DamageCount>[];
+
+      // Get all schools with damage counts, filtered by supervisor IDs
+      final schools = await _damageRepository!.getSchoolsWithDamageCounts(
+        supervisorIds: supervisorIds.isNotEmpty ? supervisorIds : null,
+      );
+
+      for (final school in schools) {
+        final schoolId = school['school_id'] as String;
+        // For damage counts, we need to get all counts for the school and filter by supervisor
+        final counts = await _damageRepository!.getDamageCounts(
+          schoolId: schoolId,
+        );
+        
+        // Filter counts by supervisor IDs if needed
+        if (supervisorIds.isNotEmpty) {
+          final filteredCounts = counts.where((count) => 
+            supervisorIds.contains(count.supervisorId)
+          ).toList();
+          allCounts.addAll(filteredCounts);
+        } else {
+          allCounts.addAll(counts);
+        }
+      }
+
+      print('🔍 DEBUG: Retrieved ${allCounts.length} damage counts for Excel export');
+      return allCounts;
+    } catch (e) {
+      print('❌ ERROR: Failed to get damage counts for Excel export: $e');
+      return [];
     }
-
-    return allCounts;
   }
 
   Future<Map<String, String>> _getSchoolNamesMap() async {
@@ -965,13 +1125,13 @@ class ExcelExportService {
   }
 
   void _createMechanicalDamageSheet(Excel excel, List<DamageCount> allCounts,
-      Map<String, String> schoolNames) {
+      Map<String, String> schoolNames, Map<String, String> supervisorNames) {
     final sheet = excel['أعمال الميكانيك والسباكة'];
 
-    // Headers
     final headers = [
       'اسم المدرسة',
       'تاريخ الحصر',
+      'المشرفون',
       'كرسي شرقي',
       'كرسي افرنجي',
       'حوض مغسلة مع القاعدة',
@@ -987,14 +1147,14 @@ class ExcelExportService {
       'مواسير الصرف الخارجية',
     ];
 
-    // Add headers to first row
+    // Add headers
     for (int i = 0; i < headers.length; i++) {
       final cell =
           sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
       cell.value = headers[i];
     }
 
-    // Add data rows
+    // Add data
     int rowIndex = 1;
     for (final count in allCounts) {
       final schoolName =
@@ -1003,6 +1163,7 @@ class ExcelExportService {
       final rowData = [
         schoolName, // Text
         _formatDate(count.createdAt), // Text
+        supervisorNames[count.supervisorId] ?? 'غير محدد', // Text
         count.itemCounts['plastic_chair'] ?? 0, // Number
         count.itemCounts['plastic_chair_external'] ?? 0, // Number
         count.itemCounts['water_sink'] ?? 0, // Number
@@ -1026,12 +1187,13 @@ class ExcelExportService {
   }
 
   void _createElectricalDamageSheet(Excel excel, List<DamageCount> allCounts,
-      Map<String, String> schoolNames) {
+      Map<String, String> schoolNames, Map<String, String> supervisorNames) {
     final sheet = excel['أعمال الكهرباء'];
 
     final headers = [
       'اسم المدرسة',
       'تاريخ الحصر',
+      'المشرفون',
       'قاطع كهرباني سعة (250) أمبير',
       'قاطع كهرباني سعة (400) أمبير',
       'قاطع كهرباني سعة 1250 أمبير',
@@ -1059,6 +1221,7 @@ class ExcelExportService {
       final rowData = [
         schoolName, // Text
         _formatDate(count.createdAt), // Text
+        supervisorNames[count.supervisorId] ?? 'غير محدد', // Text
         count.itemCounts['circuit_breaker_250'] ?? 0, // Number
         count.itemCounts['circuit_breaker_400'] ?? 0, // Number
         count.itemCounts['circuit_breaker_1250'] ?? 0, // Number
@@ -1078,12 +1241,13 @@ class ExcelExportService {
   }
 
   void _createCivilDamageSheet(Excel excel, List<DamageCount> allCounts,
-      Map<String, String> schoolNames) {
+      Map<String, String> schoolNames, Map<String, String> supervisorNames) {
     final sheet = excel['أعمال مدنية'];
 
     final headers = [
       'اسم المدرسة',
       'تاريخ الحصر',
+      'المشرفون',
       'قماش مظلات من مادة (UPVC) لفة (50) متر مربع',
       'هبوط او تلف بلاط الموقع العام',
       'دهانات الواجهات الخارجية',
@@ -1116,6 +1280,7 @@ class ExcelExportService {
       final rowData = [
         schoolName, // Text
         _formatDate(count.createdAt), // Text
+        supervisorNames[count.supervisorId] ?? 'غير محدد', // Text
         count.itemCounts['upvc_50_meter'] ?? 0, // Number
         count.itemCounts['site_tile_damage'] ?? 0, // Number
         count.itemCounts['external_facade_paint'] ?? 0, // Number
@@ -1140,12 +1305,13 @@ class ExcelExportService {
   }
 
   void _createSafetyDamageSheet(Excel excel, List<DamageCount> allCounts,
-      Map<String, String> schoolNames) {
+      Map<String, String> schoolNames, Map<String, String> supervisorNames) {
     final sheet = excel['أعمال الامن والسلامة'];
 
     final headers = [
       'اسم المدرسة',
       'تاريخ الحصر',
+      'المشرفون',
       'محبس حريق OS&Y من قطر 4 بوصة',
       'لوحة انذار معنونه كاملة',
       'طفاية حريق Dry powder وزن 6 كيلو',
@@ -1173,6 +1339,7 @@ class ExcelExportService {
       final rowData = [
         schoolName, // Text
         _formatDate(count.createdAt), // Text
+        supervisorNames[count.supervisorId] ?? 'غير محدد', // Text
         count.itemCounts['pvc_pipe_connection_4'] ?? 0, // Number
         count.itemCounts['fire_alarm_panel'] ?? 0, // Number
         count.itemCounts['dry_powder_6kg'] ?? 0, // Number
@@ -1192,12 +1359,13 @@ class ExcelExportService {
   }
 
   void _createAirConditioningDamageSheet(Excel excel,
-      List<DamageCount> allCounts, Map<String, String> schoolNames) {
+      List<DamageCount> allCounts, Map<String, String> schoolNames, Map<String, String> supervisorNames) {
     final sheet = excel['التكييف'];
 
     final headers = [
       'اسم المدرسة',
       'تاريخ الحصر',
+      'المشرفون',
       'دولابي',
       'سبليت',
       'شباك',
@@ -1220,10 +1388,11 @@ class ExcelExportService {
       final rowData = [
         schoolName, // Text
         _formatDate(count.createdAt), // Text
-        count.itemCounts['cabinet_ac'] ?? 0, // Number
-        count.itemCounts['split_ac'] ?? 0, // Number
-        count.itemCounts['window_ac'] ?? 0, // Number
-        count.itemCounts['package_ac'] ?? 0, // Number
+        supervisorNames[count.supervisorId] ?? 'غير محدد', // Text
+        count.itemCounts['air_conditioning_cabinet'] ?? 0, // Number
+        count.itemCounts['air_conditioning_split'] ?? 0, // Number
+        count.itemCounts['air_conditioning_window'] ?? 0, // Number
+        count.itemCounts['air_conditioning_package'] ?? 0, // Number
       ];
 
       for (int i = 0; i < rowData.length; i++) {
@@ -1313,20 +1482,43 @@ class ExcelExportService {
   Future<void> _exportDamageCountsSyncfusionWeb(List<DamageCount> allCounts, Map<String, String> schoolNames) async {
     final workbook = syncfusion.Workbook();
 
+    // Fetch supervisor names in batch for better performance
+    final Map<String, String> supervisorNames = {};
+    final Set<String> uniqueSupervisorIds = {};
+    
+    // Collect all unique supervisor IDs
+    for (final count in allCounts) {
+      uniqueSupervisorIds.add(count.supervisorId);
+    }
+    
+    // Fetch supervisor names in batch
+    if (uniqueSupervisorIds.isNotEmpty) {
+      try {
+        final supervisors = await _supervisorRepository.getSupervisorsByIds(uniqueSupervisorIds.toList());
+        for (final supervisor in supervisors) {
+          supervisorNames[supervisor.id] = supervisor.username;
+        }
+        print('🔍 DEBUG: Fetched ${supervisorNames.length} supervisor names for damage count Excel export');
+      } catch (e) {
+        print('⚠️ WARNING: Failed to fetch supervisor names for damage count export: $e');
+      }
+    }
+
     // Mechanical Sheet
     final mechanicalSheet = workbook.worksheets[0];
     mechanicalSheet.name = 'أعمال الميكانيك والسباكة';
     
     // Title
-    final mechanicalTitleRange = mechanicalSheet.getRangeByIndex(1, 1, 1, 15);
+    final mechanicalTitleRange = mechanicalSheet.getRangeByIndex(1, 1, 1, 16);
     mechanicalTitleRange.setText('حصر أعمال الميكانيك والسباكة');
     mechanicalTitleRange.cellStyle.fontSize = 16;
     mechanicalTitleRange.cellStyle.bold = true;
-    mechanicalSheet.getRangeByIndex(1, 1, 1, 15).merge();
+    mechanicalSheet.getRangeByIndex(1, 1, 1, 16).merge();
     
     final mechanicalHeaders = [
       'اسم المدرسة',
       'تاريخ الحصر',
+      'المشرفون',
       'كرسي شرقي',
       'كرسي افرنجي',
       'حوض مغسلة مع القاعدة',
@@ -1353,9 +1545,14 @@ class ExcelExportService {
     
     for (int row = 0; row < allCounts.length; row++) {
       final count = allCounts[row];
+      
+      // Get supervisor name for this record
+      final supervisorName = supervisorNames[count.supervisorId] ?? 'غير محدد';
+      
       final rowData = [
         schoolNames[count.schoolId] ?? 'مدرسة ${count.schoolId}',
         _formatDate(count.createdAt),
+        supervisorName,
         count.itemCounts['plastic_chair'] ?? 0,
         count.itemCounts['plastic_chair_external'] ?? 0,
         count.itemCounts['water_sink'] ?? 0,
@@ -1373,7 +1570,8 @@ class ExcelExportService {
       
       mechanicalSheet.getRangeByIndex(row + 4, 1).setText(rowData[0].toString());
       mechanicalSheet.getRangeByIndex(row + 4, 2).setText(rowData[1].toString());
-      for (int col = 2; col < rowData.length; col++) {
+      mechanicalSheet.getRangeByIndex(row + 4, 3).setText(rowData[2].toString());
+      for (int col = 3; col < rowData.length; col++) {
         mechanicalSheet.getRangeByIndex(row + 4, col + 1).setNumber(double.tryParse(rowData[col].toString()) ?? 0);
       }
     }
@@ -1382,15 +1580,16 @@ class ExcelExportService {
     final electricalSheet = workbook.worksheets.addWithName('أعمال الكهرباء');
     
     // Title
-    final electricalTitleRange = electricalSheet.getRangeByIndex(1, 1, 1, 11);
+    final electricalTitleRange = electricalSheet.getRangeByIndex(1, 1, 1, 12);
     electricalTitleRange.setText('حصر أعمال الكهرباء');
     electricalTitleRange.cellStyle.fontSize = 16;
     electricalTitleRange.cellStyle.bold = true;
-    electricalSheet.getRangeByIndex(1, 1, 1, 11).merge();
+    electricalSheet.getRangeByIndex(1, 1, 1, 12).merge();
     
     final electricalHeaders = [
       'اسم المدرسة',
       'تاريخ الحصر',
+      'المشرفون',
       'قاطع كهرباني سعة (250) أمبير',
       'قاطع كهرباني سعة (400) أمبير',
       'قاطع كهرباني سعة 1250 أمبير',
@@ -1413,9 +1612,14 @@ class ExcelExportService {
     
     for (int row = 0; row < allCounts.length; row++) {
       final count = allCounts[row];
+      
+      // Get supervisor name for this record
+      final supervisorName = supervisorNames[count.supervisorId] ?? 'غير محدد';
+      
       final rowData = [
         schoolNames[count.schoolId] ?? 'مدرسة ${count.schoolId}',
         _formatDate(count.createdAt),
+        supervisorName,
         count.itemCounts['circuit_breaker_250'] ?? 0,
         count.itemCounts['circuit_breaker_400'] ?? 0,
         count.itemCounts['circuit_breaker_1250'] ?? 0,
@@ -1429,7 +1633,8 @@ class ExcelExportService {
       
       electricalSheet.getRangeByIndex(row + 4, 1).setText(rowData[0].toString());
       electricalSheet.getRangeByIndex(row + 4, 2).setText(rowData[1].toString());
-      for (int col = 2; col < rowData.length; col++) {
+      electricalSheet.getRangeByIndex(row + 4, 3).setText(rowData[2].toString());
+      for (int col = 3; col < rowData.length; col++) {
         electricalSheet.getRangeByIndex(row + 4, col + 1).setNumber(double.tryParse(rowData[col].toString()) ?? 0);
       }
     }
@@ -1438,15 +1643,16 @@ class ExcelExportService {
     final civilSheet = workbook.worksheets.addWithName('أعمال مدنية');
     
     // Title
-    final civilTitleRange = civilSheet.getRangeByIndex(1, 1, 1, 16);
+    final civilTitleRange = civilSheet.getRangeByIndex(1, 1, 1, 17);
     civilTitleRange.setText('حصر الأعمال المدنية');
     civilTitleRange.cellStyle.fontSize = 16;
     civilTitleRange.cellStyle.bold = true;
-    civilSheet.getRangeByIndex(1, 1, 1, 16).merge();
+    civilSheet.getRangeByIndex(1, 1, 1, 17).merge();
     
     final civilHeaders = [
       'اسم المدرسة',
       'تاريخ الحصر',
+      'المشرفون',
       'قماش مظلات من مادة (UPVC) لفة (50) متر مربع',
       'هبوط او تلف بلاط الموقع العام',
       'دهانات الواجهات الخارجية',
@@ -1474,9 +1680,14 @@ class ExcelExportService {
     
     for (int row = 0; row < allCounts.length; row++) {
       final count = allCounts[row];
+      
+      // Get supervisor name for this record
+      final supervisorName = supervisorNames[count.supervisorId] ?? 'غير محدد';
+      
       final rowData = [
         schoolNames[count.schoolId] ?? 'مدرسة ${count.schoolId}',
         _formatDate(count.createdAt),
+        supervisorName,
         count.itemCounts['upvc_50_meter'] ?? 0,
         count.itemCounts['site_tile_damage'] ?? 0,
         count.itemCounts['external_facade_paint'] ?? 0,
@@ -1495,7 +1706,8 @@ class ExcelExportService {
       
       civilSheet.getRangeByIndex(row + 4, 1).setText(rowData[0].toString());
       civilSheet.getRangeByIndex(row + 4, 2).setText(rowData[1].toString());
-      for (int col = 2; col < rowData.length; col++) {
+      civilSheet.getRangeByIndex(row + 4, 3).setText(rowData[2].toString());
+      for (int col = 3; col < rowData.length; col++) {
         civilSheet.getRangeByIndex(row + 4, col + 1).setNumber(double.tryParse(rowData[col].toString()) ?? 0);
       }
     }
@@ -1705,6 +1917,66 @@ class ExcelExportService {
     }
   }
 
+  /// 🚀 NEW: Helper method to format supervisor information for Excel export
+  String _formatSupervisorForExcel(String supervisorId) {
+    // Check if this is a merged record (contains multiple supervisor IDs)
+    if (supervisorId.contains(', ')) {
+      final supervisorIdList = supervisorId.split(', ');
+      if (supervisorIdList.length == 1) {
+        return 'مشرف واحد';
+      } else {
+        return '${supervisorIdList.length} مشرفين';
+      }
+    } else {
+      // Single supervisor
+      return 'مشرف واحد';
+    }
+  }
+
+  /// 🚀 NEW: Helper method to get real supervisor names for Excel export
+  Future<String> _getSupervisorNamesForExcel(String supervisorId) async {
+    try {
+      // Check if this is a merged record (contains multiple supervisor IDs)
+      if (supervisorId.contains(', ')) {
+        final supervisorIdList = supervisorId.split(', ');
+        final supervisorNames = <String>[];
+        
+        for (final id in supervisorIdList) {
+          try {
+            final supervisor = await _supervisorRepository.getSupervisorById(id.trim());
+            if (supervisor != null && supervisor.username.isNotEmpty) {
+              supervisorNames.add(supervisor.username);
+            }
+          } catch (e) {
+            print('⚠️ WARNING: Failed to fetch supervisor name for ID $id: $e');
+          }
+        }
+        
+        if (supervisorNames.isNotEmpty) {
+          if (supervisorNames.length == 1) {
+            return supervisorNames.first;
+          } else {
+            return supervisorNames.join('، ');
+          }
+        } else {
+          return 'غير محدد';
+        }
+      } else {
+        // Single supervisor
+        try {
+          final supervisor = await _supervisorRepository.getSupervisorById(supervisorId);
+          return supervisor?.username ?? 'غير محدد';
+        } catch (e) {
+          print('⚠️ WARNING: Failed to fetch supervisor name for ID $supervisorId: $e');
+          return 'غير محدد';
+        }
+      }
+    } catch (e) {
+      print('❌ ERROR: Failed to get supervisor names for Excel: $e');
+      return 'غير محدد';
+    }
+  }
+
   Future<void> exportAllMaintenanceCountsSimplified() async {
     // Prevent multiple simultaneous downloads
     if (_isDownloading) {
@@ -1745,6 +2017,7 @@ class ExcelExportService {
         'اسم المدرسة',
         'تاريخ الحصر',
         'الحالة',
+        'المشرفون',
         'عدد العناصر',
         'عدد الإجابات النصية',
         'عدد الإجابات نعم/لا',
@@ -1762,6 +2035,35 @@ class ExcelExportService {
       
       // Add data rows
       print('📝 Adding data rows...');
+      
+      // Fetch supervisor names in batch for better performance
+      final Map<String, String> supervisorNames = {};
+      final Set<String> uniqueSupervisorIds = {};
+      
+      // Collect all unique supervisor IDs
+      for (final count in allCounts) {
+        if (count.supervisorId.contains(', ')) {
+          // Split merged supervisor IDs
+          final supervisorIdList = count.supervisorId.split(', ');
+          uniqueSupervisorIds.addAll(supervisorIdList.map((id) => id.trim()));
+        } else {
+          uniqueSupervisorIds.add(count.supervisorId);
+        }
+      }
+      
+      // Fetch supervisor names in batch
+      if (uniqueSupervisorIds.isNotEmpty) {
+        try {
+          final supervisors = await _supervisorRepository.getSupervisorsByIds(uniqueSupervisorIds.toList());
+          for (final supervisor in supervisors) {
+            supervisorNames[supervisor.id] = supervisor.username;
+          }
+          print('🔍 DEBUG: Fetched ${supervisorNames.length} supervisor names for Excel export');
+        } catch (e) {
+          print('⚠️ WARNING: Failed to fetch supervisor names: $e');
+        }
+      }
+      
       for (int row = 0; row < allCounts.length; row++) {
         final count = allCounts[row];
         
@@ -1770,10 +2072,34 @@ class ExcelExportService {
           print('   📊 Processing row ${row + 1}/${allCounts.length}');
         }
         
+        // Get supervisor names for this record
+        String supervisorDisplay = 'غير محدد';
+        if (count.supervisorId.contains(', ')) {
+          // Multiple supervisors
+          final supervisorIdList = count.supervisorId.split(', ');
+          final supervisorNameList = <String>[];
+          
+          for (final id in supervisorIdList) {
+            final name = supervisorNames[id.trim()];
+            if (name != null && name.isNotEmpty) {
+              supervisorNameList.add(name);
+            }
+          }
+          
+          if (supervisorNameList.isNotEmpty) {
+            supervisorDisplay = supervisorNameList.join('، ');
+          }
+        } else {
+          // Single supervisor
+          final supervisorName = supervisorNames[count.supervisorId];
+          supervisorDisplay = supervisorName ?? 'غير محدد';
+        }
+        
         final rowData = [
           schoolNames[count.schoolId] ?? 'مدرسة ${count.schoolId}',
           _formatDate(count.createdAt),
           count.status == 'submitted' ? 'مرسل' : 'مسودة',
+          supervisorDisplay,
           count.itemCounts.length,
           count.textAnswers.length,
           count.yesNoAnswers.length,

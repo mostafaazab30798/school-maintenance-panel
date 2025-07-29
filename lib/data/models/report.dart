@@ -39,24 +39,24 @@ class Report extends Equatable {
 
   factory Report.fromMap(Map<String, dynamic> map) {
     return Report(
-      id: map['id'] as String,
-      schoolName: map['school_name'] as String,
-      description: map['description'] as String,
-      type: map['type'] as String,
-      priority: map['priority'] as String,
+      id: map['id']?.toString() ?? '',
+      schoolName: map['school_name']?.toString() ?? '',
+      description: map['description']?.toString() ?? '',
+      type: map['type']?.toString() ?? '',
+      priority: map['priority']?.toString() ?? '',
       images: List<String>.from(map['images'] ?? []),
-      status: map['status'] as String,
-      supervisorId: map['supervisor_id'] as String,
-      supervisorName: map['supervisors']?['username'] ?? 'غير معروف',
-      createdAt: DateTime.parse(map['created_at']),
-      scheduledDate: DateTime.parse(map['scheduled_date']),
+      status: map['status']?.toString() ?? '',
+      supervisorId: map['supervisor_id']?.toString() ?? '',
+      supervisorName: map['supervisors']?['username']?.toString() ?? 'غير معروف',
+      createdAt: map['created_at'] != null ? DateTime.parse(map['created_at']) : DateTime.now(),
+      scheduledDate: map['scheduled_date'] != null ? DateTime.parse(map['scheduled_date']) : DateTime.now(),
       completionPhotos: List<String>.from(map['completion_photos'] ?? []),
-      completionNote: map['completion_note'],
+      completionNote: map['completion_note']?.toString(),
       closedAt:
           map['closed_at'] != null ? DateTime.parse(map['closed_at']) : null,
       updatedAt:
           map['updated_at'] != null ? DateTime.parse(map['updated_at']) : null,
-      reportSource: map['report_source'] as String? ?? 'unifier',
+      reportSource: map['report_source']?.toString() ?? 'unifier',
     );
   }
 

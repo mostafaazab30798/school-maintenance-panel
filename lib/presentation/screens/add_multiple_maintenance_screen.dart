@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:ui';
+import '../../core/services/supabase_storage_service.dart';
 
 import '../../logic/blocs/maintenance_reports/maintenance_bloc.dart';
 import '../../logic/blocs/maintenance_reports/maintenance_event.dart';
@@ -21,7 +22,9 @@ class AddMultipleMaintenanceScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (context) => MaintenanceFormBloc(),
+      create: (context) => MaintenanceFormBloc(
+        storageService: context.read<SupabaseStorageService>(),
+      ),
       child: _MaintenanceFormContent(supervisorId: supervisorId),
     );
   }

@@ -176,66 +176,91 @@ class MaintenanceReportRepository extends BaseRepository<MaintenanceReport> {
           if (supervisorIds != null) {
             debugPrint('🔍 DEBUG: Supervisor IDs: ${supervisorIds.length} IDs');
           }
+          debugPrint('🔍 DEBUG: Requested limit: $limit');
         }
 
-        // 🚀 FIX: Use basic query without complex filtering
-        final response = await client
-            .from('maintenance_reports')
-            .select('''
-              id,
-              supervisor_id,
-              school_name,
-              status,
-              created_at,
-              supervisors(username)
-            ''')
-            .limit(limit * 2) // Get more records for filtering
-            .order('created_at', ascending: false);
-
+        // 🚀 FIX: Use database-level filtering for better performance when possible
+        PostgrestList response;
+        
         if (kDebugMode) {
-          debugPrint('🔍 DEBUG: Executing simple query...');
+          debugPrint('🔍 MaintenanceRepository: Building query with supervisorId: $supervisorId, supervisorIds: $supervisorIds');
+        }
+        
+        if (supervisorId != null) {
+          // Single supervisor filter - use database-level filtering
+          if (kDebugMode) {
+            debugPrint('🔍 MaintenanceRepository: Using single supervisor filter: $supervisorId');
+          }
+          response = await client
+              .from('maintenance_reports')
+              .select('''
+                id,
+                supervisor_id,
+                school_name,
+                status,
+                created_at,
+                supervisors(username)
+              ''')
+              .eq('supervisor_id', supervisorId)
+              .order('created_at', ascending: false)
+              .limit(limit);
+        } else if (supervisorIds != null && supervisorIds.isNotEmpty) {
+          // Multiple supervisor filter - use database-level filtering
+          if (kDebugMode) {
+            debugPrint('🔍 MaintenanceRepository: Using multiple supervisor filter: $supervisorIds');
+          }
+          response = await client
+              .from('maintenance_reports')
+              .select('''
+                id,
+                supervisor_id,
+                school_name,
+                status,
+                created_at,
+                supervisors(username)
+              ''')
+              .inFilter('supervisor_id', supervisorIds)
+              .order('created_at', ascending: false)
+              .limit(limit);
+        } else {
+          // No supervisor filter - get all records
+          if (kDebugMode) {
+            debugPrint('🔍 MaintenanceRepository: No supervisor filter - getting all records');
+          }
+          response = await client
+              .from('maintenance_reports')
+              .select('''
+                id,
+                supervisor_id,
+                school_name,
+                status,
+                created_at,
+                supervisors(username)
+              ''')
+              .order('created_at', ascending: false)
+              .limit(limit);
         }
 
-        if (response is List) {
+        // Apply additional status filter if needed
+        if (status != null) {
+          // For status filtering, we need to filter in memory since we already have the data
           final results = response.cast<Map<String, dynamic>>();
-          
-          // 🚀 FIX: Apply all filtering in memory
-          List<Map<String, dynamic>> filteredResults = results;
-          
-          // Filter by supervisor IDs
-          if (supervisorId != null) {
-            filteredResults = filteredResults.where((item) {
-              final itemSupervisorId = item['supervisor_id']?.toString();
-              return itemSupervisorId == supervisorId;
-            }).toList();
-          } else if (supervisorIds != null && supervisorIds.isNotEmpty) {
-            filteredResults = filteredResults.where((item) {
-              final itemSupervisorId = item['supervisor_id']?.toString();
-              return itemSupervisorId != null && supervisorIds.contains(itemSupervisorId);
-            }).toList();
-          }
-          
-          // Filter by status
-          if (status != null) {
-            filteredResults = filteredResults.where((item) {
-              final itemStatus = item['status']?.toString();
-              return itemStatus == status;
-            }).toList();
-          }
-          
-          // Apply limit
-          if (filteredResults.length > limit) {
-            filteredResults = filteredResults.take(limit).toList();
-          }
+          final filteredResults = results.where((item) {
+            final itemStatus = item['status']?.toString();
+            return itemStatus == status;
+          }).toList();
           
           if (kDebugMode) {
-            debugPrint('🔍 DEBUG: Applied in-memory filtering: ${results.length} -> ${filteredResults.length}');
-            debugPrint('✅ Dashboard: Fetched ${filteredResults.length} maintenance reports');
+            debugPrint('🔍 DEBUG: Applied status filter: ${results.length} -> ${filteredResults.length}');
           }
+          
           return filteredResults;
-        } else {
-          throw Exception('Failed to load dashboard maintenance reports');
         }
+
+        if (kDebugMode) {
+          debugPrint('✅ Dashboard: Fetched ${response.length} maintenance reports with database filtering');
+        }
+        return response.cast<Map<String, dynamic>>();
       },
       cacheParams: {
         'supervisorId': supervisorId,

@@ -50,6 +50,7 @@ import '../../presentation/screens/schools_with_achievements_screen.dart';
 
 import '../../core/services/admin_service.dart';
 import '../../core/services/admin_management_service.dart';
+import '../../core/services/supabase_storage_service.dart';
 // Commented out for now
 // import '../../presentation/screens/supervisor_auth_link_screen.dart';
 
@@ -202,7 +203,10 @@ final GoRouter appRouter = GoRouter(
               ),
             ),
             BlocProvider<AddMultipleReportsCubit>(
-              create: (_) => AddMultipleReportsCubit(supervisorId),
+              create: (_) => AddMultipleReportsCubit(
+                supervisorId,
+                storageService: SupabaseStorageService(Supabase.instance.client),
+              ),
             ),
           ],
           child: AddMultipleReportsScreen(supervisorId: supervisorId),

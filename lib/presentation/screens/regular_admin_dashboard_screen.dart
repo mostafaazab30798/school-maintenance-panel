@@ -252,49 +252,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 ),
                           tooltip:
                               isLoading ? 'جاري التحديث...' : 'تحديث البيانات',
-                          onPressed: isLoading
-                              ? null
-                              : () {
-                                  context
-                                      .read<DashboardBloc>()
-                                      .add(const RefreshDashboard());
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Row(
-                                        children: [
-                                          SizedBox(
-                                            width: 18,
-                                            height: 18,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              valueColor:
-                                                  const AlwaysStoppedAnimation<
-                                                      Color>(
-                                                Colors.white,
-                                              ),
-                                            ),
+                                                onPressed: isLoading
+                          ? null
+                          : () async {
+                              // Force refresh admin data first
+                              await context.read<DashboardBloc>().forceRefreshAdminData();
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor:
+                                              const AlwaysStoppedAnimation<
+                                                  Color>(
+                                            Colors.white,
                                           ),
-                                          const SizedBox(width: 12),
-                                          const Text(
-                                            'جاري تحديث جميع البيانات والإحصائيات...',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w500,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                        ],
+                                        ),
                                       ),
-                                      backgroundColor: const Color(0xFF3B82F6),
-                                      duration: const Duration(seconds: 3),
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
+                                      const SizedBox(width: 12),
+                                      const Text(
+                                        'جاري تحديث جميع البيانات والإحصائيات...',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.white,
+                                        ),
                                       ),
-                                      margin: const EdgeInsets.all(16),
-                                    ),
-                                  );
-                                },
+                                    ],
+                                  ),
+                                  backgroundColor: const Color(0xFF3B82F6),
+                                  duration: const Duration(seconds: 3),
+                                  behavior: SnackBarBehavior.floating,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  margin: const EdgeInsets.all(16),
+                                ),
+                              );
+                            },
                         );
                       },
                     ),

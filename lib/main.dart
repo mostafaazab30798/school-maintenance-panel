@@ -21,6 +21,7 @@ import 'core/constants/app_themes.dart';
 import 'core/routes/app_router.dart';
 import 'core/services/admin_service.dart';
 import 'core/services/admin_management_service.dart';
+import 'core/services/supabase_storage_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 
@@ -68,6 +69,7 @@ class MyApp extends StatelessWidget {
     final fciAssessmentRepo = FciAssessmentRepository(supabase);
     final adminService = AdminService(supabase);
     final adminManagementService = AdminManagementService(supabase);
+    final supabaseStorageService = SupabaseStorageService(supabase);
 
     return MultiRepositoryProvider(
       providers: [
@@ -81,6 +83,8 @@ class MyApp extends StatelessWidget {
         RepositoryProvider<AdminService>.value(value: adminService),
         RepositoryProvider<AdminManagementService>.value(
             value: adminManagementService),
+        RepositoryProvider<SupabaseStorageService>.value(
+            value: supabaseStorageService),
       ],
       child: MultiBlocProvider(
         providers: [

@@ -29,18 +29,18 @@ class MaintenanceReport extends Equatable {
 
   factory MaintenanceReport.fromMap(Map<String, dynamic> map) {
     return MaintenanceReport(
-      id: map['id'] as String,
-      supervisorId: map['supervisor_id'] as String,
-      supervisorName: map['supervisors']?['username'] ?? 'غير معروف',
-      schoolId: map['school_name'] as String,
-      description: map['description'] as String,
-      status: map['status'] as String,
+      id: map['id']?.toString() ?? '',
+      supervisorId: map['supervisor_id']?.toString() ?? '',
+      supervisorName: map['supervisors']?['username']?.toString() ?? 'غير معروف',
+      schoolId: map['school_name']?.toString() ?? '',
+      description: map['description']?.toString() ?? '',
+      status: map['status']?.toString() ?? '',
       images: List<String>.from(map['images'] ?? []),
-      createdAt: DateTime.parse(map['created_at']),
+      createdAt: map['created_at'] != null ? DateTime.parse(map['created_at']) : DateTime.now(),
       closedAt:
           map['closed_at'] != null ? DateTime.parse(map['closed_at']) : null,
       completionPhotos: List<String>.from(map['completion_photos'] ?? []),
-      completionNote: map['completion_note'],
+      completionNote: map['completion_note']?.toString(),
     );
   }
 

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart' as intl;
 import '../../logic/blocs/maintenance_counts/maintenance_counts_bloc.dart';
 import '../../data/repositories/maintenance_count_repository.dart';
 import '../../data/repositories/damage_count_repository.dart';
+import '../../data/repositories/supervisor_repository.dart';
 import '../../core/services/admin_service.dart';
 import '../../core/services/excel_export_service.dart';
 import '../widgets/common/shared_app_bar.dart';
@@ -732,9 +733,11 @@ class _DamageInventoryViewState extends State<DamageInventoryView> {
       final maintenanceRepository =
           MaintenanceCountRepository(Supabase.instance.client);
       final damageRepository = DamageCountRepository(Supabase.instance.client);
+      final supervisorRepository = SupervisorRepository(Supabase.instance.client);
       final excelService = ExcelExportService(
         maintenanceRepository,
         damageRepository: damageRepository,
+        supervisorRepository: supervisorRepository,
       );
 
       // Export damage counts to Excel with retry mechanism

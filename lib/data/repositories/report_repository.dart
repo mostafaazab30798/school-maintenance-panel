@@ -240,37 +240,73 @@ class ReportRepository extends BaseRepository<Report> {
           if (supervisorIds != null) {
             debugPrint('🔍 DEBUG: Supervisor IDs: ${supervisorIds.length} IDs');
           }
+          debugPrint('🔍 DEBUG: Requested limit: $limit');
         }
 
         // 🚀 PERFORMANCE OPTIMIZATION: Build query with database-level filters
-        final query = client
-            .from('reports')
-            .select('''
-              id,
-              supervisor_id,
-              type,
-              status,
-              priority,
-              school_name,
-              created_at,
-              supervisors(username)
-            ''');
-
-        // Apply database-level filters and execute query
         PostgrestList response;
         
+        if (kDebugMode) {
+          debugPrint('🔍 ReportRepository: Building query with supervisorId: $supervisorId, supervisorIds: $supervisorIds');
+        }
+        
         if (supervisorId != null) {
-          response = await query
+          // Single supervisor filter - use database-level filtering
+          if (kDebugMode) {
+            debugPrint('🔍 ReportRepository: Using single supervisor filter: $supervisorId');
+          }
+          response = await client
+              .from('reports')
+              .select('''
+                id,
+                supervisor_id,
+                type,
+                status,
+                priority,
+                school_name,
+                created_at,
+                supervisors(username)
+              ''')
               .eq('supervisor_id', supervisorId)
               .order('created_at', ascending: false)
               .limit(limit);
         } else if (supervisorIds != null && supervisorIds.isNotEmpty) {
-          response = await query
+          // Multiple supervisor filter - use database-level filtering
+          if (kDebugMode) {
+            debugPrint('🔍 ReportRepository: Using multiple supervisor filter: $supervisorIds');
+          }
+          response = await client
+              .from('reports')
+              .select('''
+                id,
+                supervisor_id,
+                type,
+                status,
+                priority,
+                school_name,
+                created_at,
+                supervisors(username)
+              ''')
               .inFilter('supervisor_id', supervisorIds)
               .order('created_at', ascending: false)
               .limit(limit);
         } else {
-          response = await query
+          // No supervisor filter - get all records
+          if (kDebugMode) {
+            debugPrint('🔍 ReportRepository: No supervisor filter - getting all records');
+          }
+          response = await client
+              .from('reports')
+              .select('''
+                id,
+                supervisor_id,
+                type,
+                status,
+                priority,
+                school_name,
+                created_at,
+                supervisors(username)
+              ''')
               .order('created_at', ascending: false)
               .limit(limit);
         }
@@ -279,36 +315,45 @@ class ReportRepository extends BaseRepository<Report> {
         if (status != null || type != null || priority != null || schoolName != null) {
           // For additional filters, we'll need to filter in memory
           // This is a trade-off for the complex filtering requirements
-          var filteredQuery = query;
+          final results = response.cast<Map<String, dynamic>>();
+          List<Map<String, dynamic>> filteredResults = results;
           
           if (status != null) {
-            filteredQuery = filteredQuery.eq('status', status);
+            filteredResults = filteredResults.where((item) {
+              final itemStatus = item['status']?.toString();
+              return itemStatus == status;
+            }).toList();
           }
           if (type != null) {
-            filteredQuery = filteredQuery.eq('type', type);
+            filteredResults = filteredResults.where((item) {
+              final itemType = item['type']?.toString();
+              return itemType == type;
+            }).toList();
           }
           if (priority != null) {
-            filteredQuery = filteredQuery.eq('priority', priority);
+            filteredResults = filteredResults.where((item) {
+              final itemPriority = item['priority']?.toString();
+              return itemPriority == priority;
+            }).toList();
           }
           if (schoolName != null) {
-            filteredQuery = filteredQuery.ilike('school_name', '%$schoolName%');
+            filteredResults = filteredResults.where((item) {
+              final itemSchoolName = item['school_name']?.toString() ?? '';
+              return itemSchoolName.toLowerCase().contains(schoolName.toLowerCase());
+            }).toList();
           }
-          
-          response = await filteredQuery
-              .order('created_at', ascending: false)
-              .limit(limit);
-        }
-
-        if (response is List) {
-          final results = response.cast<Map<String, dynamic>>();
           
           if (kDebugMode) {
-            debugPrint('✅ Dashboard: Fetched ${results.length} reports with database filtering');
+            debugPrint('🔍 DEBUG: Applied additional filters: ${results.length} -> ${filteredResults.length}');
           }
-          return results;
-        } else {
-          throw Exception('Failed to load dashboard reports');
+          
+          return filteredResults;
         }
+
+        if (kDebugMode) {
+          debugPrint('✅ Dashboard: Fetched ${response.length} reports with database filtering');
+        }
+        return response.cast<Map<String, dynamic>>();
       },
       cacheParams: {
         'supervisorId': supervisorId,

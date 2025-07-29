@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../logic/blocs/maintenance_counts/maintenance_counts_bloc.dart';
 import '../../data/repositories/maintenance_count_repository.dart';
+import '../../data/repositories/supervisor_repository.dart';
 import '../../data/repositories/damage_count_repository.dart';
 import '../../core/services/admin_service.dart';
 import '../../core/services/excel_export_service.dart';
@@ -512,7 +513,11 @@ class CountInventoryView extends StatelessWidget {
 
       // Create Excel export service
       final repository = MaintenanceCountRepository(Supabase.instance.client);
-      final excelService = ExcelExportService(repository);
+      final supervisorRepository = SupervisorRepository(Supabase.instance.client);
+      final excelService = ExcelExportService(
+        repository,
+        supervisorRepository: supervisorRepository,
+      );
 
       // Export to Excel
       await excelService.exportAllMaintenanceCounts();

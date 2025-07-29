@@ -83,20 +83,29 @@ class AdminService {
       // First, get the admin's database ID from the admins table
       final adminResponse = await _client
           .from('admins')
-          .select('id')
+          .select('id, role')
           .eq('auth_user_id', authUserId)
           .single();
 
       final adminId = adminResponse['id'] as String;
+      final adminRole = adminResponse['role'] as String?;
 
       if (kDebugMode) {
-        debugPrint('$_logPrefix: 👤 Admin database ID: $adminId');
+        debugPrint('$_logPrefix: 👤 Admin database ID: $adminId, Role: $adminRole');
+      }
+
+      // If super admin, return empty list (they can see all data)
+      if (adminRole == 'super_admin') {
+        if (kDebugMode) {
+          debugPrint('$_logPrefix: 🎯 Super admin detected - returning empty list for all data access');
+        }
+        return [];
       }
 
       // Query supervisors table for supervisors assigned to this admin
       final response = await _client
           .from('supervisors')
-          .select('id')
+          .select('id, username')
           .eq('admin_id', adminId);
 
       if (kDebugMode) {
@@ -215,5 +224,18 @@ class AdminService {
         debugPrint('AdminService: Cleared all supervisor cache');
       }
     }
+  }
+
+  /// Force refresh supervisor IDs for current admin (clears cache and refetches)
+  Future<List<String>> forceRefreshSupervisorIds() async {
+    final user = _client.auth.currentUser;
+    if (user != null) {
+      _supervisorCache.remove(user.id);
+      _cacheTimestamp.remove(user.id);
+      if (kDebugMode) {
+        debugPrint('AdminService: Force refreshing supervisor IDs for user ${user.id}');
+      }
+    }
+    return await getCurrentAdminSupervisorIds();
   }
 }
