@@ -15,7 +15,7 @@ class SchoolAssignmentService {
     return (response as List).map((data) => School.fromMap(data)).toList();
   }
 
-  /// Get schools assigned to a supervisor
+  /// Get schools assigned to a specific supervisor
   Future<List<School>> getSchoolsForSupervisor(String supervisorId) async {
     try {
       // First, get the count to see if we need pagination
@@ -65,6 +65,38 @@ class SchoolAssignmentService {
       return allSchools;
     } catch (e) {
       print('🏫 ERROR: Failed to fetch schools for supervisor $supervisorId: $e');
+      rethrow;
+    }
+  }
+
+  /// 🚀 PERFORMANCE OPTIMIZATION: Get schools for multiple supervisors in a single query
+  Future<List<School>> getSchoolsForMultipleSupervisors(List<String> supervisorIds) async {
+    if (supervisorIds.isEmpty) return [];
+    
+    try {
+      print('🏫 DEBUG: Getting schools for ${supervisorIds.length} supervisors in batch');
+      
+      // Use a single query to get all schools for all supervisors
+      final response = await _client
+          .from('schools')
+          .select('*, supervisor_schools!inner(*)')
+          .inFilter('supervisor_schools.supervisor_id', supervisorIds)
+          .order('name');
+      
+      final allSchools = (response as List).map((data) => School.fromMap(data)).toList();
+      
+      // Remove duplicates based on school ID
+      final uniqueSchools = <String, School>{};
+      for (final school in allSchools) {
+        uniqueSchools[school.id] = school;
+      }
+      
+      final uniqueSchoolsList = uniqueSchools.values.toList();
+      print('🏫 DEBUG: Fetched ${uniqueSchoolsList.length} unique schools for ${supervisorIds.length} supervisors in single query');
+      
+      return uniqueSchoolsList;
+    } catch (e) {
+      print('🏫 ERROR: Failed to fetch schools for multiple supervisors: $e');
       rethrow;
     }
   }

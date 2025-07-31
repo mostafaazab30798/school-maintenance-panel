@@ -1045,4 +1045,57 @@ class AdminManagementService {
 
     return priorityStats;
   }
+
+  /// Change supervisor password via Edge Function
+  Future<Map<String, dynamic>> changeSupervisorPassword({
+    required String supervisorId,
+    required String newPassword,
+  }) async {
+    try {
+      // Debug logging
+      print('🔍 DEBUG: Attempting to change password for supervisor ID: $supervisorId');
+      
+      // Get current session to include auth headers
+      final session = _client.auth.currentSession;
+      if (session == null) {
+        throw Exception('No active session. Please login first.');
+      }
+
+      // Call the Edge Function to change supervisor password
+      final response = await _client.functions.invoke(
+        'change-supervisor-password',
+        body: {
+          'supervisorId': supervisorId,
+          'newPassword': newPassword,
+        },
+        headers: {
+          'Authorization': 'Bearer ${session.accessToken}',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.status != 200) {
+        final errorData = response.data as Map<String, dynamic>?;
+        final errorMessage = errorData?['error'] ?? 'Unknown error occurred';
+        throw Exception(errorMessage);
+      }
+
+      final data = response.data as Map<String, dynamic>;
+      return data;
+    } catch (e) {
+      if (e.toString().contains('FunctionsException')) {
+        // Extract the actual error message from FunctionsException
+        final errorString = e.toString();
+        if (errorString.contains('error":')) {
+          final startIndex = errorString.indexOf('"error":"') + 9;
+          final endIndex = errorString.indexOf('"', startIndex);
+          if (startIndex > 8 && endIndex > startIndex) {
+            final errorMessage = errorString.substring(startIndex, endIndex);
+            throw Exception(errorMessage);
+          }
+        }
+      }
+      throw Exception('Failed to change supervisor password: $e');
+    }
+  }
 }

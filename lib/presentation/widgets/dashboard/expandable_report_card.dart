@@ -119,6 +119,8 @@ class _ExpandableReportCardState extends State<ExpandableReportCard>
     final report = widget.report;
     final dateFormat = intl.DateFormat('yyyy-MM-dd hh:mm a');
     final theme = Theme.of(context);
+    
+
     final isDark = theme.brightness == Brightness.dark;
 
     return Container(
@@ -172,30 +174,51 @@ class _ExpandableReportCardState extends State<ExpandableReportCard>
                 _animationController.reverse();
               }
             },
-            leading: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    _priorityColor(report['priority']).withOpacity(0.8),
-                    _priorityColor(report['priority']),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [
-                  BoxShadow(
-                    color: _priorityColor(report['priority']).withOpacity(0.2),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
+            leading: Stack(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        _priorityColor(report['priority']).withOpacity(0.8),
+                        _priorityColor(report['priority']),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: _priorityColor(report['priority']).withOpacity(0.2),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: Icon(
-                _priorityIcon(report['priority']),
-                color: Colors.white,
-                size: 20,
-              ),
+                  child: Icon(
+                    _priorityIcon(report['priority']),
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+                // Status indicator dot
+                Positioned(
+                  top: 2,
+                  right: 2,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _statusColor(report['status']),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
             trailing: IconButton(
               icon: const Icon(Icons.download_rounded),
@@ -218,31 +241,75 @@ class _ExpandableReportCardState extends State<ExpandableReportCard>
                         ),
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            _priorityColor(report['priority']).withOpacity(0.1),
-                            _priorityColor(report['priority']).withOpacity(0.2),
-                          ],
+                    Row(
+                      children: [
+                        // Priority badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                _priorityColor(report['priority']).withOpacity(0.1),
+                                _priorityColor(report['priority']).withOpacity(0.2),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _priorityColor(report['priority']),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            report['priority'] == 'Routine' ? 'روتيني' : 'طارئ',
+                            style: TextStyle(
+                              color: _priorityColor(report['priority']),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 10,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
                         ),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _priorityColor(report['priority']),
-                          width: 1,
+                        const SizedBox(width: 8),
+                        // Status badge
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                _statusColor(report['status']).withOpacity(0.1),
+                                _statusColor(report['status']).withOpacity(0.2),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: _statusColor(report['status']),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                _statusIcon(report['status']),
+                                size: 12,
+                                color: _statusColor(report['status']),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _statusLabel(report['status']),
+                                style: TextStyle(
+                                  color: _statusColor(report['status']),
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 10,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      child: Text(
-                        report['priority'] == 'Routine' ? 'روتيني' : 'طارئ',
-                        style: TextStyle(
-                          color: _priorityColor(report['priority']),
-                          fontWeight: FontWeight.w600,
-                          fontSize: 10,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
+                      ],
                     ),
                   ],
                 ),
@@ -322,13 +389,102 @@ class _ExpandableReportCardState extends State<ExpandableReportCard>
                         isDark: isDark,
                         isCompleted: true,
                       ),
-                    if (report['completion_note'] != null)
-                      _buildDetailRow(
-                        icon: Icons.check_circle_rounded,
-                        title: 'ملاحظة الاغلاق',
-                        value: report['completion_note'] ?? '-',
-                        isDark: isDark,
-                        isCompleted: true,
+                    // Show completion note if available, or show a placeholder for completed reports
+                    if (report['completion_note'] != null && report['completion_note'].toString().isNotEmpty)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.green.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.note_rounded,
+                                  color: Colors.green,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'ملاحظة الإنجاز',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: Colors.green,
+                                  ),
+                                ),
+                                const Spacer(),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    'مكتمل',
+                                    style: TextStyle(
+                                      color: Colors.green,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 10,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              report['completion_note'] ?? '',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: isDark ? Colors.grey[200] : Colors.grey[800],
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    // Show completion status for completed reports without notes
+                    if (report['status'] == 'completed' && (report['completion_note'] == null || report['completion_note'].toString().isEmpty))
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Colors.green.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.check_circle_rounded,
+                              color: Colors.green,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'تم إنجاز البلاغ بنجاح',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: Colors.green,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     if ((report['images'] as List?)?.isNotEmpty ?? false)
                       Container(
@@ -356,7 +512,7 @@ class _ExpandableReportCardState extends State<ExpandableReportCard>
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  'الصور المرفقة',
+                                  'الصور قبل الإصلاح',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 14,
@@ -480,13 +636,13 @@ class _ExpandableReportCardState extends State<ExpandableReportCard>
                             Row(
                               children: [
                                 Icon(
-                                  Icons.photo_library_outlined,
+                                  Icons.check_circle_rounded,
                                   size: 20,
                                   color: Colors.green,
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
-                                  'صور بعد الإنجاز',
+                                  'الصور بعد الإصلاح',
                                   style: TextStyle(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 14,
@@ -589,6 +745,8 @@ class _ExpandableReportCardState extends State<ExpandableReportCard>
                           ],
                         ),
                       ),
+                      
+
                   ],
                 ),
               ),
@@ -689,6 +847,51 @@ class _ExpandableReportCardState extends State<ExpandableReportCard>
         return Icons.schedule_rounded;
       default:
         return Icons.info_rounded;
+    }
+  }
+
+  Color _statusColor(String? status) {
+    switch (status) {
+      case 'pending':
+        return const Color(0xFF6B7280);
+      case 'completed':
+        return const Color(0xFF10B981);
+      case 'late':
+        return const Color(0xFFEF4444);
+      case 'late_completed':
+        return const Color(0xFFFF9800);
+      default:
+        return const Color(0xFF6B7280);
+    }
+  }
+
+  IconData _statusIcon(String? status) {
+    switch (status) {
+      case 'pending':
+        return Icons.schedule_outlined;
+      case 'completed':
+        return Icons.check_circle_outline;
+      case 'late':
+        return Icons.warning_outlined;
+      case 'late_completed':
+        return Icons.check_circle_outline;
+      default:
+        return Icons.schedule_outlined;
+    }
+  }
+
+  String _statusLabel(String? status) {
+    switch (status) {
+      case 'pending':
+        return 'قيد التنفيذ';
+      case 'completed':
+        return 'مكتمل';
+      case 'late':
+        return 'متأخر';
+      case 'late_completed':
+        return 'منجز متأخر';
+      default:
+        return status ?? 'غير محدد';
     }
   }
 

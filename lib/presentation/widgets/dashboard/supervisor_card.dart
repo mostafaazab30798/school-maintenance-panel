@@ -9,6 +9,7 @@ import '../../../core/services/admin_service.dart';
 import '../../../logic/blocs/supervisors/supervisor_bloc.dart';
 import '../super_admin/dialogs/schools_list_dialog.dart';
 import '../super_admin/dialogs/technician_management_dialog.dart';
+import '../super_admin/dialogs/change_supervisor_password_dialog.dart';
 import '../attendance/attendance_dialog.dart';
 import '../common/esc_dismissible_dialog.dart';
 
@@ -332,6 +333,17 @@ class _SupervisorCardState extends State<SupervisorCard>
                     const Color(0xFF8B5CF6),
                     isDark,
                     onTap: () => _openSchoolsList(context),
+                  ),
+                  const SizedBox(width: 8),
+                  _buildEnhancedBadge(
+                    Icons.key_rounded,
+                    1,
+                    'كلمة المرور',
+                    const Color(0xFFF59E0B),
+                    isDark,
+                    onTap: widget.supervisor != null
+                        ? () => _openPasswordChangeDialog(context)
+                        : null,
                   ),
                 ],
               ),
@@ -897,5 +909,32 @@ class _SupervisorCardState extends State<SupervisorCard>
 
   void _showAttendanceDialog(BuildContext context) {
     AttendanceDialog.show(context, widget.supervisorId, widget.name);
+  }
+
+  void _openPasswordChangeDialog(BuildContext context) {
+    if (widget.supervisor == null) return;
+
+    // Debug logging
+    print('🔍 DEBUG: Regular supervisor card - Opening password change dialog');
+    print('🔍 DEBUG: Supervisor ID: ${widget.supervisor!.id}');
+    print('🔍 DEBUG: Supervisor username: ${widget.supervisor!.username}');
+
+    ChangeSupervisorPasswordDialog.show(
+      context,
+      widget.supervisor!,
+      onPasswordChanged: () {
+        // Optionally refresh data or show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('تم تحديث كلمة المرور بنجاح'),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      },
+    );
   }
 }

@@ -68,21 +68,9 @@ class SchoolsBloc extends Bloc<SchoolsEvent, SchoolsState> {
         adminId: currentAdmin.id,
       );
 
-      // Get all schools for these supervisors
-      List<School> allSchools = [];
-      for (final supervisor in supervisors) {
-        final supervisorSchools =
-            await _schoolService.getSchoolsForSupervisor(supervisor.id);
-        allSchools.addAll(supervisorSchools);
-      }
-
-      // Remove duplicates based on school ID
-      final uniqueSchools = <String, School>{};
-      for (final school in allSchools) {
-        uniqueSchools[school.id] = school;
-      }
-
-      final schools = uniqueSchools.values.toList();
+      // 🚀 PERFORMANCE OPTIMIZATION: Get all schools in a single batch query
+      final supervisorIds = supervisors.map((s) => s.id).toList();
+      final schools = await _schoolService.getSchoolsForMultipleSupervisors(supervisorIds);
       emit(SchoolsLoaded(
         schools: schools,
         filteredSchools: schools,

@@ -337,7 +337,8 @@ class _ExpandableMaintenanceCardState extends State<ExpandableMaintenanceCard>
                             .format(DateTime.parse(report['scheduled_date'])),
                         isDark: isDark,
                       ),
-                    if (report['closed_at'] != null)
+                    if (report['closed_at'] != null && 
+                        (report['status'] == 'completed' || report['status'] == 'late_completed'))
                       _buildDetailRow(
                         icon: Icons.check_circle_rounded,
                         title: 'تاريخ الإنهاء:',
@@ -346,7 +347,8 @@ class _ExpandableMaintenanceCardState extends State<ExpandableMaintenanceCard>
                         isDark: isDark,
                         isCompleted: true,
                       ),
-                    if (report['completion_note'] != null)
+                    if (report['completion_note'] != null && 
+                        (report['status'] == 'completed' || report['status'] == 'late_completed'))
                       _buildDetailRow(
                         icon: Icons.check_circle_rounded,
                         title: 'ملاحظة الاغلاق',
@@ -506,9 +508,9 @@ class _ExpandableMaintenanceCardState extends State<ExpandableMaintenanceCard>
                           ],
                         ),
                       ),
-                    if ((report['completion_photos'] as List?)?.isNotEmpty ??
-                        false)
-                      Container(
+                    if ((report['completion_photos'] as List?)?.isNotEmpty ?? false)
+                      if (report['status'] == 'completed' || report['status'] == 'late_completed')
+                        Container(
                         margin: const EdgeInsets.only(top: 16),
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(

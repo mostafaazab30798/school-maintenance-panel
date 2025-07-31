@@ -96,6 +96,12 @@ class ReportRepository extends BaseRepository<Report> {
               status,
               priority,
               school_name,
+              description,
+              images,
+              completion_note,
+              completion_photos,
+              closed_at,
+              scheduled_date,
               created_at,
               supervisors(username)
             ''')
@@ -275,21 +281,90 @@ class ReportRepository extends BaseRepository<Report> {
           if (kDebugMode) {
             debugPrint('🔍 ReportRepository: Using multiple supervisor filter: $supervisorIds');
           }
-          response = await client
-              .from('reports')
-              .select('''
-                id,
-                supervisor_id,
-                type,
-                status,
-                priority,
-                school_name,
-                created_at,
-                supervisors(username)
-              ''')
-              .inFilter('supervisor_id', supervisorIds)
-              .order('created_at', ascending: false)
-              .limit(limit);
+          
+          // 🚀 PERFORMANCE OPTIMIZATION: Use smart filtering strategy based on list size
+          if (supervisorIds.length == 1) {
+            // Single supervisor - use eq filter (fastest)
+            response = await client
+                .from('reports')
+                .select('''
+                  id,
+                  supervisor_id,
+                  type,
+                  status,
+                  priority,
+                  school_name,
+                  created_at,
+                  supervisors(username)
+                ''')
+                .eq('supervisor_id', supervisorIds.first)
+                .order('created_at', ascending: false)
+                .limit(limit);
+          } else if (supervisorIds.length <= 10) {
+            // Small to medium list - use inFilter (efficient for reasonable lists)
+            response = await client
+                .from('reports')
+                .select('''
+                  id,
+                  supervisor_id,
+                  type,
+                  status,
+                  priority,
+                  school_name,
+                  created_at,
+                  supervisors(username)
+                ''')
+                .inFilter('supervisor_id', supervisorIds)
+                .order('created_at', ascending: false)
+                .limit(limit);
+          } else {
+            // Large list - use multiple queries and combine results
+            if (kDebugMode) {
+              debugPrint('🔍 Large supervisor list (${supervisorIds.length}), using multiple queries for complete data');
+            }
+            
+            // Split into chunks to avoid query size limits
+            final chunks = <List<String>>[];
+            for (int i = 0; i < supervisorIds.length; i += 5) {
+              chunks.add(supervisorIds.skip(i).take(5).toList());
+            }
+            
+            final allResponses = <PostgrestList>[];
+            for (final chunk in chunks) {
+              final chunkResponse = await client
+                  .from('reports')
+                  .select('''
+                    id,
+                    supervisor_id,
+                    type,
+                    status,
+                    priority,
+                    school_name,
+                    created_at,
+                    supervisors(username)
+                  ''')
+                  .inFilter('supervisor_id', chunk)
+                  .order('created_at', ascending: false)
+                  .limit(limit);
+              allResponses.add(chunkResponse);
+            }
+            
+            // Combine all responses
+            final combinedData = <Map<String, dynamic>>[];
+            for (final response in allResponses) {
+              combinedData.addAll(response.cast<Map<String, dynamic>>());
+            }
+            
+            // Sort by created_at and limit
+            combinedData.sort((a, b) {
+              final aDate = DateTime.tryParse(a['created_at']?.toString() ?? '');
+              final bDate = DateTime.tryParse(b['created_at']?.toString() ?? '');
+              if (aDate == null || bDate == null) return 0;
+              return bDate.compareTo(aDate);
+            });
+            
+            response = combinedData.take(limit).toList() as PostgrestList;
+          }
         } else {
           // No supervisor filter - get all records
           if (kDebugMode) {
@@ -312,48 +387,42 @@ class ReportRepository extends BaseRepository<Report> {
         }
 
         // Apply additional filters if needed
-        if (status != null || type != null || priority != null || schoolName != null) {
-          // For additional filters, we'll need to filter in memory
-          // This is a trade-off for the complex filtering requirements
-          final results = response.cast<Map<String, dynamic>>();
-          List<Map<String, dynamic>> filteredResults = results;
-          
-          if (status != null) {
-            filteredResults = filteredResults.where((item) {
-              final itemStatus = item['status']?.toString();
-              return itemStatus == status;
-            }).toList();
-          }
-          if (type != null) {
-            filteredResults = filteredResults.where((item) {
-              final itemType = item['type']?.toString();
-              return itemType == type;
-            }).toList();
-          }
-          if (priority != null) {
-            filteredResults = filteredResults.where((item) {
-              final itemPriority = item['priority']?.toString();
-              return itemPriority == priority;
-            }).toList();
-          }
-          if (schoolName != null) {
-            filteredResults = filteredResults.where((item) {
-              final itemSchoolName = item['school_name']?.toString() ?? '';
-              return itemSchoolName.toLowerCase().contains(schoolName.toLowerCase());
-            }).toList();
-          }
-          
-          if (kDebugMode) {
-            debugPrint('🔍 DEBUG: Applied additional filters: ${results.length} -> ${filteredResults.length}');
-          }
-          
-          return filteredResults;
+        List<Map<String, dynamic>> results = response.cast<Map<String, dynamic>>();
+        
+        // 🚀 PERFORMANCE OPTIMIZATION: Apply filters in memory only when necessary
+        if (type != null || status != null || priority != null || schoolName != null) {
+          results = results.where((item) {
+            bool matches = true;
+            
+            if (type != null) {
+              final itemType = item['type']?.toString().toLowerCase();
+              matches = matches && itemType == type.toLowerCase();
+            }
+            
+            if (status != null) {
+              final itemStatus = item['status']?.toString().toLowerCase();
+              matches = matches && itemStatus == status.toLowerCase();
+            }
+            
+            if (priority != null) {
+              final itemPriority = item['priority']?.toString().toLowerCase();
+              matches = matches && itemPriority == priority.toLowerCase();
+            }
+            
+            if (schoolName != null) {
+              final itemSchoolName = item['school_name']?.toString().toLowerCase();
+              matches = matches && itemSchoolName?.contains(schoolName.toLowerCase()) == true;
+            }
+            
+            return matches;
+          }).toList();
         }
 
         if (kDebugMode) {
-          debugPrint('✅ Dashboard: Fetched ${response.length} reports with database filtering');
+          debugPrint('✅ Dashboard: Fetched ${results.length} reports with database filtering');
         }
-        return response.cast<Map<String, dynamic>>();
+        
+        return results;
       },
       cacheParams: {
         'supervisorId': supervisorId,
@@ -364,7 +433,6 @@ class ReportRepository extends BaseRepository<Report> {
         'schoolName': schoolName,
         'limit': limit,
         'page': 1,
-        'userId': client.auth.currentUser?.id,
       },
       useCache: true,
       forceRefresh: forceRefresh,

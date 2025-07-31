@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dialogs/technician_management_dialog.dart';
 import 'dialogs/schools_list_dialog.dart';
 import 'dialogs/edit_supervisor_dialog.dart';
+import 'dialogs/change_supervisor_password_dialog.dart';
 import '../../../data/models/supervisor.dart';
 import '../../../data/repositories/supervisor_repository.dart';
 import '../../../logic/blocs/supervisors/supervisor_bloc.dart';
@@ -392,6 +393,34 @@ const SizedBox(height: 12),
                             Icons.edit_outlined,
                             size: 16,
                             color: Color(0xFF10B981),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Password Change Button
+                  Tooltip(
+                    message: 'تغيير كلمة المرور',
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => _openPasswordChangeDialog(context, supervisor),
+                        borderRadius: BorderRadius.circular(8),
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: const Color(0xFFF59E0B).withOpacity(0.1),
+                            border: Border.all(
+                              color: const Color(0xFFF59E0B).withOpacity(0.2),
+                              width: 0.5,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.key_rounded,
+                            size: 16,
+                            color: Color(0xFFF59E0B),
                           ),
                         ),
                       ),
@@ -1201,6 +1230,46 @@ const SizedBox(height: 12),
         ),
       ),
     );
+  }
+
+  void _openPasswordChangeDialog(BuildContext context, Map<String, dynamic> supervisor) {
+    try {
+      // Debug logging
+      print('🔍 DEBUG: Opening password change dialog for supervisor:');
+      print('🔍 DEBUG: Raw supervisor data: $supervisor');
+      print('🔍 DEBUG: Supervisor ID from map: ${supervisor['id']}');
+      
+      // Convert the map to a Supervisor object
+      final supervisorObj = Supervisor.fromMap(supervisor);
+      
+      print('🔍 DEBUG: Parsed supervisor object ID: ${supervisorObj.id}');
+
+      ChangeSupervisorPasswordDialog.show(
+        context,
+        supervisorObj,
+        onPasswordChanged: () {
+          // Optionally refresh data or show success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('تم تحديث كلمة المرور بنجاح'),
+              backgroundColor: const Color(0xFF10B981),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      print('🔍 DEBUG: Error in _openPasswordChangeDialog: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('خطأ في تحميل بيانات المشرف: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
 

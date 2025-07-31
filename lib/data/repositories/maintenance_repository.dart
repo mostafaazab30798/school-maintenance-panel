@@ -148,8 +148,10 @@ class MaintenanceReportRepository extends BaseRepository<MaintenanceReport> {
     String? supervisorId,
     List<String>? supervisorIds,
     String? status,
-    int limit = 10, // Smaller limit for dashboard
+    bool forceRefresh = false,
+    int limit = 50, // Larger limit for dashboard but still limited
   }) async {
+    // 🚀 PERFORMANCE OPTIMIZATION: Use optimized cache key generation
     final cacheKey = _generateOptimizedCacheKey(
       supervisorId: supervisorId,
       supervisorIds: supervisorIds,
@@ -158,19 +160,22 @@ class MaintenanceReportRepository extends BaseRepository<MaintenanceReport> {
       page: 1,
     );
 
-    // Check cache first
-    final cached = getFromCache<List<MaintenanceReport>>(cacheKey);
-    if (cached != null) {
-      if (kDebugMode) {
-        debugPrint('⚡ Dashboard cache hit - returning ${cached.length} maintenance reports');
+    // 🚀 PERFORMANCE OPTIMIZATION: Check cache first for instant response
+    if (!forceRefresh) {
+      final cached = getFromCache<List<MaintenanceReport>>(cacheKey);
+      if (cached != null) {
+        if (kDebugMode) {
+          debugPrint('⚡ MaintenanceRepository: Dashboard cache hit - returning ${cached.length} maintenance reports instantly');
+        }
+        return cached;
       }
-      return cached;
     }
 
+    // 🚀 PERFORMANCE OPTIMIZATION: Use BaseRepository's executeQuery with optimized parameters
     return await executeQuery(
       operation: 'fetchMaintenanceReportsForDashboard',
       query: () async {
-        // 🚀 FIX: Use simplest possible Supabase query approach
+        // 🚀 PERFORMANCE OPTIMIZATION: Use database-level filtering for better performance
         if (kDebugMode) {
           debugPrint('🔍 DEBUG: Using simplest query approach');
           if (supervisorIds != null) {
@@ -179,7 +184,7 @@ class MaintenanceReportRepository extends BaseRepository<MaintenanceReport> {
           debugPrint('🔍 DEBUG: Requested limit: $limit');
         }
 
-        // 🚀 FIX: Use database-level filtering for better performance when possible
+        // 🚀 PERFORMANCE OPTIMIZATION: Build query with database-level filters
         PostgrestList response;
         
         if (kDebugMode) {
@@ -209,19 +214,84 @@ class MaintenanceReportRepository extends BaseRepository<MaintenanceReport> {
           if (kDebugMode) {
             debugPrint('🔍 MaintenanceRepository: Using multiple supervisor filter: $supervisorIds');
           }
-          response = await client
-              .from('maintenance_reports')
-              .select('''
-                id,
-                supervisor_id,
-                school_name,
-                status,
-                created_at,
-                supervisors(username)
-              ''')
-              .inFilter('supervisor_id', supervisorIds)
-              .order('created_at', ascending: false)
-              .limit(limit);
+          
+          // 🚀 PERFORMANCE OPTIMIZATION: Use smart filtering strategy based on list size
+          if (supervisorIds.length == 1) {
+            // Single supervisor - use eq filter (fastest)
+            response = await client
+                .from('maintenance_reports')
+                .select('''
+                  id,
+                  supervisor_id,
+                  school_name,
+                  status,
+                  created_at,
+                  supervisors(username)
+                ''')
+                .eq('supervisor_id', supervisorIds.first)
+                .order('created_at', ascending: false)
+                .limit(limit);
+          } else if (supervisorIds.length <= 10) {
+            // Small to medium list - use inFilter (efficient for reasonable lists)
+            response = await client
+                .from('maintenance_reports')
+                .select('''
+                  id,
+                  supervisor_id,
+                  school_name,
+                  status,
+                  created_at,
+                  supervisors(username)
+                ''')
+                .inFilter('supervisor_id', supervisorIds)
+                .order('created_at', ascending: false)
+                .limit(limit);
+          } else {
+            // Large list - use multiple queries and combine results
+            if (kDebugMode) {
+              debugPrint('🔍 Large supervisor list (${supervisorIds.length}), using multiple queries for complete data');
+            }
+            
+            // Split into chunks to avoid query size limits
+            final chunks = <List<String>>[];
+            for (int i = 0; i < supervisorIds.length; i += 5) {
+              chunks.add(supervisorIds.skip(i).take(5).toList());
+            }
+            
+            final allResponses = <PostgrestList>[];
+            for (final chunk in chunks) {
+              final chunkResponse = await client
+                  .from('maintenance_reports')
+                  .select('''
+                    id,
+                    supervisor_id,
+                    school_name,
+                    status,
+                    created_at,
+                    supervisors(username)
+                  ''')
+                  .inFilter('supervisor_id', chunk)
+                  .order('created_at', ascending: false)
+                  .limit(limit);
+              allResponses.add(chunkResponse);
+            }
+            
+            // Combine all responses
+            final combinedData = <Map<String, dynamic>>[];
+            for (final response in allResponses) {
+              combinedData.addAll(response.cast<Map<String, dynamic>>());
+            }
+            
+            // Sort by created_at and limit
+            combinedData.sort((a, b) {
+              final aDate = DateTime.tryParse(a['created_at']?.toString() ?? '');
+              final bDate = DateTime.tryParse(b['created_at']?.toString() ?? '');
+              if (aDate == null || bDate == null) return 0;
+              return bDate.compareTo(aDate);
+            });
+            
+            response = combinedData.take(limit).toList() as PostgrestList;
+          }
         } else {
           // No supervisor filter - get all records
           if (kDebugMode) {
@@ -242,25 +312,24 @@ class MaintenanceReportRepository extends BaseRepository<MaintenanceReport> {
         }
 
         // Apply additional status filter if needed
+        List<Map<String, dynamic>> results = response.cast<Map<String, dynamic>>();
+        
         if (status != null) {
           // For status filtering, we need to filter in memory since we already have the data
-          final results = response.cast<Map<String, dynamic>>();
-          final filteredResults = results.where((item) {
+          results = results.where((item) {
             final itemStatus = item['status']?.toString();
             return itemStatus == status;
           }).toList();
           
           if (kDebugMode) {
-            debugPrint('🔍 DEBUG: Applied status filter: ${results.length} -> ${filteredResults.length}');
+            debugPrint('🔍 DEBUG: Applied status filter: ${response.length} -> ${results.length}');
           }
-          
-          return filteredResults;
         }
 
         if (kDebugMode) {
-          debugPrint('✅ Dashboard: Fetched ${response.length} maintenance reports with database filtering');
+          debugPrint('✅ Dashboard: Fetched ${results.length} maintenance reports with database filtering');
         }
-        return response.cast<Map<String, dynamic>>();
+        return results;
       },
       cacheParams: {
         'supervisorId': supervisorId,

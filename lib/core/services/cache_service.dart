@@ -32,10 +32,11 @@ class CacheService {
   final Map<String, List<VoidCallback>> _listeners = {};
 
   // Cache durations for different data types
-  static const Duration _defaultCacheDuration = Duration(minutes: 5);
-  static const Duration _reportsCacheDuration = Duration(minutes: 3);
-  static const Duration _maintenanceCacheDuration = Duration(minutes: 3);
-  static const Duration _dashboardCacheDuration = Duration(minutes: 2);
+  static const Duration _defaultCacheDuration = Duration(minutes: 3);
+  static const Duration _reportsCacheDuration = Duration(minutes: 2);
+  static const Duration _maintenanceCacheDuration = Duration(minutes: 2);
+  static const Duration _dashboardCacheDuration = Duration(minutes: 1); // Reduced for faster refresh
+  static const Duration _supervisorCacheDuration = Duration(minutes: 5); // Longer for stable data
 
   /// Get cached data if available and not expired
   T? getCached<T>(String key) {
@@ -91,6 +92,7 @@ class CacheService {
     if (key.contains('reports')) return _reportsCacheDuration;
     if (key.contains('maintenance')) return _maintenanceCacheDuration;
     if (key.contains('dashboard')) return _dashboardCacheDuration;
+    if (key.contains('supervisor')) return _supervisorCacheDuration;
     return _defaultCacheDuration;
   }
 

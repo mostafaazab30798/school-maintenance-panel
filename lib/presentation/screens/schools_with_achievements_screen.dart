@@ -75,15 +75,11 @@ class _SchoolsWithAchievementsScreenState
       final supervisors = await _supervisorRepository.fetchSupervisors(
           adminId: currentAdmin.id);
 
-      // Get all schools for these supervisors
-      List<School> allSchools = [];
-      for (final supervisor in supervisors) {
-        final supervisorSchools =
-            await _schoolService.getSchoolsForSupervisor(supervisor.id);
-        allSchools.addAll(supervisorSchools);
-      }
+      // 🚀 PERFORMANCE OPTIMIZATION: Get all schools in a single batch query
+      final supervisorIds = supervisors.map((s) => s.id).toList();
+      final allSchools = await _schoolService.getSchoolsForMultipleSupervisors(supervisorIds);
 
-      // Remove duplicates and filter only schools with achievements
+      // Filter only schools with achievements
       final uniqueSchools = <String, School>{};
       for (final school in allSchools) {
         if (schoolAchievements.containsKey(school.id)) {

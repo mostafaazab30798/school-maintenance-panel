@@ -39,10 +39,39 @@ class _ReportScreenState extends State<ReportScreen> {
   final TextEditingController _searchController = TextEditingController();
   List<Report> _filteredReports = [];
   bool _isSearching = false;
+  String _selectedStatusFilter = 'all';
+
+  // Status filter options
+  final List<Map<String, dynamic>> _statusFilterOptions = [
+    {'key': 'all', 'label': 'جميع البلاغات', 'icon': Icons.list_alt},
+    {'key': 'pending', 'label': 'قيد التنفيذ', 'icon': Icons.schedule_outlined},
+    {'key': 'completed', 'label': 'مكتملة', 'icon': Icons.check_circle_outline},
+    {'key': 'late', 'label': 'متأخرة', 'icon': Icons.warning_outlined},
+    {'key': 'late_completed', 'label': 'منجزة متأخرة', 'icon': Icons.check_circle_outlined},
+  ];
+
+  // Status colors and labels
+  final Map<String, Color> _statusColors = {
+    'pending': const Color(0xFF6B7280),
+    'completed': const Color(0xFF10B981),
+    'late': const Color(0xFFEF4444),
+    'late_completed': const Color(0xFFFF9800),
+  };
+
+  final Map<String, String> _statusLabels = {
+    'pending': 'قيد التنفيذ',
+    'completed': 'مكتمل',
+    'late': 'متأخر',
+    'late_completed': 'منجز متأخر',
+  };
 
   @override
   void initState() {
     super.initState();
+    // Set initial status filter based on widget status parameter
+    if (widget.status != null) {
+      _selectedStatusFilter = widget.status!;
+    }
     // Initial load with filters
     _loadReportsWithFilters();
     _searchController.addListener(_onSearchChanged);
@@ -61,13 +90,23 @@ class _ReportScreenState extends State<ReportScreen> {
 
   void _filterReports(List<Report> allReports) {
     final query = _searchController.text.toLowerCase().trim();
-    if (query.isEmpty) {
-      _filteredReports = allReports;
-    } else {
-      _filteredReports = allReports.where((report) {
+    List<Report> filteredBySearch = allReports;
+    
+    // Apply search filter
+    if (query.isNotEmpty) {
+      filteredBySearch = allReports.where((report) {
         return report.schoolName.toLowerCase().contains(query);
       }).toList();
     }
+    
+    // Apply status filter
+    if (_selectedStatusFilter != 'all') {
+      filteredBySearch = filteredBySearch.where((report) {
+        return report.status == _selectedStatusFilter;
+      }).toList();
+    }
+    
+    _filteredReports = filteredBySearch;
   }
 
   void _loadReportsWithFilters({bool forceRefresh = false}) {
@@ -134,6 +173,143 @@ class _ReportScreenState extends State<ReportScreen> {
         return 'استشاري';
       default:
         return value ?? 'يونيفاير'; // Default to unifier
+    }
+  }
+
+  Widget _buildStatusFilterChips() {
+    return Container(
+      height: 50,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: _statusFilterOptions.length,
+        itemBuilder: (context, index) {
+          final option = _statusFilterOptions[index];
+          final isSelected = _selectedStatusFilter == option['key'];
+          
+          return Container(
+            margin: const EdgeInsets.only(right: 8),
+            child: FilterChip(
+              selected: isSelected,
+              label: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    option['icon'],
+                    size: 16,
+                    color: isSelected ? Colors.white : _getStatusColor(option['key']),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(option['label']),
+                ],
+              ),
+              selectedColor: _getStatusColor(option['key']),
+              checkmarkColor: Colors.white,
+              onSelected: (selected) {
+                setState(() {
+                  _selectedStatusFilter = option['key'];
+                });
+                // Re-filter the reports
+                if (context.read<ReportBloc>().state is ReportLoaded) {
+                  final state = context.read<ReportBloc>().state as ReportLoaded;
+                  _filterReports(state.reports);
+                }
+              },
+              backgroundColor: Colors.grey[200],
+              side: BorderSide(
+                color: isSelected ? _getStatusColor(option['key']) : Colors.grey[300]!,
+                width: 1,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'pending':
+        return const Color(0xFF6B7280);
+      case 'completed':
+        return const Color(0xFF10B981);
+      case 'late':
+        return const Color(0xFFEF4444);
+      case 'late_completed':
+        return const Color(0xFFFF9800);
+      default:
+        return const Color(0xFF3B82F6);
+    }
+  }
+
+  
+
+  
+
+  Widget _buildEmptyState() {
+    if (_searchController.text.isNotEmpty) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              'لا توجد نتائج للبحث',
+              style: TextStyle(fontSize: 18, color: Colors.grey),
+            ),
+            Text(
+              'جرب البحث بكلمة أخرى',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+          ],
+        ),
+      );
+    } else if (_selectedStatusFilter != 'all') {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _statusFilterOptions.firstWhere((opt) => opt['key'] == _selectedStatusFilter)['icon'],
+              size: 64,
+              color: _getStatusColor(_selectedStatusFilter),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'لا توجد بلاغات ${_statusLabels[_selectedStatusFilter] ?? _selectedStatusFilter}',
+              style: TextStyle(
+                fontSize: 18,
+                color: _getStatusColor(_selectedStatusFilter),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'جرب تغيير الفلتر أو البحث بكلمة أخرى',
+              style: const TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+          ],
+        ),
+      );
+    } else {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.inbox_outlined, size: 64, color: Colors.grey),
+            SizedBox(height: 16),
+            Text(
+              'لا يوجد بلاغات',
+              style: TextStyle(fontSize: 18, color: Colors.grey),
+            ),
+            Text(
+              'لم يتم العثور على أي بلاغات في النظام',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+          ],
+        ),
+      );
     }
   }
 
@@ -254,34 +430,17 @@ class _ReportScreenState extends State<ReportScreen> {
             if (state is ReportLoading) {
               return const Center(child: CircularProgressIndicator());
             } else if (state is ReportLoaded) {
-              // Filter reports based on search query
+              // Filter reports based on search query and status
               _filterReports(state.reports);
-
-              if (_filteredReports.isEmpty) {
-                if (_searchController.text.isNotEmpty) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.search_off, size: 64, color: Colors.grey),
-                        SizedBox(height: 16),
-                        Text(
-                          'لا توجد نتائج للبحث',
-                          style: TextStyle(fontSize: 18, color: Colors.grey),
-                        ),
-                        Text(
-                          'جرب البحث بكلمة أخرى',
-                          style: TextStyle(fontSize: 14, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                return const Center(child: Text('لا يوجد بلاغات.'));
-              }
 
               return Column(
                 children: [
+               
+                  
+                  
+                  // Status filter chips
+                  _buildStatusFilterChips(),
+                  
                   // Search results count
                   if (_searchController.text.isNotEmpty)
                     Container(
@@ -298,15 +457,35 @@ class _ReportScreenState extends State<ReportScreen> {
                         textAlign: TextAlign.center,
                       ),
                     ),
+                  
+                  // Filtered results count
+                  if (_selectedStatusFilter != 'all' && _searchController.text.isEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      color: _getStatusColor(_selectedStatusFilter).withOpacity(0.1),
+                      child: Text(
+                        'عرض ${_filteredReports.length} بلاغ ${_statusLabels[_selectedStatusFilter] ?? _selectedStatusFilter}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: _getStatusColor(_selectedStatusFilter),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  
                   // Results list
                   Expanded(
-                    child: ListView.builder(
-                      itemCount: _filteredReports.length,
-                      itemBuilder: (context, index) {
-                        final Report report = _filteredReports[index];
-                        return ExpandableReportCard(report: report.toMap());
-                      },
-                    ),
+                    child: _filteredReports.isEmpty
+                        ? _buildEmptyState()
+                        : ListView.builder(
+                            itemCount: _filteredReports.length,
+                            itemBuilder: (context, index) {
+                              final Report report = _filteredReports[index];
+                              return ExpandableReportCard(report: report.toMap());
+                            },
+                          ),
                   ),
                 ],
               );

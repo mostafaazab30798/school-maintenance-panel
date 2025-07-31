@@ -12,99 +12,89 @@ class PerformanceOptimizationService {
   final Map<String, DateTime> _cacheTimestamps = {};
   static const Duration _cacheExpiry = Duration(minutes: 5);
 
-  /// 🚀 Optimized method to get schools count for multiple supervisors in a single query
+  /// 🚀 PERFORMANCE OPTIMIZATION: Get schools count for supervisors with optimized caching
   Future<Map<String, int>> getSupervisorsSchoolsCountOptimized(List<String> supervisorIds) async {
     if (supervisorIds.isEmpty) return {};
-
-    final cacheKey = 'schools_count_${supervisorIds.join('_')}';
+    
+    final cacheKey = 'supervisors_schools_count_${supervisorIds.join('_')}';
     
     // Check cache first
     if (_isCacheValid(cacheKey)) {
       if (kDebugMode) {
-        debugPrint('⚡ PerformanceOptimizationService: Cache hit for schools count');
+        print('⚡ PerformanceOptimizationService: Cached schools count for ${supervisorIds.length} supervisors');
       }
       return _cache[cacheKey] as Map<String, int>;
     }
-
+    
     try {
-      // 🚀 PERFORMANCE OPTIMIZATION: Single query with GROUP BY equivalent
+      // 🚀 PERFORMANCE OPTIMIZATION: Use single query for all supervisors
       final response = await Supabase.instance.client
           .from('supervisor_schools')
           .select('supervisor_id')
           .inFilter('supervisor_id', supervisorIds);
-
+      
       // Count schools per supervisor
-      final Map<String, int> counts = {};
+      final Map<String, int> schoolsCount = {};
       for (final supervisorId in supervisorIds) {
-        counts[supervisorId] = 0;
+        schoolsCount[supervisorId] = response
+            .where((item) => item['supervisor_id'] == supervisorId)
+            .length;
       }
-
-      for (final record in response) {
-        final supervisorId = record['supervisor_id']?.toString();
-        if (supervisorId != null && counts.containsKey(supervisorId)) {
-          counts[supervisorId] = (counts[supervisorId] ?? 0) + 1;
-        }
-      }
-
+      
       // Cache the result
-      _cache[cacheKey] = counts;
+      _cache[cacheKey] = schoolsCount;
       _cacheTimestamps[cacheKey] = DateTime.now();
-
+      
       if (kDebugMode) {
-        debugPrint('⚡ PerformanceOptimizationService: Cached schools count for ${supervisorIds.length} supervisors');
+        print('⚡ PerformanceOptimizationService: Cached schools count for ${supervisorIds.length} supervisors');
       }
-
-      return counts;
+      
+      return schoolsCount;
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ PerformanceOptimizationService: Error getting schools count: $e');
+        print('❌ PerformanceOptimizationService: Error getting schools count: $e');
       }
+      // Return empty map on error
       return {for (final id in supervisorIds) id: 0};
     }
   }
 
-  /// 🚀 Optimized method to get schools with achievements in a single query
+  /// 🚀 PERFORMANCE OPTIMIZATION: Get schools with achievements using optimized query
   Future<int> getSchoolsWithAchievementsOptimized(Set<String> schoolIds) async {
     if (schoolIds.isEmpty) return 0;
-
+    
     final cacheKey = 'schools_achievements_${schoolIds.length}';
     
     // Check cache first
     if (_isCacheValid(cacheKey)) {
       if (kDebugMode) {
-        debugPrint('⚡ PerformanceOptimizationService: Cache hit for schools achievements');
+        print('⚡ PerformanceOptimizationService: Cached schools achievements count: ${_cache[cacheKey]}');
       }
       return _cache[cacheKey] as int;
     }
-
+    
     try {
-      // 🚀 PERFORMANCE OPTIMIZATION: Single query to get unique schools with achievements
+      // 🚀 PERFORMANCE OPTIMIZATION: Use optimized query for achievements
       final response = await Supabase.instance.client
           .from('achievement_photos')
           .select('school_id')
           .inFilter('school_id', schoolIds.toList())
           .not('school_id', 'is', null);
-
-      // Count unique schools with achievements
-      final schoolsWithAchievementsSet = response
-          .map((achievement) => achievement['school_id']?.toString())
-          .where((schoolId) => schoolId != null && schoolId.isNotEmpty)
-          .toSet();
-
-      final count = schoolsWithAchievementsSet.length;
-
+      
+      final schoolsWithAchievements = response.map((item) => item['school_id']).toSet().length;
+      
       // Cache the result
-      _cache[cacheKey] = count;
+      _cache[cacheKey] = schoolsWithAchievements;
       _cacheTimestamps[cacheKey] = DateTime.now();
-
+      
       if (kDebugMode) {
-        debugPrint('⚡ PerformanceOptimizationService: Cached schools achievements count: $count');
+        print('⚡ PerformanceOptimizationService: Cached schools achievements count: $schoolsWithAchievements');
       }
-
-      return count;
+      
+      return schoolsWithAchievements;
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('❌ PerformanceOptimizationService: Error getting schools achievements: $e');
+        print('❌ PerformanceOptimizationService: Error getting schools achievements: $e');
       }
       return 0;
     }
