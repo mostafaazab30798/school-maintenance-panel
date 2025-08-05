@@ -190,25 +190,35 @@ class MaintenanceCount extends Equatable {
   }
 
   // Utility methods for checking data presence
+  bool get hasAirConditioningData =>
+      itemCounts.keys.any((key) => MaintenanceItemTypes.airConditioningTypes.contains(key));
+
+  bool get hasElectricalData =>
+      itemCounts.keys.any((key) => MaintenanceItemTypes.electricalTypes.contains(key)) ||
+      itemCounts.keys.any((key) => MaintenanceItemTypes.electricalPanelTypes.contains(key)) ||
+      itemCounts.keys.any((key) => MaintenanceItemTypes.electricalBreakerTypes.contains(key)) ||
+      textAnswers.keys.any((key) => key.contains('electricity'));
+
   bool get hasFireSafetyData =>
-      itemCounts.keys.any((key) => key.startsWith('fire_')) ||
+      itemCounts.keys.any((key) => MaintenanceItemTypes.fireSafetyTypes.contains(key)) ||
+      itemCounts.keys.any((key) => MaintenanceItemTypes.fireItemsWithCondition.contains(key)) ||
+      itemCounts.keys.any((key) => MaintenanceItemTypes.fireSafetyItemsWithCountAndCondition.contains(key)) ||
       fireSafetyAlarmPanelData.isNotEmpty ||
       fireSafetyConditionOnlyData.isNotEmpty ||
       fireSafetyExpiryDates.isNotEmpty;
 
-  bool get hasElectricalData =>
-      itemCounts.keys.any((key) => key.startsWith('electrical_')) ||
-      textAnswers.keys.any((key) => key.contains('electricity'));
-
   bool get hasMechanicalData =>
-      itemCounts.keys.any((key) => key.startsWith('water_')) ||
-      yesNoAnswers.keys
-          .any((key) => key.contains('elevator') || key.contains('water'));
+      itemCounts.keys.any((key) => MaintenanceItemTypes.mechanicalTypes.contains(key)) ||
+      itemCounts.keys.any((key) => MaintenanceItemTypes.mechanicalHeaterTypes.contains(key)) ||
+      itemCounts.keys.any((key) => MaintenanceItemTypes.mechanicalItemsCountOnly.contains(key)) ||
+      yesNoAnswers.keys.any((key) => key.contains('elevator') || key.contains('water'));
 
-  bool get hasCivilData => yesNoAnswers.keys.any((key) =>
-      key.contains('wall_') ||
-      key.contains('roof_') ||
-      key.contains('concrete_'));
+  bool get hasCivilData =>
+      itemCounts.keys.any((key) => MaintenanceItemTypes.civilItemsCountOnly.contains(key)) ||
+      yesNoAnswers.keys.any((key) =>
+          key.contains('wall_') ||
+          key.contains('roof_') ||
+          key.contains('concrete_'));
 
   bool get hasDamageData =>
       yesNoAnswers.values.any((value) => value == true) ||
@@ -224,35 +234,61 @@ class MaintenanceCount extends Equatable {
   List<String> getPhotosBySection(String section) =>
       sectionPhotos[section] ?? [];
 
-  // New utility methods for the updated item structure
-  bool get hasUpdatedACData =>
-      itemCounts.containsKey('split_concealed_ac') ||
-      itemCounts.containsKey('hidden_ducts_ac');
+  // New utility methods for field types
+  bool get hasTextAnswerData =>
+      textAnswers.keys.any((key) => MaintenanceFieldTypes.textAnswerFields.contains(key));
 
-  bool get hasUpdatedSinkData =>
-      itemCounts.containsKey('hand_sink') ||
-      itemCounts.containsKey('basin_sink');
+  bool get hasYesNoAnswerData =>
+      yesNoAnswers.keys.any((key) => MaintenanceFieldTypes.yesNoAnswerFields.contains(key));
 
-  bool get hasUpdatedSiphonData =>
-      itemCounts.containsKey('arabic_siphon') ||
-      itemCounts.containsKey('english_siphon');
+  bool get hasYesNoWithCountsData =>
+      yesNoWithCounts.keys.any((key) => MaintenanceFieldTypes.yesNoWithCountsFields.contains(key));
 
-  bool get hasUpdatedBreakerData =>
-      itemCounts.containsKey('breakers') ||
-      itemCounts.containsKey('bells');
+  bool get hasSurveyAnswerData =>
+      surveyAnswers.keys.any((key) => MaintenanceFieldTypes.surveyAnswerFields.contains(key));
 
-  bool get hasUpdatedDetectorData =>
-      itemCounts.containsKey('smoke_detectors') ||
-      itemCounts.containsKey('heat_detectors');
+  // Get specific data by category
+  Map<String, String> getTextAnswersByCategory() {
+    return Map.fromEntries(
+      textAnswers.entries.where((entry) => 
+        MaintenanceFieldTypes.textAnswerFields.contains(entry.key))
+    );
+  }
 
-  bool get hasNewData =>
-      itemCounts.containsKey('camera') ||
-      itemCounts.containsKey('emergency_signs') ||
-      itemCounts.containsKey('sink_mirrors') ||
-      itemCounts.containsKey('wall_tap') ||
-      itemCounts.containsKey('sink_tap') ||
-      itemCounts.containsKey('single_door') ||
-      itemCounts.containsKey('double_door');
+  Map<String, bool> getYesNoAnswersByCategory() {
+    return Map.fromEntries(
+      yesNoAnswers.entries.where((entry) => 
+        MaintenanceFieldTypes.yesNoAnswerFields.contains(entry.key))
+    );
+  }
+
+  Map<String, int> getYesNoWithCountsByCategory() {
+    return Map.fromEntries(
+      yesNoWithCounts.entries.where((entry) => 
+        MaintenanceFieldTypes.yesNoWithCountsFields.contains(entry.key))
+    );
+  }
+
+  Map<String, String> getSurveyAnswersByCategory() {
+    return Map.fromEntries(
+      surveyAnswers.entries.where((entry) => 
+        MaintenanceFieldTypes.surveyAnswerFields.contains(entry.key))
+    );
+  }
+
+  // Get items by category
+  Map<String, int> getItemsByCategory(String category) {
+    final categoryItems = MaintenanceItemTypes.getItemsByCategory()[category] ?? [];
+    return Map.fromEntries(
+      itemCounts.entries.where((entry) => categoryItems.contains(entry.key))
+    );
+  }
+
+  // Get total count for a specific category
+  int getCategoryTotalCount(String category) {
+    final categoryItems = getItemsByCategory(category);
+    return categoryItems.values.fold(0, (sum, count) => sum + count);
+  }
 
   @override
   List<Object?> get props => [
@@ -296,98 +332,252 @@ class MaintenanceConditions {
   ];
 }
 
+// Field types for different answer categories
+class MaintenanceFieldTypes {
+  // Text answer fields (amperage, capacity, meter numbers, etc.)
+  static const List<String> textAnswerFields = [
+    'ac_panel_amperage',
+    'power_panel_amperage',
+    'main_breaker_amperage',
+    'lighting_panel_amperage',
+    'electricity_meter_number',
+    'bathroom_heaters_1_capacity',
+    'bathroom_heaters_2_capacity',
+    'concealed_ac_breaker_amperage',
+    'main_distribution_panel_amperage',
+    'fire_extinguishers_expiry_day',
+    'fire_extinguishers_expiry_year',
+    'fire_extinguishers_expiry_month',
+  ];
+
+  // Yes/No answer fields (structural issues, safety concerns)
+  static const List<String> yesNoAnswerFields = [
+    'elevators',
+    'wall_cracks',
+    'falling_shades',
+    'has_water_leaks',
+    'low_railing_height',
+    'concrete_rust_damage',
+    'roof_insulation_damage',
+  ];
+
+  // Yes/No with counts fields (same as yes/no but with counts)
+  static const List<String> yesNoWithCountsFields = [
+    'elevators',
+    'wall_cracks',
+    'falling_shades',
+    'has_water_leaks',
+    'low_railing_height',
+    'concrete_rust_damage',
+    'roof_insulation_damage',
+  ];
+
+  // Survey answer fields (condition assessments)
+  static const List<String> surveyAnswerFields = [
+    'bells_condition',
+    'alarm_panel_type',
+    'fire_alarm_system',
+    'fire_hose_condition',
+    'fire_boxes_condition',
+    'alarm_panel_condition',
+    'diesel_pump_condition',
+    'electric_pump_condition',
+    'fire_suppression_system',
+    'auxiliary_pump_condition',
+    'heat_detectors_condition',
+    'emergency_exits_condition',
+    'smoke_detectors_condition',
+    'emergency_lights_condition',
+    'fire_alarm_system_condition',
+    'fire_suppression_system_condition',
+  ];
+
+  // Get all field types combined
+  static List<String> getAllFieldTypes() {
+    return [
+      ...textAnswerFields,
+      ...yesNoAnswerFields,
+      ...yesNoWithCountsFields,
+      ...surveyAnswerFields,
+    ];
+  }
+
+  // Get fields by category
+  static Map<String, List<String>> getFieldsByCategory() {
+    return {
+      'text': textAnswerFields,
+      'yesNo': yesNoAnswerFields,
+      'yesNoWithCounts': yesNoWithCountsFields,
+      'survey': surveyAnswerFields,
+    };
+  }
+}
+
 // New constants for updated item structure
 class MaintenanceItemTypes {
-  // Updated AC types
-  static const List<String> acTypes = [
-    'split_concealed_ac',
-    'hidden_ducts_ac',
-    'window_ac',
-    'cabinet_ac',
-    'package_ac',
+  // Air Conditioning Category (التكييف) - SEPARATE FROM ELECTRICAL
+  static const List<String> airConditioningTypes = [
+    'cabinet_ac',           // دولابي
+    'split_concealed_ac',   // سبليت
+    'hidden_ducts_ac',      // مخفي بداكت
+    'window_ac',            // شباك
+    'package_ac',           // باكدج
   ];
 
-  // Updated sink types
-  static const List<String> sinkTypes = [
-    'hand_sink',
-    'basin_sink',
+  // Electrical Category (كهرباء) - WITHOUT AC ITEMS
+  static const List<String> electricalTypes = [
+    'lamps',                // لمبات
+    'projector',            // بروجيكتور
+    'class_bell',           // جرس الفصول
+    'speakers',             // السماعات
+    'microphone_system',    // نظام الميكوفون
   ];
 
-  // Updated siphon types
-  static const List<String> siphonTypes = [
-    'arabic_siphon',
-    'english_siphon',
+  // Electrical panels that need count and amperage
+  static const List<String> electricalPanelTypes = [
+    'lighting_panel',           // لوحة انارة
+    'power_panel',              // لوحة باور(أفياش)
+    'ac_panel',                 // لوحة تكييف
+    'main_distribution_panel',  // لوحة توزيع رئيسية
   ];
 
-  // Updated breaker and bell types
-  static const List<String> breakerTypes = [
-    'breakers',
-    'bells',
+  // Electrical breakers that need count and amperage
+  static const List<String> electricalBreakerTypes = [
+    'main_breaker',             // القاطع الرئيسي
+    'concealed_ac_breaker',     // قاطع تكييف (كونسيلد)
+    'package_ac_breaker',       // قاطع تكييف (باكدج)
   ];
 
-  // Updated detector types
-  static const List<String> detectorTypes = [
-    'smoke_detectors',
-    'heat_detectors',
+  // Fire and Safety Category (أمان وسلامة)
+  static const List<String> fireSafetyTypes = [
+    'electric_pump',            // مضخة الكهرباء
+    'diesel_pump',             // مضخة الديزل
+    'auxiliary_pump',          // المضخة المساعدة
+    'fire_extinguishers',       // طفايات الحريق
+    'fire_boxes',              // صناديق الحريق
+    'camera',                  // كاميرا
+    'emergency_signs',         // لوحات الطوارئ
   ];
 
-  // New item types
-  static const List<String> newItemTypes = [
-    'camera',
-    'emergency_signs',
-    'sink_mirrors',
-    'wall_tap',
-    'sink_tap',
-    'single_door',
-    'double_door',
+  // Fire items that need both count and condition
+  static const List<String> fireItemsWithCondition = [
+    'fire_hose',               // خرطوم الحريق
+  ];
+
+  // Fire safety items with count and condition
+  static const List<String> fireSafetyItemsWithCountAndCondition = [
+    'emergency_lights',        // كشافات طوارئ
+    'emergency_exits',         // مخارج الطوارئ
+    'smoke_detectors',         // كواشف دخان
+    'heat_detectors',          // كواشف حرارة
+    'breakers',                // كواسر
+    'bells',                   // اجراس
+  ];
+
+  // Mechanical Category (ميكانيك)
+  static const List<String> mechanicalTypes = [
+    'water_pumps',             // مضخات المياة
+  ];
+
+  // Mechanical heaters with multiple entries (capacity and quantity)
+  // Note: Individual heater entries are now combined into a single "سخانات" entry in Excel exports
+  static const List<String> mechanicalHeaterTypes = [
+    // Individual heater types removed - now handled as combined "سخانات" in exports
+  ];
+
+  // Mechanical items that only need count
+  static const List<String> mechanicalItemsCountOnly = [
+    'hand_sink',               // مغسلة يد
+    'basin_sink',              // مغسلة حوض
+    'western_toilet',          // كرسي افرنجي
+    'arabic_toilet',           // كرسي عربي
+    'arabic_siphon',           // سيفون عربي
+    'english_siphon',          // سيفون افرنجي
+    'bidets',                  // شطافات
+    'wall_exhaust_fans',       // مراوح شفط جدارية
+    'central_exhaust_fans',    // مراوح شفط مركزية
+    'cafeteria_exhaust_fans',  // مراوح شفط (باقي الغرف)
+    'wall_water_coolers',      // برادات مياة جدارية
+    'corridor_water_coolers',  // برادات مياة للممرات
+    'sink_mirrors',            // مرايا المغاسل
+    'wall_tap',                // خلاط الحائط
+    'sink_tap',                // خلاط المغسلة
+    'upper_tank',              // خزان علوي
+    'lower_tank',              // خزان سفلي
+  ];
+
+  // Civil Category (أعمال مدنية)
+  static const List<String> civilItemsCountOnly = [
+    'blackboard',              // سبورة
+    'internal_windows',        // نوافذ داخلية
+    'external_windows',        // نوافذ خارجية
+    'single_door',             // باب مفرد
+    'double_door',             // باب مزدوج
   ];
 
   // All item types combined
   static List<String> getAllItemTypes() {
     return [
-      ...acTypes,
-      ...sinkTypes,
-      ...siphonTypes,
-      ...breakerTypes,
-      ...detectorTypes,
-      ...newItemTypes,
+      ...airConditioningTypes,
+      ...electricalTypes,
+      ...electricalPanelTypes,
+      ...electricalBreakerTypes,
+      ...fireSafetyTypes,
+      ...fireItemsWithCondition,
+      ...fireSafetyItemsWithCountAndCondition,
+      ...mechanicalTypes,
+      ...mechanicalHeaterTypes,
+      ...mechanicalItemsCountOnly,
+      ...civilItemsCountOnly,
       // Legacy items
-      'lamps',
-      'bidets',
-      'ac_panel',
-      'speakers',
-      'fire_hose',
-      'projector',
-      'blackboard',
-      'class_bell',
-      'fire_boxes',
-      'diesel_pump',
-      'power_panel',
-      'water_pumps',
-      'main_breaker',
-      'arabic_toilet',
-      'electric_pump',
-      'auxiliary_pump',
-      'lighting_panel',
-      'western_toilet',
-      'emergency_exits',
-      'emergency_lights',
-      'external_windows',
-      'internal_windows',
       'alarm_panel_count',
-      'microphone_system',
-      'wall_exhaust_fans',
-      'bathroom_heaters_1',
-      'bathroom_heaters_2',
-      'fire_extinguishers',
-      'package_ac_breaker',
-      'wall_water_coolers',
-      'cafeteria_heaters_1',
-      'central_exhaust_fans',
-      'concealed_ac_breaker',
-      'cafeteria_exhaust_fans',
-      'corridor_water_coolers',
-      'main_distribution_panel',
     ];
+  }
+
+  // Get items by category for better organization
+  static Map<String, List<String>> getItemsByCategory() {
+    return {
+      'air_conditioning': airConditioningTypes,
+      'electrical': electricalTypes,
+      'electrical_panels': electricalPanelTypes,
+      'electrical_breakers': electricalBreakerTypes,
+      'fire_safety': fireSafetyTypes,
+      'fire_safety_with_condition': fireItemsWithCondition,
+      'fire_safety_count_and_condition': fireSafetyItemsWithCountAndCondition,
+      'mechanical': mechanicalTypes,
+      // 'mechanical_heaters' category removed - heaters now handled as combined "سخانات" in exports
+      'mechanical_items': mechanicalItemsCountOnly,
+      'civil': civilItemsCountOnly,
+    };
+  }
+
+  // Get category display names
+  static String getCategoryDisplayName(String category) {
+    switch (category) {
+      case 'air_conditioning':
+        return 'التكييف';
+      case 'electrical':
+        return 'كهرباء';
+      case 'electrical_panels':
+        return 'لوحات كهربائية';
+      case 'electrical_breakers':
+        return 'قواطع كهربائية';
+      case 'fire_safety':
+        return 'أمان وسلامة';
+      case 'fire_safety_with_condition':
+        return 'أمان وسلامة (مع حالة)';
+      case 'fire_safety_count_and_condition':
+        return 'أمان وسلامة (عدد وحالة)';
+      case 'mechanical':
+        return 'ميكانيك';
+      case 'mechanical_heaters':
+        return 'سخانات';
+      case 'mechanical_items':
+        return 'عناصر ميكانيكية';
+      case 'civil':
+        return 'أعمال مدنية';
+      default:
+        return 'فئة غير محددة';
+    }
   }
 }

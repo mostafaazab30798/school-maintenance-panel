@@ -7,6 +7,7 @@ import '../../data/repositories/maintenance_count_repository.dart';
 import '../../data/repositories/damage_count_repository.dart';
 import '../../data/models/damage_count.dart';
 import '../../core/services/admin_service.dart';
+import '../../core/services/damage_report_service.dart';
 import '../widgets/common/shared_app_bar.dart';
 import '../widgets/common/error_widget.dart';
 
@@ -36,7 +37,7 @@ class DamageCountDetailScreen extends StatelessWidget {
   }
 }
 
-class DamageCountDetailView extends StatelessWidget {
+class DamageCountDetailView extends StatefulWidget {
   final String schoolId;
   final String schoolName;
 
@@ -45,6 +46,14 @@ class DamageCountDetailView extends StatelessWidget {
     required this.schoolId,
     required this.schoolName,
   });
+
+  @override
+  State<DamageCountDetailView> createState() => _DamageCountDetailViewState();
+}
+
+class _DamageCountDetailViewState extends State<DamageCountDetailView> {
+  bool _isGeneratingReport = false;
+  final DamageReportService _reportService = DamageReportService();
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +65,15 @@ class DamageCountDetailView extends StatelessWidget {
         backgroundColor:
             isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
         appBar: SharedAppBar(
-          title: "$schoolName - تفاصيل التوالف",
+          title: "${widget.schoolName} - تفاصيل التوالف",
+        ),
+        floatingActionButton: BlocBuilder<MaintenanceCountsBloc, MaintenanceCountsState>(
+          builder: (context, state) {
+            if (state is DamageCountDetailsLoaded && state.damageCount.hasDamage) {
+              return _buildDownloadButton(state.damageCount, state.supervisorName);
+            }
+            return const SizedBox.shrink();
+          },
         ),
         body: BlocBuilder<MaintenanceCountsBloc, MaintenanceCountsState>(
           builder: (context, state) {
@@ -70,7 +87,7 @@ class DamageCountDetailView extends StatelessWidget {
                   message: state.message,
                   onRetry: () => context
                       .read<MaintenanceCountsBloc>()
-                      .add(LoadDamageCountDetails(schoolId: schoolId)),
+                      .add(LoadDamageCountDetails(schoolId: widget.schoolId)),
                 ),
               );
             }
@@ -1207,5 +1224,210 @@ class DamageCountDetailView extends StatelessWidget {
 
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
+  }
+
+  /// Build the professional download button
+  Widget _buildDownloadButton(DamageCount damageCount, String? supervisorName) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1E40AF).withOpacity(0.3),
+            offset: const Offset(0, 4),
+            blurRadius: 12,
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: FloatingActionButton.extended(
+        onPressed: _isGeneratingReport 
+            ? null 
+            : () => _generateDamageReport(damageCount, supervisorName ?? 'غير محدد'),
+        backgroundColor: _isGeneratingReport 
+            ? Colors.grey[400] 
+            : const Color(0xFF1E40AF),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        heroTag: "damage_report_download",
+        icon: _isGeneratingReport
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : const Icon(
+                Icons.download_rounded,
+                size: 22,
+              ),
+        label: Text(
+          _isGeneratingReport ? 'جاري الإنشاء...' : 'تحميل التقرير',
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Generate and download the damage report
+  Future<void> _generateDamageReport(DamageCount damageCount, String supervisorName) async {
+    setState(() {
+      _isGeneratingReport = true;
+    });
+
+    try {
+      await _reportService.generateDamageReport(
+        damageCount: damageCount,
+        supervisorName: supervisorName,
+      );
+      
+      if (mounted) {
+        _showSuccessSnackBar();
+      }
+    } catch (e) {
+      debugPrint('❌ Error generating damage report: $e');
+      if (mounted) {
+        _showErrorSnackBar(e.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGeneratingReport = false;
+        });
+      }
+    }
+  }
+
+  /// Show success message
+  void _showSuccessSnackBar() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Container(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.check_circle_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'تم إنشاء التقرير بنجاح',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      'تم تحميل التقرير المرئي المفصل - يمكن طباعته كـ PDF',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        backgroundColor: const Color(0xFF10B981),
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  /// Show error message
+  void _showErrorSnackBar(String error) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Container(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.error_outline_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'خطأ في إنشاء التقرير',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      'حدث خطأ: ${error.length > 50 ? error.substring(0, 50) + '...' : error}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.white70,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        backgroundColor: const Color(0xFFEF4444),
+        duration: const Duration(seconds: 5),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        margin: const EdgeInsets.all(16),
+        action: SnackBarAction(
+          label: 'إعادة المحاولة',
+          textColor: Colors.white,
+          onPressed: () {
+            // Re-attempt to generate report
+            final state = context.read<MaintenanceCountsBloc>().state;
+            if (state is DamageCountDetailsLoaded) {
+              _generateDamageReport(state.damageCount, state.supervisorName ?? 'غير محدد');
+            }
+          },
+        ),
+      ),
+    );
   }
 }

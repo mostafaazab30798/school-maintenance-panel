@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'dart:math' as math;
 import 'indicator_card.dart';
 import 'supervisor_card.dart';
+import '../common/excel_upload_chip.dart';
+import '../../../data/models/excel_report_data.dart';
 
 import 'completion_progress_card.dart';
 
@@ -43,6 +45,8 @@ class DashboardGrid extends StatefulWidget {
     required this.submittedFciAssessments,
     required this.draftFciAssessments,
     required this.schoolsWithFciAssessments,
+    // Excel upload callback
+    required this.onExcelProcessed,
   });
 
   final int totalReports;
@@ -73,6 +77,9 @@ class DashboardGrid extends StatefulWidget {
   final int submittedFciAssessments;
   final int draftFciAssessments;
   final int schoolsWithFciAssessments;
+
+  // Excel upload callback
+  final Function(Map<String, List<ExcelReportData>>) onExcelProcessed;
 
   final VoidCallback onTapTotalReports;
   final VoidCallback onTapRoutineReports;
@@ -348,16 +355,16 @@ class _DashboardGridState extends State<DashboardGrid>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Progress and Supervisors row
+        // Progress, Supervisors, and Excel Upload row
         LayoutBuilder(
           builder: (context, constraints) {
-            if (constraints.maxWidth >= 600) {
-              // Desktop/Tablet layout - side by side
+            if (constraints.maxWidth >= 800) {
+              // Desktop layout - three chips side by side
               return IntrinsicHeight(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Progress Chip with super admin sizing
+                    // Progress Chip
                     Expanded(
                       flex: 2,
                       child: Container(
@@ -382,8 +389,67 @@ class _DashboardGridState extends State<DashboardGrid>
                         child: _buildSupervisorsChip(context),
                       ),
                     ),
+                    const SizedBox(width: 16),
+                    // Excel Upload Chip
+                    Expanded(
+                      flex: 1,
+                      child: Container(
+                        constraints: const BoxConstraints(
+                          minHeight: 200,
+                          maxHeight: 200,
+                        ),
+                        child: _buildExcelUploadChip(context),
+                      ),
+                    ),
                   ],
                 ),
+              );
+            } else if (constraints.maxWidth >= 600) {
+              // Tablet layout - two rows
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // First row: Progress and Supervisors
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: Container(
+                            constraints: const BoxConstraints(
+                              minHeight: 200,
+                              maxHeight: 200,
+                            ),
+                            child: ClipRect(
+                              child: _buildProgressChip(context),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 1,
+                          child: Container(
+                            constraints: const BoxConstraints(
+                              minHeight: 200,
+                              maxHeight: 200,
+                            ),
+                            child: _buildSupervisorsChip(context),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Second row: Excel Upload
+                  Container(
+                    constraints: const BoxConstraints(
+                      minHeight: 200,
+                      maxHeight: 200,
+                    ),
+                    child: _buildExcelUploadChip(context),
+                  ),
+                ],
               );
             } else {
               // Mobile layout - stacked
@@ -406,6 +472,14 @@ class _DashboardGridState extends State<DashboardGrid>
                       maxHeight: 200,
                     ),
                     child: _buildSupervisorsChip(context),
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    constraints: const BoxConstraints(
+                      minHeight: 200,
+                      maxHeight: 200,
+                    ),
+                    child: _buildExcelUploadChip(context),
                   ),
                 ],
               );
@@ -696,6 +770,12 @@ class _DashboardGridState extends State<DashboardGrid>
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildExcelUploadChip(BuildContext context) {
+    return ExcelUploadChip(
+      onExcelProcessed: widget.onExcelProcessed,
     );
   }
 

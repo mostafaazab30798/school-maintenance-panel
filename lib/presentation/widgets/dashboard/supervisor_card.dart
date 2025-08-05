@@ -616,14 +616,14 @@ class _SupervisorCardState extends State<SupervisorCard>
         'count': widget.routineCount,
         'color': const Color(0xFF06B6D4),
         'icon': Icons.schedule_rounded,
-        'route': '/reports?title=البلاغات الروتينية للمشرف ${widget.name}&priority=Routine&supervisorId=${widget.supervisorId}'
+        'route': '/reports?title=البلاغات الروتينية للمشرف ${widget.name}&priority=routine&supervisorId=${widget.supervisorId}'
       },
       {
         'label': 'طارئ',
         'count': widget.emergencyCount,
         'color': const Color(0xFFEF4444),
         'icon': Icons.warning_rounded,
-        'route': '/reports?title=البلاغات الطارئة للمشرف ${widget.name}&priority=Emergency&supervisorId=${widget.supervisorId}'
+        'route': '/reports?title=البلاغات الطارئة للمشرف ${widget.name}&priority=emergency&supervisorId=${widget.supervisorId}'
       },
       {
         'label': 'مكتمل',

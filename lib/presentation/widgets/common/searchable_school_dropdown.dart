@@ -67,6 +67,18 @@ class SchoolDropdownCubit extends Cubit<SchoolDropdownState> {
     try {
       if (isClosed) return;
       emit(state.copyWith(isLoading: true, errorMessage: null));
+      
+      // Validate supervisorId before making the query
+      if (supervisorId.isEmpty || supervisorId.trim().isEmpty) {
+        print('🏫 ERROR: Invalid supervisor ID provided: "$supervisorId"');
+        if (isClosed) return;
+        emit(state.copyWith(
+          errorMessage: 'معرف المشرف غير صحيح',
+          isLoading: false,
+        ));
+        return;
+      }
+      
       print('🏫 Loading schools for supervisor: $supervisorId');
       
       final schools = await _schoolService.getSchoolsForSupervisor(supervisorId);

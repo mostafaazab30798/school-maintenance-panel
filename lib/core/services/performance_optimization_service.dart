@@ -30,15 +30,31 @@ class PerformanceOptimizationService {
       // 🚀 PERFORMANCE OPTIMIZATION: Use single query for all supervisors
       final response = await Supabase.instance.client
           .from('supervisor_schools')
-          .select('supervisor_id')
+          .select('supervisor_id, school_id')
           .inFilter('supervisor_id', supervisorIds);
       
-      // Count schools per supervisor
+      // 🚀 CRITICAL FIX: Count unique schools per supervisor to avoid duplicates
+      final Map<String, Set<String>> supervisorSchools = {};
+      
+      // Initialize sets for each supervisor
+      for (final supervisorId in supervisorIds) {
+        supervisorSchools[supervisorId] = <String>{};
+      }
+      
+      // Add unique school IDs to each supervisor's set
+      for (final item in response) {
+        final supervisorId = item['supervisor_id']?.toString();
+        final schoolId = item['school_id']?.toString();
+        
+        if (supervisorId != null && schoolId != null && schoolId.isNotEmpty) {
+          supervisorSchools[supervisorId]?.add(schoolId);
+        }
+      }
+      
+      // Convert sets to counts
       final Map<String, int> schoolsCount = {};
       for (final supervisorId in supervisorIds) {
-        schoolsCount[supervisorId] = response
-            .where((item) => item['supervisor_id'] == supervisorId)
-            .length;
+        schoolsCount[supervisorId] = supervisorSchools[supervisorId]?.length ?? 0;
       }
       
       // Cache the result
@@ -46,7 +62,9 @@ class PerformanceOptimizationService {
       _cacheTimestamps[cacheKey] = DateTime.now();
       
       if (kDebugMode) {
-        print('⚡ PerformanceOptimizationService: Cached schools count for ${supervisorIds.length} supervisors');
+        print('⚡ PerformanceOptimizationService: Cached unique schools count for ${supervisorIds.length} supervisors');
+        print('  - Total school assignments: ${response.length}');
+        print('  - Unique schools per supervisor: ${schoolsCount.values}');
       }
       
       return schoolsCount;

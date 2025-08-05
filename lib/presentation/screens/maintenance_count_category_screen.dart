@@ -88,6 +88,8 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
         return _buildMechanicalCategory(context);
       case 'electrical':
         return _buildElectricalCategory(context);
+      case 'air_conditioning':
+        return _buildAirConditioningCategory(context);
       case 'civil':
         return _buildCivilCategory(context);
       default:
@@ -158,6 +160,32 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       children: [
         if (merged.isNotEmpty) ...[
           _buildSectionTitle('الأنظمة الكهربائية'),
+          const SizedBox(height: 12),
+          _buildItemsGrid(context, merged),
+          const SizedBox(height: 24),
+        ],
+        if (photos.isNotEmpty) ...[
+          _buildSectionTitle('الصور'),
+          const SizedBox(height: 12),
+          _buildPhotosSection(context, photos),
+          const SizedBox(height: 24),
+        ],
+        if (merged.isEmpty && photos.isEmpty) _buildEmptyState(context),
+      ],
+    );
+  }
+
+  Widget _buildAirConditioningCategory(BuildContext context) {
+    final items = _getAirConditioningItems();
+    final conditions = _getAirConditioningConditions();
+    final photos = _getAirConditioningPhotos();
+    final merged = _mergeItemsWithConditions(items, conditions);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (merged.isNotEmpty) ...[
+          _buildSectionTitle('أنظمة التكييف'),
           const SizedBox(height: 12),
           _buildItemsGrid(context, merged),
           const SizedBox(height: 24),
@@ -306,6 +334,19 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
         if (value.containsKey('amperage')) {
           parts.add('الأمبير: ${value['amperage']}');
         }
+      } else if (entry.key == 'breakers_combined' ||
+                 entry.key == 'bells_combined' ||
+                 entry.key == 'break_glasses_bells_combined' ||
+                 entry.key == 'smoke_detectors_combined' ||
+                 entry.key == 'heat_detectors_combined' ||
+                 entry.key == 'emergency_exits_combined' ||
+                 entry.key == 'emergency_lights_combined') {
+        if (value.containsKey('count')) {
+          parts.add('العدد: ${value['count']}');
+        }
+        if (value.containsKey('condition')) {
+          parts.add('الحالة: ${value['condition']}');
+        }
       } else if (entry.key == 'bathroom_heaters_combined' ||
                  entry.key == 'cafeteria_heaters_combined') {
         if (value.containsKey('count')) {
@@ -313,6 +354,13 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
         }
         if (value.containsKey('capacity')) {
           parts.add('السعة: ${value['capacity']}');
+        }
+      } else if (entry.key == 'water_pumps_combined') {
+        if (value.containsKey('count')) {
+          parts.add('العدد: ${value['count']}');
+        }
+        if (value.containsKey('condition')) {
+          parts.add('الحالة: ${value['condition']}');
         }
       } else if (entry.key.startsWith('bathroom_heaters_') ||
                  entry.key.startsWith('cafeteria_heaters_')) {
@@ -959,21 +1007,44 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       }
     }
 
-    // Add emergency exits and emergency lights
-    if (count.itemCounts.containsKey('emergency_exits')) {
-      items['emergency_exits'] = count.itemCounts['emergency_exits'];
+    // Create combined items for emergency exits and emergency lights
+    if (count.itemCounts.containsKey('emergency_exits') ||
+        count.surveyAnswers.containsKey('emergency_exits_condition')) {
+      final emergencyExitsData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('emergency_exits')) {
+        emergencyExitsData['count'] = count.itemCounts['emergency_exits'];
+      }
+      if (count.surveyAnswers.containsKey('emergency_exits_condition')) {
+        emergencyExitsData['condition'] = count.surveyAnswers['emergency_exits_condition'];
+      }
+      
+      if (emergencyExitsData.isNotEmpty) {
+        items['emergency_exits_combined'] = emergencyExitsData;
+      }
     }
-    if (count.itemCounts.containsKey('emergency_lights')) {
-      items['emergency_lights'] = count.itemCounts['emergency_lights'];
+
+    if (count.itemCounts.containsKey('emergency_lights') ||
+        count.surveyAnswers.containsKey('emergency_lights_condition')) {
+      final emergencyLightsData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('emergency_lights')) {
+        emergencyLightsData['count'] = count.itemCounts['emergency_lights'];
+      }
+      if (count.surveyAnswers.containsKey('emergency_lights_condition')) {
+        emergencyLightsData['condition'] = count.surveyAnswers['emergency_lights_condition'];
+      }
+      
+      if (emergencyLightsData.isNotEmpty) {
+        items['emergency_lights_combined'] = emergencyLightsData;
+      }
     }
 
     // Add new safety items with counts
     final newSafetyItems = [
-      'breakers',
-      'bells',
-      'smoke_detectors',
-      'heat_detectors',
-      'emergency_signs'
+      'emergency_signs',
+      'camera',
+      'break_glasses_bells'
     ];
 
     count.itemCounts.forEach((key, value) {
@@ -981,6 +1052,92 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
         items[key] = value;
       }
     });
+
+    // Create combined items for items with both count and status
+    // Breakers
+    if (count.itemCounts.containsKey('breakers') ||
+        count.surveyAnswers.containsKey('breakers_condition')) {
+      final breakersData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('breakers')) {
+        breakersData['count'] = count.itemCounts['breakers'];
+      }
+      if (count.surveyAnswers.containsKey('breakers_condition')) {
+        breakersData['condition'] = count.surveyAnswers['breakers_condition'];
+      }
+      
+      if (breakersData.isNotEmpty) {
+        items['breakers_combined'] = breakersData;
+      }
+    }
+
+    // Bells
+    if (count.itemCounts.containsKey('bells') ||
+        count.surveyAnswers.containsKey('break_glasses_bells_condition')) {
+      final bellsData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('bells')) {
+        bellsData['count'] = count.itemCounts['bells'];
+      }
+      if (count.surveyAnswers.containsKey('break_glasses_bells_condition')) {
+        bellsData['condition'] = count.surveyAnswers['break_glasses_bells_condition'];
+      }
+      
+      if (bellsData.isNotEmpty) {
+        items['bells_combined'] = bellsData;
+      }
+    }
+
+    // Break glasses bells
+    if (count.itemCounts.containsKey('break_glasses_bells') ||
+        count.surveyAnswers.containsKey('break_glasses_bells_condition')) {
+      final breakGlassesBellsData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('break_glasses_bells')) {
+        breakGlassesBellsData['count'] = count.itemCounts['break_glasses_bells'];
+      }
+      if (count.surveyAnswers.containsKey('break_glasses_bells_condition')) {
+        breakGlassesBellsData['condition'] = count.surveyAnswers['break_glasses_bells_condition'];
+      }
+      
+      if (breakGlassesBellsData.isNotEmpty) {
+        items['break_glasses_bells_combined'] = breakGlassesBellsData;
+      }
+    }
+
+    // Smoke detectors
+    if (count.itemCounts.containsKey('smoke_detectors') ||
+        count.surveyAnswers.containsKey('smoke_detectors_condition')) {
+      final smokeDetectorsData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('smoke_detectors')) {
+        smokeDetectorsData['count'] = count.itemCounts['smoke_detectors'];
+      }
+      if (count.surveyAnswers.containsKey('smoke_detectors_condition')) {
+        smokeDetectorsData['condition'] = count.surveyAnswers['smoke_detectors_condition'];
+      }
+      
+      if (smokeDetectorsData.isNotEmpty) {
+        items['smoke_detectors_combined'] = smokeDetectorsData;
+      }
+    }
+
+    // Heat detectors
+    if (count.itemCounts.containsKey('heat_detectors') ||
+        count.surveyAnswers.containsKey('heat_detectors_condition')) {
+      final heatDetectorsData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('heat_detectors')) {
+        heatDetectorsData['count'] = count.itemCounts['heat_detectors'];
+      }
+      if (count.surveyAnswers.containsKey('heat_detectors_condition')) {
+        heatDetectorsData['condition'] = count.surveyAnswers['heat_detectors_condition'];
+      }
+      
+      if (heatDetectorsData.isNotEmpty) {
+        items['heat_detectors_combined'] = heatDetectorsData;
+      }
+    }
 
     // Add survey answers for safety systems
     final safetySurveyKeys = [
@@ -1175,7 +1332,6 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       'cafeteria_exhaust_fans',
       'wall_water_coolers',
       'corridor_water_coolers',
-      'water_pumps',
       'sink_mirrors',
       'wall_tap',
       'sink_tap'
@@ -1186,6 +1342,23 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
         items[key] = value;
       }
     });
+
+    // Create combined item for water pumps
+    if (count.itemCounts.containsKey('water_pumps') ||
+        count.surveyAnswers.containsKey('water_pumps_condition')) {
+      final waterPumpsData = <String, dynamic>{};
+      
+      if (count.itemCounts.containsKey('water_pumps')) {
+        waterPumpsData['count'] = count.itemCounts['water_pumps'];
+      }
+      if (count.surveyAnswers.containsKey('water_pumps_condition')) {
+        waterPumpsData['condition'] = count.surveyAnswers['water_pumps_condition'];
+      }
+      
+      if (waterPumpsData.isNotEmpty) {
+        items['water_pumps_combined'] = waterPumpsData;
+      }
+    }
 
     // Add water meter number
     if (count.textAnswers.containsKey('water_meter_number') && 
@@ -1233,6 +1406,29 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
   Map<String, dynamic> _getElectricalItems() {
     Map<String, dynamic> items = {};
 
+    // Note: AC Panel data is now handled in the Air Conditioning category
+
+    // Add electrical items (excluding AC units - those go to Air Conditioning category)
+    if (count.itemCounts.containsKey('lamps')) {
+      items['lamps'] = count.itemCounts['lamps'];
+    }
+
+    if (count.itemCounts.containsKey('projector')) {
+      items['projector'] = count.itemCounts['projector'];
+    }
+
+    if (count.itemCounts.containsKey('class_bell')) {
+      items['class_bell'] = count.itemCounts['class_bell'];
+    }
+
+    if (count.itemCounts.containsKey('speakers')) {
+      items['speakers'] = count.itemCounts['speakers'];
+    }
+
+    if (count.itemCounts.containsKey('microphone_system')) {
+      items['microphone_system'] = count.itemCounts['microphone_system'];
+    }
+
     // Combine AC Panel data
     if (count.itemCounts.containsKey('ac_panel') ||
         count.textAnswers.containsKey('ac_panel_amperage')) {
@@ -1249,30 +1445,6 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       if (acPanelData.isNotEmpty) {
         items['ac_panel_combined'] = acPanelData;
       }
-    }
-
-    // Add updated AC types
-    if (count.itemCounts.containsKey('split_concealed_ac')) {
-      items['split_concealed_ac'] = count.itemCounts['split_concealed_ac'];
-    }
-
-    if (count.itemCounts.containsKey('hidden_ducts_ac')) {
-      items['hidden_ducts_ac'] = count.itemCounts['hidden_ducts_ac'];
-    }
-
-    // Add window AC (new item)
-    if (count.itemCounts.containsKey('window_ac')) {
-      items['window_ac'] = count.itemCounts['window_ac'];
-    }
-
-    // Add cabinet AC (new item)
-    if (count.itemCounts.containsKey('cabinet_ac')) {
-      items['cabinet_ac'] = count.itemCounts['cabinet_ac'];
-    }
-
-    // Add package AC (new item)
-    if (count.itemCounts.containsKey('package_ac')) {
-      items['package_ac'] = count.itemCounts['package_ac'];
     }
 
     // Combine Power Panel data
@@ -1391,11 +1563,6 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       'speakers',
       'microphone_system',
       'electrical_panels',
-      'breakers',
-      'bells',
-      'smoke_detectors',
-      'heat_detectors',
-      'camera'
     ];
 
     count.itemCounts.forEach((key, value) {
@@ -1514,6 +1681,50 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
     return notes;
   }
 
+  Map<String, dynamic> _getAirConditioningItems() {
+    Map<String, dynamic> items = {};
+
+    // Add air conditioning units
+    final airConditioningKeys = [
+      'cabinet_ac',
+      'split_concealed_ac',
+      'hidden_ducts_ac',
+      'window_ac',
+      'package_ac',
+    ];
+
+    count.itemCounts.forEach((key, value) {
+      if (airConditioningKeys.contains(key)) {
+        items[key] = value;
+      }
+    });
+
+
+
+    return items;
+  }
+
+  Map<String, String> _getAirConditioningConditions() {
+    return {};
+  }
+
+  List<String> _getAirConditioningPhotos() {
+    return count.sectionPhotos['air_conditioning'] ?? [];
+  }
+
+  Map<String, String> _getAirConditioningNotes() {
+    final airConditioningKeys = ['ac_note'];
+
+    Map<String, String> notes = {};
+    count.maintenanceNotes.forEach((key, value) {
+      if (airConditioningKeys.contains(key) && value.isNotEmpty) {
+        notes[key] = value;
+      }
+    });
+
+    return notes;
+  }
+
   Map<String, dynamic> _mergeItemsWithConditions(
     Map<String, dynamic> items,
     Map<String, String> conditions,
@@ -1565,6 +1776,30 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       case 'break_glasses_bells_condition':
         noteKey = 'break_glasses_bells_note';
         break;
+      case 'break_glasses_bells':
+        noteKey = 'break_glasses_bells_note';
+        break;
+      case 'breakers_combined':
+        noteKey = 'breakers_note';
+        break;
+      case 'bells_combined':
+        noteKey = 'break_glasses_bells_note';
+        break;
+      case 'break_glasses_bells_combined':
+        noteKey = 'break_glasses_bells_note';
+        break;
+      case 'smoke_detectors_combined':
+        noteKey = 'smoke_detectors_note';
+        break;
+      case 'heat_detectors_combined':
+        noteKey = 'heat_detectors_note';
+        break;
+      case 'emergency_exits_combined':
+        noteKey = 'emergency_exits_note';
+        break;
+      case 'emergency_lights_combined':
+        noteKey = 'emergency_lights_note';
+        break;
       case 'alarm_panel_condition':
       case 'alarm_panel_type':
       case 'alarm_panel_count':
@@ -1597,6 +1832,9 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
         break;
       case 'water_pumps':
       case 'water_pumps_condition':
+        noteKey = 'water_pumps_note';
+        break;
+      case 'water_pumps_combined':
         noteKey = 'water_pumps_note';
         break;
       case 'electrical_panels':
@@ -1712,6 +1950,8 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       case 'water_pumps':
       case 'water_pumps_condition':
         return Icons.water_damage_rounded;
+      case 'water_pumps_combined':
+        return Icons.water_damage_rounded;
       case 'electrical_panels':
       case 'electrical_panels_condition':
         return Icons.electrical_services_rounded;
@@ -1754,10 +1994,26 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
         return Icons.power_settings_new_rounded;
       case 'bells':
         return Icons.notifications_active_rounded;
+      case 'break_glasses_bells':
+        return Icons.notifications_active_rounded;
       case 'smoke_detectors':
         return Icons.sensors_rounded;
       case 'heat_detectors':
         return Icons.thermostat_rounded;
+      case 'breakers_combined':
+        return Icons.power_settings_new_rounded;
+      case 'bells_combined':
+        return Icons.notifications_active_rounded;
+      case 'break_glasses_bells_combined':
+        return Icons.notifications_active_rounded;
+      case 'smoke_detectors_combined':
+        return Icons.sensors_rounded;
+      case 'heat_detectors_combined':
+        return Icons.thermostat_rounded;
+      case 'emergency_exits_combined':
+        return Icons.exit_to_app_rounded;
+      case 'emergency_lights_combined':
+        return Icons.lightbulb_rounded;
       case 'camera':
         return Icons.videocam_rounded;
       
@@ -1949,6 +2205,7 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       'package_ac_breaker': 'قاطع تكييف باكدج',
       'breakers': 'قواطع كهربائية',
       'bells': 'أجراس',
+      'break_glasses_bells': 'كواسر',
       'smoke_detectors': 'أجهزة استشعار الدخان',
       'heat_detectors': 'أجهزة استشعار الحرارة',
       'camera': 'كاميرات',
@@ -1985,6 +2242,7 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       // Combined mechanical items
       'bathroom_heaters_combined': 'سخانات حمام',
       'cafeteria_heaters_combined': 'سخانات مقصف',
+      'water_pumps_combined': 'مضخات المياه',
       
       // Individual heater entries
       'bathroom_heater_': 'سخان حمام',
@@ -2005,6 +2263,13 @@ class MaintenanceCountCategoryScreen extends StatelessWidget {
       'electric_pump_combined': 'المضخة الكهربائية',
       'auxiliary_pump_combined': 'المضخة المساعدة',
       'alarm_panel_combined': 'لوحة الإنذار',
+      'breakers_combined': 'قواطع كهربائية',
+      'bells_combined': 'أجراس',
+      'break_glasses_bells_combined': 'كواسر',
+      'smoke_detectors_combined': 'كواشف دخان',
+      'heat_detectors_combined': 'كواشف حرارة',
+      'emergency_exits_combined': 'مخارج الطوارئ',
+      'emergency_lights_combined': 'أضواء الطوارئ',
 
       // Survey answers - Safety conditions
       'emergency_exits': 'مخارج الطوارئ',

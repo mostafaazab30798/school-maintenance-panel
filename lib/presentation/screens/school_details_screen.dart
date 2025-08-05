@@ -725,7 +725,7 @@ class _SchoolDetailsScreenState extends State<SchoolDetailsScreen> {
             children: [
               Expanded(
                 child: _buildStatCard(
-                  'حصر الأضرار',
+                  'حصر التوالف',
                   _damageCounts.length.toString(),
                   Icons.warning,
                   const Color(0xFFFF6B6B),

@@ -122,9 +122,9 @@ class _ReportScreenState extends State<ReportScreen> {
 
   String _translatePriority(String? value) {
     switch (value) {
-      case 'Routine':
+      case 'routine':
         return 'روتيني';
-      case 'Emergency':
+      case 'emergency':
         return 'طارئ';
       default:
         return value ?? '';

@@ -18,6 +18,18 @@ class SchoolAssignmentService {
   /// Get schools assigned to a specific supervisor
   Future<List<School>> getSchoolsForSupervisor(String supervisorId) async {
     try {
+      // Validate supervisorId before making the query
+      if (supervisorId.isEmpty || supervisorId.trim().isEmpty) {
+        print('🏫 ERROR: Invalid supervisor ID provided: "$supervisorId"');
+        throw Exception('معرف المشرف غير صحيح');
+      }
+      
+      // Validate UUID format
+      if (!RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', caseSensitive: false).hasMatch(supervisorId)) {
+        print('🏫 ERROR: Invalid UUID format for supervisor ID: "$supervisorId"');
+        throw Exception('معرف المشرف غير صحيح');
+      }
+      
       // First, get the count to see if we need pagination
       final countResponse = await _client
           .from('supervisor_schools')
@@ -145,58 +157,108 @@ class SchoolAssignmentService {
         }
       }
 
-      onProgress('جاري البحث عن المدارس الموجودة...');
+      return await _processSchoolsList(
+        schools: excelSchools,
+        supervisorId: supervisorId,
+        onProgress: onProgress,
+      );
+    } catch (e) {
+      throw Exception('خطأ في معالجة الملف: $e');
+    }
+  }
 
-      // Get all existing schools from database
-      final existingSchoolsResponse =
-          await _client.from('schools').select('id, name, address');
+  /// Manually add schools to supervisor
+  Future<Map<String, dynamic>> manuallyAddSchools({
+    required List<Map<String, String>> schools,
+    required String supervisorId,
+    required Function(String) onProgress,
+    bool replaceExisting = false,
+  }) async {
+    try {
+      if (schools.isEmpty) {
+        throw Exception('لا توجد مدارس لإضافتها');
+      }
 
-      final existingSchools = Map<String, String>.fromEntries(
-          (existingSchoolsResponse as List).map((school) =>
-              MapEntry(school['name'] as String, school['id'] as String)));
-
-      onProgress('جاري تحديد المدارس الجديدة...');
-
-      // Determine which schools need to be created
-      List<String> finalSchoolIds = [];
-      List<Map<String, dynamic>> schoolsToCreate = [];
-
-      int processedCount = 0;
-      for (final excelSchool in excelSchools) {
-        final schoolName = excelSchool['name']!;
-
-        if (existingSchools.containsKey(schoolName)) {
-          // School already exists, use existing ID
-          finalSchoolIds.add(existingSchools[schoolName]!);
-        } else {
-          // School doesn't exist, mark for creation
-          schoolsToCreate.add({
-            'name': schoolName,
-            'address':
-                excelSchool['address']!.isEmpty ? null : excelSchool['address'],
-          });
+      // Validate school data
+      for (final school in schools) {
+        if (school['name']?.trim().isEmpty == true) {
+          throw Exception('اسم المدرسة مطلوب');
         }
-
-        processedCount++;
-        final progress = ((processedCount / excelSchools.length) * 30).round();
-        onProgress(
-            'تم معالجة ${processedCount} من ${excelSchools.length} مدرسة... ($progress%)');
       }
 
-      // Create new schools if any
-      if (schoolsToCreate.isNotEmpty) {
-        onProgress('جاري إنشاء المدارس الجديدة...');
+      onProgress('جاري معالجة قائمة المدارس...');
 
-        final newSchoolsResponse =
-            await _client.from('schools').insert(schoolsToCreate).select('id');
+      return await _processSchoolsList(
+        schools: schools,
+        supervisorId: supervisorId,
+        onProgress: onProgress,
+        replaceExisting: replaceExisting,
+      );
+    } catch (e) {
+      throw Exception('خطأ في إضافة المدارس: $e');
+    }
+  }
 
-        final newSchoolIds = (newSchoolsResponse as List)
-            .map((school) => school['id'] as String)
-            .toList();
+  /// Internal method to process schools list and assign to supervisor
+  Future<Map<String, dynamic>> _processSchoolsList({
+    required List<Map<String, String>> schools,
+    required String supervisorId,
+    required Function(String) onProgress,
+    bool replaceExisting = false,
+  }) async {
+    onProgress('جاري البحث عن المدارس الموجودة...');
 
-        finalSchoolIds.addAll(newSchoolIds);
+    // Get all existing schools from database
+    final existingSchoolsResponse =
+        await _client.from('schools').select('id, name, address');
+
+    final existingSchools = Map<String, String>.fromEntries(
+        (existingSchoolsResponse as List).map((school) =>
+            MapEntry(school['name'] as String, school['id'] as String)));
+
+    onProgress('جاري تحديد المدارس الجديدة...');
+
+    // Determine which schools need to be created
+    List<String> finalSchoolIds = [];
+    List<Map<String, dynamic>> schoolsToCreate = [];
+
+    int processedCount = 0;
+    for (final school in schools) {
+      final schoolName = school['name']!;
+
+      if (existingSchools.containsKey(schoolName)) {
+        // School already exists, use existing ID
+        finalSchoolIds.add(existingSchools[schoolName]!);
+      } else {
+        // School doesn't exist, mark for creation
+        schoolsToCreate.add({
+          'name': schoolName,
+          'address':
+              school['address']?.isEmpty == true ? null : school['address'],
+        });
       }
 
+      processedCount++;
+      final progress = ((processedCount / schools.length) * 30).round();
+      onProgress(
+          'تم معالجة ${processedCount} من ${schools.length} مدرسة... ($progress%)');
+    }
+
+    // Create new schools if any
+    if (schoolsToCreate.isNotEmpty) {
+      onProgress('جاري إنشاء المدارس الجديدة...');
+
+      final newSchoolsResponse =
+          await _client.from('schools').insert(schoolsToCreate).select('id');
+
+      final newSchoolIds = (newSchoolsResponse as List)
+          .map((school) => school['id'] as String)
+          .toList();
+
+      finalSchoolIds.addAll(newSchoolIds);
+    }
+
+    if (replaceExisting) {
       onProgress('جاري إزالة الربط السابق...');
 
       // Remove all existing assignments for this supervisor
@@ -204,33 +266,48 @@ class SchoolAssignmentService {
           .from('supervisor_schools')
           .delete()
           .eq('supervisor_id', supervisorId);
+    } else {
+      onProgress('جاري التحقق من المدارس المربوطة حالياً...');
 
-      onProgress('جاري ربط المدارس الجديدة...');
+      // Get existing assignments to avoid duplicates
+      final existingAssignmentsResponse = await _client
+          .from('supervisor_schools')
+          .select('school_id')
+          .eq('supervisor_id', supervisorId);
 
-      // Create new assignments
-      if (finalSchoolIds.isNotEmpty) {
-        final assignments = finalSchoolIds
-            .map((schoolId) => {
-                  'supervisor_id': supervisorId,
-                  'school_id': schoolId,
-                })
-            .toList();
+      final existingSchoolIds = (existingAssignmentsResponse as List)
+          .map((assignment) => assignment['school_id'] as String)
+          .toSet();
 
-        await _client.from('supervisor_schools').insert(assignments);
-      }
-
-      onProgress('تم إكمال العملية بنجاح!');
-
-      return {
-        'success': true,
-        'total_schools': finalSchoolIds.length,
-        'new_schools_created': schoolsToCreate.length,
-        'existing_schools_used': finalSchoolIds.length - schoolsToCreate.length,
-        'supervisor_id': supervisorId,
-      };
-    } catch (e) {
-      throw Exception('خطأ في معالجة الملف: $e');
+      // Filter out schools that are already assigned
+      finalSchoolIds = finalSchoolIds
+          .where((schoolId) => !existingSchoolIds.contains(schoolId))
+          .toList();
     }
+
+    onProgress('جاري ربط المدارس الجديدة...');
+
+    // Create new assignments
+    if (finalSchoolIds.isNotEmpty) {
+      final assignments = finalSchoolIds
+          .map((schoolId) => {
+                'supervisor_id': supervisorId,
+                'school_id': schoolId,
+              })
+          .toList();
+
+      await _client.from('supervisor_schools').insert(assignments);
+    }
+
+    onProgress('تم إكمال العملية بنجاح!');
+
+    return {
+      'success': true,
+      'total_schools': finalSchoolIds.length,
+      'new_schools_created': schoolsToCreate.length,
+      'existing_schools_used': finalSchoolIds.length - schoolsToCreate.length,
+      'supervisor_id': supervisorId,
+    };
   }
 
   /// Remove a school assignment from a supervisor

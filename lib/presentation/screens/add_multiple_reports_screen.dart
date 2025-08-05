@@ -9,6 +9,8 @@ import '../../logic/blocs/multi_reports/multi_reports_state.dart';
 import '../../logic/cubits/add_multiple_reports_cubit.dart';
 import '../../logic/cubits/add_multiple_reports_state.dart';
 import '../widgets/common/searchable_school_dropdown.dart';
+import '../widgets/common/searchable_supervisor_dropdown.dart';
+import '../widgets/common/searchable_excel_school_dropdown.dart';
 
 class AddMultipleReportsScreen extends StatelessWidget {
   final String supervisorId;
@@ -76,13 +78,36 @@ class AddMultipleReportsScreen extends StatelessWidget {
                   // Validation Error Message
                   if (state.validationFailed)
                     SliverToBoxAdapter(
-                      child: _buildValidationError(context),
+                      child: _buildValidationError(context, state),
                     ),
 
                   // Header Statistics
                   SliverToBoxAdapter(
                     child: _buildHeaderStats(context, state),
                   ),
+
+                  // Excel Mode Toggle
+                  SliverToBoxAdapter(
+                    child: _buildModeToggle(context, state),
+                  ),
+
+                  // Supervisor Selection (when in Excel mode)
+                  if (state.isExcelMode)
+                    SliverToBoxAdapter(
+                      child: _buildSupervisorSelection(context, state),
+                    ),
+
+                  // Excel Error Message
+                  if (state.excelErrorMessage != null)
+                    SliverToBoxAdapter(
+                      child: _buildExcelErrorMessage(context, state),
+                    ),
+
+                  // Excel School Selection
+                  if (state.isExcelMode && state.excelReportsBySchool.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: _buildSchoolSelectionForExcel(context, state),
+                    ),
 
                   // Reports List
                   SliverPadding(
@@ -149,7 +174,7 @@ class AddMultipleReportsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildValidationError(BuildContext context) {
+  Widget _buildValidationError(BuildContext context, AddMultipleReportsState state) {
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(12),
@@ -168,18 +193,20 @@ class AddMultipleReportsScreen extends StatelessWidget {
           width: 1,
         ),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(
+          const Icon(
             Icons.error_outline_rounded,
             color: Color(0xFFEF4444),
             size: 20,
           ),
-          SizedBox(width: 10),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'يرجى ملء جميع الحقول المطلوبة قبل الإرسال',
-              style: TextStyle(
+              state.isExcelMode && (state.selectedSupervisorId == null || state.selectedSupervisorId!.isEmpty)
+                  ? 'يرجى اختيار المشرف وملء جميع الحقول المطلوبة قبل الإرسال'
+                  : 'يرجى ملء جميع الحقول المطلوبة قبل الإرسال',
+              style: const TextStyle(
                 color: Color(0xFFEF4444),
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
@@ -277,6 +304,244 @@ class AddMultipleReportsScreen extends StatelessWidget {
                     letterSpacing: -0.3,
                   ),
                 ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModeToggle(BuildContext context, AddMultipleReportsState state) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFF3B82F6).withOpacity(0.1),
+            const Color(0xFF3B82F6).withOpacity(0.05),
+          ],
+        ),
+        border: Border.all(
+          color: const Color(0xFF3B82F6).withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF3B82F6).withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.table_view_rounded,
+            color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'الوضع الإكسل',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
+              ),
+            ),
+          ),
+          Switch(
+            value: state.isExcelMode,
+            onChanged: (value) {
+              context.read<AddMultipleReportsCubit>().toggleExcelMode(value);
+            },
+            activeColor: const Color(0xFF3B82F6),
+            inactiveTrackColor: const Color(0xFF94A3B8),
+            inactiveThumbColor: const Color(0xFFF1F5F9),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSupervisorSelection(BuildContext context, AddMultipleReportsState state) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFF10B981).withOpacity(0.1),
+            const Color(0xFF10B981).withOpacity(0.05),
+          ],
+        ),
+        border: Border.all(
+          color: const Color(0xFF10B981).withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF10B981).withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.person_search_rounded,
+                color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
+                size: 20,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'اختر المشرف لإرسال البلاغات',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SearchableSupervisorDropdown(
+            selectedSupervisorId: state.selectedSupervisorId,
+            onSupervisorSelected: (supervisorId) {
+              context.read<AddMultipleReportsCubit>().updateSelectedSupervisor(supervisorId);
+            },
+            hintText: 'ابحث واختر المشرف...',
+            errorText: state.validationFailed && state.selectedSupervisorId == null
+                ? 'اختيار المشرف مطلوب'
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExcelErrorMessage(BuildContext context, AddMultipleReportsState state) {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFFEF4444).withOpacity(0.1),
+            const Color(0xFFEF4444).withOpacity(0.05),
+          ],
+        ),
+        border: Border.all(
+          color: const Color(0xFFEF4444).withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              state.excelErrorMessage!,
+              style: const TextStyle(
+                color: Color(0xFFEF4444),
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSchoolSelectionForExcel(BuildContext context, AddMultipleReportsState state) {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFF3B82F6).withOpacity(0.1),
+            const Color(0xFF3B82F6).withOpacity(0.05),
+          ],
+        ),
+        border: Border.all(
+          color: const Color(0xFF3B82F6).withOpacity(0.2),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF3B82F6).withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'اختر المدرسة لتحميل البلاغات',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).brightness == Brightness.dark ? const Color(0xFFF1F5F9) : const Color(0xFF1E293B),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SearchableExcelSchoolDropdown(
+            schools: state.excelReportsBySchool.keys.toList()..sort(),
+            selectedSchoolName: state.selectedExcelSchoolName,
+            hintText: 'ابحث واختر المدرسة من ملف الإكسل...',
+            onSchoolSelected: (schoolName) {
+              context.read<AddMultipleReportsCubit>().updateSelectedExcelSchoolName(schoolName);
+            },
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton(
+            onPressed: state.selectedExcelSchoolName == null || state.selectedExcelSchoolName!.isEmpty || state.selectedSupervisorId == null
+                ? null
+                : () {
+                    context.read<AddMultipleReportsCubit>().loadExcelReportsForSupervisor(state.selectedSupervisorId!, state.selectedExcelSchoolName!);
+                  },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3B82F6),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.download_rounded, size: 16),
+                const SizedBox(width: 8),
+                Text(state.selectedSupervisorId != null ? 'إضافة بلاغات المشرف' : 'إضافة البلاغات'),
               ],
             ),
           ),
@@ -1083,18 +1348,25 @@ class _ModernReportCardState extends State<_ModernReportCard> {
 
   List<DropdownMenuItem<String>> _buildTypeDropdownItems() {
     return [
+      _buildDropdownItem('كهرباء', 'كهرباء', 'assets/images/elec.png'),
       _buildDropdownItem('Electricity', 'كهرباء', 'assets/images/elec.png'),
+      _buildDropdownItem('سباكة', 'سباكة', 'assets/images/plumber.png'),
       _buildDropdownItem('Plumbing', 'سباكة', 'assets/images/plumber.png'),
+      _buildDropdownItem('تكييف', 'تكييف', 'assets/images/air-conditioner.png'),
       _buildDropdownItem('AC', 'تكييف', 'assets/images/air-conditioner.png'),
+      _buildDropdownItem('مدني', 'مدني', 'assets/images/civil.png'),
       _buildDropdownItem('Civil', 'مدني', 'assets/images/civil.png'),
+      _buildDropdownItem('حريق', 'حريق', 'assets/images/fire.png'),
       _buildDropdownItem('Fire', 'حريق', 'assets/images/fire.png'),
     ];
   }
 
   List<DropdownMenuItem<String>> _buildPriorityDropdownItems() {
     return [
-      _buildDropdownItem('Routine', 'روتيني', 'assets/images/routine.png'),
-      _buildDropdownItem('Emergency', 'طارئ', 'assets/images/emergency.png'),
+      _buildDropdownItem('روتيني', 'روتيني', 'assets/images/routine.png'),
+      _buildDropdownItem('routine', 'روتيني', 'assets/images/routine.png'),
+      _buildDropdownItem('طارئ', 'طارئ', 'assets/images/emergency.png'),
+      _buildDropdownItem('emergency', 'طارئ', 'assets/images/emergency.png'),
     ];
   }
 

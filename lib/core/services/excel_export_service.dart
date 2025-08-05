@@ -12,6 +12,7 @@ import '../../data/repositories/maintenance_count_repository.dart';
 import '../../data/repositories/damage_count_repository.dart';
 import '../../data/repositories/supervisor_repository.dart';
 import '../services/admin_service.dart';
+import '../../data/models/maintenance_count.dart' show MaintenanceItemTypes;
 // Web-specific imports - conditional
 import 'dart:html' as html;
 // Conditional import for Syncfusion - only import if available
@@ -61,22 +62,22 @@ class ExcelExportService {
         }
       }
 
-      // Get all maintenance counts and school names with timeout
+      // Get all maintenance counts and school names with increased timeout and chunking
+      print('🔍 Fetching maintenance counts data...');
       final allCounts = await _getAllMaintenanceCounts()
-          .timeout(const Duration(seconds: 30), onTimeout: () {
-        throw Exception('Database query timeout - taking too long to fetch data');
+          .timeout(const Duration(seconds: 120), onTimeout: () {
+        throw Exception('Database query timeout - taking too long to fetch data. Please try with fewer schools or contact support.');
       });
       
+      print('🔍 Fetching school names...');
       final schoolNames = await _getSchoolNamesMap()
-          .timeout(const Duration(seconds: 10), onTimeout: () {
-        throw Exception('School names query timeout');
+          .timeout(const Duration(seconds: 30), onTimeout: () {
+        throw Exception('School names query timeout. Please try again.');
       });
 
       print('Total maintenance counts: ${allCounts.length}'); // Debug
-      for (final count in allCounts) {
-        print('Count ID: ${count.id}, Heater entries: ${count.heaterEntries}'); // Debug
-      }
-
+      
+      // Validate data before export
       if (allCounts.isEmpty) {
         throw Exception('No maintenance counts found');
       }
@@ -85,6 +86,11 @@ class ExcelExportService {
       if (allCounts.length > 100) {
         print('⚠️ Large dataset detected: ${allCounts.length} records');
         print('💡 Consider using simplified export for better performance');
+      }
+      
+      // Add progress tracking for large exports
+      if (allCounts.length > 50) {
+        print('📊 Processing ${allCounts.length} records...');
       }
 
       // Check if Syncfusion is available and try it first
@@ -104,9 +110,17 @@ class ExcelExportService {
         syncfusionAvailable = false;
       }
 
-      if (syncfusionAvailable) {
+      // For very large datasets, use simplified export
+      if (allCounts.length > 1000) {
+        print('📊 Large dataset detected (${allCounts.length} records). Using simplified export...');
+        await _exportMaintenanceCountsSimplified(allCounts, schoolNames)
+            .timeout(const Duration(minutes: 3), onTimeout: () {
+          throw Exception('Export timeout - taking too long to generate file. Please try with fewer schools.');
+        });
+      } else if (syncfusionAvailable) {
         try {
           // Add timeout to prevent hanging
+          print('🔄 Using Syncfusion for export...');
           await _exportMaintenanceCountsSyncfusion(allCounts, schoolNames)
               .timeout(const Duration(minutes: 2), onTimeout: () {
             throw Exception('Export timeout - taking too long to generate file');
@@ -122,20 +136,364 @@ class ExcelExportService {
       } else {
         // Use excel package directly if Syncfusion is not available
         print('Using excel package fallback...');
-        await _exportMaintenanceCountsExcelPackage(allCounts, schoolNames)
-            .timeout(const Duration(minutes: 1), onTimeout: () {
-          throw Exception('Export timeout - taking too long to generate file');
-        });
+        try {
+          await _exportMaintenanceCountsExcelPackage(allCounts, schoolNames)
+              .timeout(const Duration(minutes: 1), onTimeout: () {
+            throw Exception('Export timeout - taking too long to generate file');
+          });
+        } catch (excelPackageError) {
+          print('Excel package fallback failed: $excelPackageError');
+          print('Trying basic Excel export as final fallback...');
+          await _exportMaintenanceCountsBasic(allCounts, schoolNames)
+              .timeout(const Duration(minutes: 1), onTimeout: () {
+            throw Exception('Basic export timeout - taking too long to generate file');
+          });
+        }
       }
     } catch (e) {
       print('❌ Export error: $e');
-      throw Exception('Failed to export Excel: ${e.toString()}');
+      print('❌ Error type: ${e.runtimeType}');
+      print('❌ Error stack trace: ${StackTrace.current}');
+      
+      // Provide more specific error messages
+      String errorMessage = 'Failed to export Excel';
+      if (e.toString().contains('No maintenance counts found')) {
+        errorMessage = 'No maintenance counts found';
+      } else if (e.toString().contains('Storage permission denied')) {
+        errorMessage = 'Storage permission denied';
+      } else if (e.toString().contains('Download already in progress')) {
+        errorMessage = 'Download already in progress';
+      } else if (e.toString().contains('Export timeout')) {
+        errorMessage = 'Export timeout - taking too long to generate file';
+      } else if (e.toString().contains('Database query timeout')) {
+        errorMessage = 'Database query timeout - taking too long to fetch data';
+      } else if (e.toString().contains('School names query timeout')) {
+        errorMessage = 'School names query timeout';
+      } else {
+        errorMessage = 'Failed to export Excel: ${e.toString()}';
+      }
+      
+      throw Exception(errorMessage);
     } finally {
       stopwatch.stop();
       print('⏱️ Export completed in ${stopwatch.elapsed.inSeconds} seconds');
       // Always reset the downloading state, even on error
       _isDownloading = false;
     }
+  }
+
+  // Helper methods for summary calculations
+  Map<String, int> _calculateCategoryTotals(List<MaintenanceCount> allCounts) {
+    final Map<String, int> totals = {};
+    int totalHeaters = 0; // Sum all heaters into one category
+    
+    for (final count in allCounts) {
+      // Calculate total heaters for this count (same logic as maintenance_count_detail_screen.dart)
+      int countHeaters = 0;
+      final heaterEntries = count.heaterEntries;
+      
+      if (heaterEntries.isNotEmpty) {
+        // Process new heater structure
+        final bathroomHeaters = heaterEntries['bathroom_heaters'] as List<dynamic>?;
+        if (bathroomHeaters != null) {
+          for (final heater in bathroomHeaters) {
+            if (heater is Map<String, dynamic>) {
+              final id = heater['id']?.toString() ?? '';
+              if (id.isNotEmpty) {
+                final heaterKey = 'bathroom_heaters_$id';
+                int heaterCount = count.itemCounts[heaterKey] ?? 0;
+                
+                // If no count in itemCounts, try to get from heater entry or default to 1
+                if (heaterCount == 0) {
+                  heaterCount = int.tryParse(heater['quantity']?.toString() ?? '1') ?? 1;
+                }
+                
+                countHeaters += heaterCount;
+              }
+            }
+          }
+        }
+        
+        final cafeteriaHeaters = heaterEntries['cafeteria_heaters'] as List<dynamic>?;
+        if (cafeteriaHeaters != null) {
+          for (final heater in cafeteriaHeaters) {
+            if (heater is Map<String, dynamic>) {
+              final id = heater['id']?.toString() ?? '';
+              if (id.isNotEmpty) {
+                final heaterKey = 'cafeteria_heaters_$id';
+                int heaterCount = count.itemCounts[heaterKey] ?? 0;
+                
+                // If no count in itemCounts, try to get from heater entry or default to 1
+                if (heaterCount == 0) {
+                  heaterCount = int.tryParse(heater['quantity']?.toString() ?? '1') ?? 1;
+                }
+                
+                countHeaters += heaterCount;
+              }
+            }
+          }
+        }
+      } else {
+        // Fallback to old structure
+        countHeaters += count.itemCounts['bathroom_heaters'] ?? 0;
+        countHeaters += count.itemCounts['cafeteria_heaters'] ?? 0;
+      }
+      
+      totalHeaters += countHeaters;
+      
+      // Process all other items (excluding individual heater entries)
+      for (final entry in count.itemCounts.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        
+        // Skip individual heater entries - we'll handle them as one "سخانات" total
+        if (key.startsWith('bathroom_heaters_') || 
+            key.startsWith('cafeteria_heaters_') ||
+            key == 'bathroom_heaters' || 
+            key == 'cafeteria_heaters') {
+          continue;
+        }
+        
+        totals[key] = (totals[key] ?? 0) + value;
+      }
+    }
+    
+    // Add combined heaters total
+    if (totalHeaters > 0) {
+      totals['سخانات'] = totalHeaters;
+    }
+    
+    return totals;
+  }
+  
+  int _countSchoolsWithItem(List<MaintenanceCount> allCounts, String itemKey) {
+    final schoolsWithItem = <String>{};
+    
+    for (final count in allCounts) {
+      if (itemKey == 'سخانات') {
+        // Special handling for combined heaters
+        bool hasHeaters = false;
+        final heaterEntries = count.heaterEntries;
+        
+        if (heaterEntries.isNotEmpty) {
+          // Check new heater structure
+          final bathroomHeaters = heaterEntries['bathroom_heaters'] as List<dynamic>?;
+          final cafeteriaHeaters = heaterEntries['cafeteria_heaters'] as List<dynamic>?;
+          
+          if (bathroomHeaters != null && bathroomHeaters.isNotEmpty) {
+            for (final heater in bathroomHeaters) {
+              if (heater is Map<String, dynamic>) {
+                final id = heater['id']?.toString() ?? '';
+                if (id.isNotEmpty) {
+                  final heaterKey = 'bathroom_heaters_$id';
+                  if ((count.itemCounts[heaterKey] ?? 0) > 0) {
+                    hasHeaters = true;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          
+          if (!hasHeaters && cafeteriaHeaters != null && cafeteriaHeaters.isNotEmpty) {
+            for (final heater in cafeteriaHeaters) {
+              if (heater is Map<String, dynamic>) {
+                final id = heater['id']?.toString() ?? '';
+                if (id.isNotEmpty) {
+                  final heaterKey = 'cafeteria_heaters_$id';
+                  if ((count.itemCounts[heaterKey] ?? 0) > 0) {
+                    hasHeaters = true;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          // Check old structure
+          hasHeaters = (count.itemCounts['bathroom_heaters'] ?? 0) > 0 || 
+                      (count.itemCounts['cafeteria_heaters'] ?? 0) > 0;
+        }
+        
+        if (hasHeaters) {
+          schoolsWithItem.add(count.schoolId);
+        }
+      } else {
+        // Normal item handling
+        if (count.itemCounts.containsKey(itemKey) && count.itemCounts[itemKey]! > 0) {
+          schoolsWithItem.add(count.schoolId);
+        }
+      }
+    }
+    
+    return schoolsWithItem.length;
+  }
+  
+  String _getItemDisplayName(String itemKey) {
+    final displayNames = {
+      // Fire Safety Items
+      'fire_hose': 'خرطوم الحريق',
+      'fire_boxes': 'صناديق الحريق',
+      'fire_extinguishers': 'طفايات الحريق',
+      'diesel_pump': 'مضخة الديزل',
+      'electric_pump': 'مضخة الكهرباء',
+      'auxiliary_pump': 'المضخة المساعدة',
+      'emergency_lights': 'كشافات الطوارئ',
+      'emergency_exits': 'مخارج الطوارئ',
+      'smoke_detectors': 'كواشف دخان',
+      'heat_detectors': 'كواشف حرارة',
+      'breakers': 'كواسر',
+      'bells': 'أجراس',
+      
+      // Electrical Panels
+      'lighting_panel': 'لوحة إنارة',
+      'power_panel': 'لوحة باور',
+      'ac_panel': 'لوحة تكييف',
+      'main_distribution_panel': 'لوحة توزيع رئيسية',
+      
+      // Electrical Breakers
+      'main_breaker': 'القاطع الرئيسي',
+      'concealed_ac_breaker': 'قاطع تكييف (كونسيلد)',
+      'package_ac_breaker': 'قاطع تكييف (باكدج)',
+      
+      // Electrical Items
+      'lamps': 'لمبات',
+      'projector': 'بروجيكتور',
+      'class_bell': 'جرس الفصول',
+      'speakers': 'السماعات',
+      'microphone_system': 'نظام الميكوفون',
+      
+      // Air Conditioning Items
+      'cabinet_ac': 'تكييف دولابي',
+      'split_concealed_ac': 'تكييف سبليت',
+      'hidden_ducts_ac': 'تكييف مخفي بداكت',
+      'window_ac': 'تكييف شباك',
+      'package_ac': 'تكييف باكدج',
+      
+      // Mechanical Items
+      'water_pumps': 'مضخات المياه',
+      'hand_sink': 'مغسلة يد',
+      'basin_sink': 'مغسلة حوض',
+      'western_toilet': 'كرسي افرنجي',
+      'arabic_toilet': 'كرسي عربي',
+      'arabic_siphon': 'سيفون عربي',
+      'english_siphon': 'سيفون افرنجي',
+      'bidets': 'شطافات',
+      'wall_exhaust_fans': 'مراوح شفط جدارية',
+      'central_exhaust_fans': 'مراوح شفط مركزية',
+      'cafeteria_exhaust_fans': 'مراوح شفط (مقصف)',
+      'wall_water_coolers': 'برادات مياه جدارية',
+      'corridor_water_coolers': 'برادات مياه للممرات',
+      'sink_mirrors': 'مرايا المغاسل',
+      'wall_tap': 'خلاط الحائط',
+      'sink_tap': 'خلاط المغسلة',
+      'upper_tank': 'خزان علوي',
+      'lower_tank': 'خزان سفلي',
+      
+      // Civil Items
+      'blackboard': 'سبورة',
+      'internal_windows': 'نوافذ داخلية',
+      'external_windows': 'نوافذ خارجية',
+      'single_door': 'باب مفرد',
+      'double_door': 'باب مزدوج',
+      
+      // Additional Fire Safety Items
+      'camera': 'كاميرا',
+      'emergency_signs': 'لوحات الطوارئ',
+      
+      // Combined heaters entry for summary
+      'سخانات': 'سخانات',
+      // Individual heater entries - these will be dynamically generated
+      'bathroom_heaters': 'سخانات الحمام',
+      'cafeteria_heaters': 'سخانات المقصف',
+      
+      // Legacy items
+      'alarm_panel_count': 'عدد لوحات الإنذار',
+    };
+    
+    // Handle dynamic heater entries
+    if (itemKey.startsWith('bathroom_heaters_')) {
+      final id = itemKey.replaceFirst('bathroom_heaters_', '');
+      return 'سخان حمام رقم $id';
+    } else if (itemKey.startsWith('cafeteria_heaters_')) {
+      final id = itemKey.replaceFirst('cafeteria_heaters_', '');
+      return 'سخان مقصف رقم $id';
+    }
+    
+    return displayNames[itemKey] ?? itemKey;
+  }
+  
+  String _getItemNotes(String itemKey) {
+    const notes = {
+      // Combined heaters
+      'سخانات': 'مجموع جميع السخانات (حمام + مقصف)',
+      
+      // Fire Safety Items
+      'fire_extinguishers': 'يجب فحص تاريخ الانتهاء',
+      'fire_boxes': 'يجب التأكد من سلامة الصناديق',
+      'fire_hose': 'يجب فحص حالة الخرطوم',
+      'emergency_exits': 'يجب التأكد من سهولة الوصول',
+      'emergency_lights': 'يجب فحص البطاريات',
+      'smoke_detectors': 'يجب فحص الحساسية',
+      'heat_detectors': 'يجب فحص الحساسية',
+      'breakers': 'يجب فحص حالة الكواسر',
+      'bells': 'يجب فحص عمل الأجراس',
+      'camera': 'يجب فحص عمل الكاميرات',
+      'emergency_signs': 'يجب التأكد من وضوح اللوحات',
+      
+      // Electrical Items
+      'lighting_panel': 'يجب فحص لوحة الإنارة',
+      'power_panel': 'يجب فحص لوحة الباور',
+      'ac_panel': 'يجب فحص لوحة التكييف',
+      'main_distribution_panel': 'يجب فحص لوحة التوزيع الرئيسية',
+      'main_breaker': 'يجب فحص القاطع الرئيسي',
+      'concealed_ac_breaker': 'يجب فحص قاطع التكييف',
+      'package_ac_breaker': 'يجب فحص قاطع التكييف',
+      'lamps': 'يجب فحص عمل اللمبات',
+      'projector': 'يجب فحص عمل البروجيكتور',
+      'class_bell': 'يجب فحص عمل جرس الفصول',
+      'speakers': 'يجب فحص عمل السماعات',
+      'microphone_system': 'يجب فحص نظام الميكروفون',
+      
+      // Air Conditioning Items
+      'cabinet_ac': 'يجب فحص عمل التكييف الدولابي',
+      'split_concealed_ac': 'يجب فحص عمل التكييف السبليت',
+      'hidden_ducts_ac': 'يجب فحص عمل التكييف المخفي',
+      'window_ac': 'يجب فحص عمل التكييف الشباك',
+      'package_ac': 'يجب فحص عمل التكييف الباكدج',
+      
+      // Mechanical Items
+      'water_pumps': 'فحص دوري مطلوب',
+      'hand_sink': 'يجب فحص عمل مغسلة اليد',
+      'basin_sink': 'يجب فحص عمل مغسلة الحوض',
+      'western_toilet': 'يجب فحص عمل الكرسي الإفرنجي',
+      'arabic_toilet': 'يجب فحص عمل الكرسي العربي',
+      'arabic_siphon': 'يجب فحص عمل السيفون العربي',
+      'english_siphon': 'يجب فحص عمل السيفون الإفرنجي',
+      'bidets': 'يجب فحص عمل الشطافات',
+      'wall_exhaust_fans': 'يجب فحص عمل مراوح الشفط الجدارية',
+      'central_exhaust_fans': 'يجب فحص عمل مراوح الشفط المركزية',
+      'cafeteria_exhaust_fans': 'يجب فحص عمل مراوح شفط المقصف',
+      'wall_water_coolers': 'يجب فحص عمل برادات المياه الجدارية',
+      'corridor_water_coolers': 'يجب فحص عمل برادات المياه للممرات',
+      'sink_mirrors': 'يجب فحص حالة مرايا المغاسل',
+      'wall_tap': 'يجب فحص عمل خلاط الحائط',
+      'sink_tap': 'يجب فحص عمل خلاط المغسلة',
+      'upper_tank': 'يجب فحص حالة الخزان العلوي',
+      'lower_tank': 'يجب فحص حالة الخزان السفلي',
+      
+      // Civil Items
+      'blackboard': 'يجب فحص حالة السبورة',
+      'internal_windows': 'يجب فحص حالة النوافذ الداخلية',
+      'external_windows': 'يجب فحص حالة النوافذ الخارجية',
+      'single_door': 'يجب فحص حالة الباب المفرد',
+      'double_door': 'يجب فحص حالة الباب المزدوج',
+      
+      // Legacy items
+      'alarm_panel_count': 'يجب فحص عدد لوحات الإنذار',
+    };
+    
+    return notes[itemKey] ?? '';
   }
 
   Future<void> _exportMaintenanceCountsSyncfusion(List<MaintenanceCount> allCounts, Map<String, String> schoolNames) async {
@@ -146,14 +504,186 @@ class ExcelExportService {
       print('   - Schools: ${schoolNames.length}');
       print('   - Platform: ${kIsWeb ? 'Web' : 'Mobile'}');
       
+      // Validate input data
+      if (allCounts.isEmpty) {
+        throw Exception('No maintenance counts to export');
+      }
+      
       // Use Syncfusion for all platforms
       final workbook = syncfusion.Workbook();
       print('✅ Workbook created successfully');
 
+      // Create Summary Sheet with Totals
+      print('📋 Creating Summary Sheet...');
+      final summarySheet = workbook.worksheets.addWithName('ملخص شامل');
+      
+      // Title
+      final summaryTitleRange = summarySheet.getRangeByIndex(1, 1, 1, 6);
+      summaryTitleRange.setText('ملخص شامل لحصر الصيانة');
+      summaryTitleRange.cellStyle.fontSize = 18;
+      summaryTitleRange.cellStyle.bold = true;
+      summarySheet.getRangeByIndex(1, 1, 1, 6).merge();
+      
+      // Calculate totals for all categories
+      print('📊 Calculating category totals...');
+      final Map<String, int> categoryTotals = _calculateCategoryTotals(allCounts);
+      print('✅ Category totals calculated: ${categoryTotals.length} categories');
+      
+      // Summary headers
+      final summaryHeaders = [
+        'الفئة',
+        'العنصر',
+        'إجمالي العدد',
+        'عدد المدارس التي تحتوي على العنصر',
+        'متوسط العدد لكل مدرسة',
+      ];
+      
+      // Apply header styling
+      final summaryHeaderRange = summarySheet.getRangeByIndex(3, 1, 3, summaryHeaders.length);
+      summaryHeaderRange.cellStyle.fontSize = 12;
+      summaryHeaderRange.cellStyle.bold = true;
+      
+      for (int i = 0; i < summaryHeaders.length; i++) {
+        summarySheet.getRangeByIndex(3, i + 1).setText(summaryHeaders[i]);
+      }
+      
+      // Add category totals
+      int rowIndex = 4;
+      
+      // Add special entry for combined heaters first
+      if (categoryTotals.containsKey('سخانات')) {
+        print('🔥 Adding heaters data...');
+        final heatersTotal = categoryTotals['سخانات']!;
+        final schoolsWithHeaters = _countSchoolsWithItem(allCounts, 'سخانات');
+        final heatersAverage = schoolsWithHeaters > 0 ? heatersTotal / schoolsWithHeaters : 0.0;
+        
+        // Add heaters category header
+        final heatersHeaderRange = summarySheet.getRangeByIndex(rowIndex, 1, rowIndex, summaryHeaders.length);
+        heatersHeaderRange.cellStyle.fontSize = 14;
+        heatersHeaderRange.cellStyle.bold = true;
+        summarySheet.getRangeByIndex(rowIndex, 1).setText('=== سخانات ===');
+        summarySheet.getRangeByIndex(rowIndex, 1, rowIndex, summaryHeaders.length).merge();
+        rowIndex++;
+        
+        // Add heaters row
+        final heatersRowData = [
+          'سخانات',
+          'سخانات',
+          heatersTotal,
+          schoolsWithHeaters,
+          heatersAverage.toStringAsFixed(1),
+        ];
+        
+        summarySheet.getRangeByIndex(rowIndex, 1).setText(heatersRowData[0].toString());
+        summarySheet.getRangeByIndex(rowIndex, 2).setText(heatersRowData[1].toString());
+        summarySheet.getRangeByIndex(rowIndex, 3).setNumber(double.tryParse(heatersRowData[2].toString()) ?? 0);
+        summarySheet.getRangeByIndex(rowIndex, 4).setNumber(double.tryParse(heatersRowData[3].toString()) ?? 0);
+        summarySheet.getRangeByIndex(rowIndex, 5).setNumber(double.tryParse(heatersRowData[4].toString()) ?? 0);
+        rowIndex++;
+        
+        // Add empty row after heaters
+        rowIndex++;
+      }
+
+      // Add category totals - using the 5 main categories from inventory screen
+      print('📊 Adding category data...');
+      
+      // Define the 5 main categories as used in the inventory screen
+      final mainCategories = [
+        {
+          'key': 'civil',
+          'name': 'أعمال مدنية',
+          'items': MaintenanceItemTypes.civilItemsCountOnly,
+        },
+        {
+          'key': 'electrical',
+          'name': 'كهرباء',
+          'items': [
+            ...MaintenanceItemTypes.electricalTypes,
+            ...MaintenanceItemTypes.electricalPanelTypes,
+            ...MaintenanceItemTypes.electricalBreakerTypes,
+          ],
+        },
+        {
+          'key': 'mechanical',
+          'name': 'ميكانيك',
+          'items': [
+            ...MaintenanceItemTypes.mechanicalTypes,
+            ...MaintenanceItemTypes.mechanicalItemsCountOnly,
+          ],
+        },
+        {
+          'key': 'safety',
+          'name': 'أمان وسلامة',
+          'items': [
+            ...MaintenanceItemTypes.fireSafetyTypes,
+            ...MaintenanceItemTypes.fireItemsWithCondition,
+            ...MaintenanceItemTypes.fireSafetyItemsWithCountAndCondition,
+          ],
+        },
+        {
+          'key': 'air_conditioning',
+          'name': 'التكييف',
+          'items': MaintenanceItemTypes.airConditioningTypes,
+        },
+      ];
+      
+      for (final category in mainCategories) {
+        final categoryName = category['name'] as String;
+        final items = category['items'] as List<String>;
+        
+        // Add category header
+        final categoryHeaderRange = summarySheet.getRangeByIndex(rowIndex, 1, rowIndex, summaryHeaders.length);
+        categoryHeaderRange.cellStyle.fontSize = 14;
+        categoryHeaderRange.cellStyle.bold = true;
+        summarySheet.getRangeByIndex(rowIndex, 1).setText('=== $categoryName ===');
+        summarySheet.getRangeByIndex(rowIndex, 1, rowIndex, summaryHeaders.length).merge();
+        rowIndex++;
+        
+        // Add items in this category - include ALL items even with zero counts
+        for (final item in items) {
+          final total = categoryTotals[item] ?? 0;
+          final schoolsWithItem = _countSchoolsWithItem(allCounts, item);
+          final average = schoolsWithItem > 0 ? total / schoolsWithItem : 0.0;
+          
+          final rowData = [
+            categoryName,
+            _getItemDisplayName(item),
+            total,
+            schoolsWithItem,
+            average.toStringAsFixed(1),
+          ];
+          
+          summarySheet.getRangeByIndex(rowIndex, 1).setText(rowData[0].toString());
+          summarySheet.getRangeByIndex(rowIndex, 2).setText(rowData[1].toString());
+          summarySheet.getRangeByIndex(rowIndex, 3).setNumber(double.tryParse(rowData[2].toString()) ?? 0);
+          summarySheet.getRangeByIndex(rowIndex, 4).setNumber(double.tryParse(rowData[3].toString()) ?? 0);
+          summarySheet.getRangeByIndex(rowIndex, 5).setNumber(double.tryParse(rowData[4].toString()) ?? 0);
+          rowIndex++;
+        }
+        
+        // Add empty row after category
+        rowIndex++;
+      }
+      
+      // Add grand totals
+      final grandTotalRow = rowIndex;
+      final grandTotalRange = summarySheet.getRangeByIndex(grandTotalRow, 1, grandTotalRow, summaryHeaders.length);
+      grandTotalRange.cellStyle.fontSize = 14;
+      grandTotalRange.cellStyle.bold = true;
+      
+      final totalItems = categoryTotals.values.fold(0, (sum, count) => sum + count);
+      final totalSchools = allCounts.map((c) => c.schoolId).toSet().length;
+      
+      summarySheet.getRangeByIndex(grandTotalRow, 1).setText('إجمالي شامل');
+      summarySheet.getRangeByIndex(grandTotalRow, 2).setText('جميع العناصر');
+      summarySheet.getRangeByIndex(grandTotalRow, 3).setNumber(totalItems.toDouble());
+      summarySheet.getRangeByIndex(grandTotalRow, 4).setNumber(totalSchools.toDouble());
+      summarySheet.getRangeByIndex(grandTotalRow, 5).setNumber(totalSchools > 0 ? totalItems / totalSchools : 0);
+
       // Safety Sheet
       print('📋 Creating Safety Sheet...');
-      final safetySheet = workbook.worksheets[0];
-      safetySheet.name = 'أمن وسلامة';
+      final safetySheet = workbook.worksheets.addWithName('أمن وسلامة');
       print('✅ Safety Sheet created');
       
       // Title
@@ -161,7 +691,7 @@ class ExcelExportService {
       titleRange.setText('حصر الأمن والسلامة');
       titleRange.cellStyle.fontSize = 16;
       titleRange.cellStyle.bold = true;
-      safetySheet.getRangeByIndex(1, 1, 1, 24).merge();
+      safetySheet.getRangeByIndex(1, 1, 1, 31).merge();
 
       final safetyHeaders = [
         'اسم المدرسة',
@@ -183,11 +713,18 @@ class ExcelExportService {
         'حالة لوحة الإنذار',
         'حالة نظام إنذار الحريق',
         'حالة نظام إطفاء الحريق',
+        'مخارج الطوارئ',
         'حالة مخارج الطوارئ',
+        'أضواء الطوارئ',
         'حالة أضواء الطوارئ',
+        'أجهزة استشعار الدخان',
         'حالة أجهزة استشعار الدخان',
+        'أجهزة استشعار الحرارة',
         'حالة أجهزة استشعار الحرارة',
-        'كاسر',
+        'أجراس',
+        'حالة الأجراس',
+        'كواسر',
+        'حالة كواسر',
       ];
       
       // Apply header styling
@@ -281,10 +818,17 @@ class ExcelExportService {
           count.surveyAnswers['alarm_panel_condition'] ?? '',
           count.surveyAnswers['fire_alarm_system_condition'] ?? '',
           count.surveyAnswers['fire_suppression_system_condition'] ?? '',
+          int.tryParse(count.itemCounts['emergency_exits']?.toString() ?? '0') ?? 0,
           count.surveyAnswers['emergency_exits_condition'] ?? '',
+          int.tryParse(count.itemCounts['emergency_lights']?.toString() ?? '0') ?? 0,
           count.surveyAnswers['emergency_lights_condition'] ?? '',
+          int.tryParse(count.itemCounts['smoke_detectors']?.toString() ?? '0') ?? 0,
           count.surveyAnswers['smoke_detectors_condition'] ?? '',
+          int.tryParse(count.itemCounts['heat_detectors']?.toString() ?? '0') ?? 0,
           count.surveyAnswers['heat_detectors_condition'] ?? '',
+          int.tryParse(count.itemCounts['bells']?.toString() ?? '0') ?? 0,
+          count.surveyAnswers['break_glasses_bells_condition'] ?? '',
+          int.tryParse(count.itemCounts['breakers']?.toString() ?? '0') ?? 0,
           count.surveyAnswers['break_glasses_bells_condition'] ?? '',
         ];
         
@@ -307,11 +851,18 @@ class ExcelExportService {
         safetySheet.getRangeByIndex(row + 4, 17).setText(rowData[16].toString());
         safetySheet.getRangeByIndex(row + 4, 18).setText(rowData[17].toString());
         safetySheet.getRangeByIndex(row + 4, 19).setText(rowData[18].toString());
-        safetySheet.getRangeByIndex(row + 4, 20).setText(rowData[19].toString());
+        safetySheet.getRangeByIndex(row + 4, 20).setNumber(double.tryParse(rowData[19].toString()) ?? 0);
         safetySheet.getRangeByIndex(row + 4, 21).setText(rowData[20].toString());
-        safetySheet.getRangeByIndex(row + 4, 22).setText(rowData[21].toString());
+        safetySheet.getRangeByIndex(row + 4, 22).setNumber(double.tryParse(rowData[21].toString()) ?? 0);
         safetySheet.getRangeByIndex(row + 4, 23).setText(rowData[22].toString());
-        safetySheet.getRangeByIndex(row + 4, 24).setText(rowData[23].toString());
+        safetySheet.getRangeByIndex(row + 4, 24).setNumber(double.tryParse(rowData[23].toString()) ?? 0);
+        safetySheet.getRangeByIndex(row + 4, 25).setText(rowData[24].toString());
+        safetySheet.getRangeByIndex(row + 4, 26).setNumber(double.tryParse(rowData[25].toString()) ?? 0);
+        safetySheet.getRangeByIndex(row + 4, 27).setText(rowData[26].toString());
+        safetySheet.getRangeByIndex(row + 4, 28).setNumber(double.tryParse(rowData[27].toString()) ?? 0);
+        safetySheet.getRangeByIndex(row + 4, 29).setText(rowData[28].toString());
+        safetySheet.getRangeByIndex(row + 4, 30).setNumber(double.tryParse(rowData[29].toString()) ?? 0);
+        safetySheet.getRangeByIndex(row + 4, 31).setText(rowData[30].toString());
       }
 
       // Electrical Sheet
@@ -413,93 +964,29 @@ class ExcelExportService {
       final mechanicalSheet = workbook.worksheets.addWithName('ميكانيكا');
       
       // Title
-      final mechanicalTitleRange = mechanicalSheet.getRangeByIndex(1, 1, 1, 50); // Increased width for dynamic columns
+      final mechanicalTitleRange = mechanicalSheet.getRangeByIndex(1, 1, 1, 18);
       mechanicalTitleRange.setText('حصر الميكانيكا');
       mechanicalTitleRange.cellStyle.fontSize = 16;
       mechanicalTitleRange.cellStyle.bold = true;
-      mechanicalSheet.getRangeByIndex(1, 1, 1, 50).merge();
+      mechanicalSheet.getRangeByIndex(1, 1, 1, 18).merge();
       
-      // Collect all unique heater IDs from all counts
-      final Set<String> allHeaterIds = {};
-      
-      for (final count in allCounts) {
-        final heaterEntries = count.heaterEntries;
-        print('Heater entries for count ${count.id}: $heaterEntries'); // Debug
-        
-        if (heaterEntries.isNotEmpty) {
-          // Process bathroom heaters
-          final bathroomHeaters = heaterEntries['bathroom_heaters'] as List<dynamic>?;
-          print('Bathroom heaters: $bathroomHeaters'); // Debug
-          
-          if (bathroomHeaters != null) {
-            for (final heater in bathroomHeaters) {
-              if (heater is Map<String, dynamic>) {
-                final id = heater['id']?.toString() ?? '';
-                print('Bathroom heater ID: $id'); // Debug
-                if (id.isNotEmpty) {
-                  allHeaterIds.add('bathroom_heaters_$id');
-                }
-              }
-            }
-          }
-          
-          // Process cafeteria heaters
-          final cafeteriaHeaters = heaterEntries['cafeteria_heaters'] as List<dynamic>?;
-          print('Cafeteria heaters: $cafeteriaHeaters'); // Debug
-          
-          if (cafeteriaHeaters != null) {
-            for (final heater in cafeteriaHeaters) {
-              if (heater is Map<String, dynamic>) {
-                final id = heater['id']?.toString() ?? '';
-                print('Cafeteria heater ID: $id'); // Debug
-                if (id.isNotEmpty) {
-                  allHeaterIds.add('cafeteria_heaters_$id');
-                }
-              }
-            }
-          }
-        }
-      }
-      
-      print('All heater IDs found: $allHeaterIds'); // Debug
-      
-      // Convert to sorted list for consistent column order
-      final sortedHeaterIds = allHeaterIds.toList()..sort();
-      
-      // Create headers with dynamic heater columns
+      // Create headers with single combined heater column
       final headers = [
         'اسم المدرسة',
         'تاريخ الحصر',
-        ...sortedHeaterIds.map((heaterId) {
-          final isBathroom = heaterId.startsWith('bathroom_heaters_');
-          final id = heaterId.replaceFirst('bathroom_heaters_', '').replaceFirst('cafeteria_heaters_', '');
-          final location = isBathroom ? 'حمام' : 'مقصف';
-          // Try to get capacity from textAnswers
-          String? capacity;
-          for (final count in allCounts) {
-            final capKey = '${heaterId}_capacity';
-            final capValue = count.textAnswers[capKey];
-            if (capValue != null && capValue.isNotEmpty) {
-              capacity = capValue;
-              break;
-            }
-          }
-          if (capacity != null && capacity.isNotEmpty) {
-            return 'سخان $location $capacity لتر';
-          } else {
-            return 'سخان $location رقم $id';
-          }
-        }),
-        'مغاسل',
+        'سخانات',
+        'مغاسل يد',
+        'مغاسل حوض',
         'كرسي افرنجي',
         'كرسي عربي',
-        'سيفونات',
+        'سيفون عربي',
+        'سيفون افرنجي',
         'شطافات',
         'مراوح شفط جدارية',
         'مراوح شفط مركزية',
         'مراوح شفط (مقصف)',
-        'برادات مياة جدارية',
-        'برادات مياة للممرات',
+        'برادات مياه جدارية',
+        'برادات مياه للممرات',
         'مضخات المياه',
         'رقم عداد المياه',
         'عدد المصاعد',
@@ -520,12 +1007,12 @@ class ExcelExportService {
       for (int row = 0; row < allCounts.length; row++) {
         final count = allCounts[row];
         
-        // Create heater data map for this count
-        final Map<String, int> heaterData = {};
+        // Calculate total heater count for this record (matches logic from maintenance_count_detail_screen.dart)
+        int totalHeaterCount = 0;
         final heaterEntries = count.heaterEntries;
         
         if (heaterEntries.isNotEmpty) {
-          // Process bathroom heaters
+          // Sum all bathroom heaters
           final bathroomHeaters = heaterEntries['bathroom_heaters'] as List<dynamic>?;
           if (bathroomHeaters != null) {
             for (final heater in bathroomHeaters) {
@@ -533,14 +1020,21 @@ class ExcelExportService {
                 final id = heater['id']?.toString() ?? '';
                 if (id.isNotEmpty) {
                   final heaterKey = 'bathroom_heaters_$id';
-                  // Get quantity from itemCounts
-                  heaterData[heaterKey] = count.itemCounts[heaterKey] ?? 0;
+                  // Try to get quantity from itemCounts first, then from heater entry itself
+                  int heaterCount = count.itemCounts[heaterKey] ?? 0;
+                  
+                  // If no count in itemCounts, try to get from heater entry or default to 1
+                  if (heaterCount == 0) {
+                    heaterCount = int.tryParse(heater['quantity']?.toString() ?? '1') ?? 1;
+                  }
+                  
+                  totalHeaterCount += heaterCount;
                 }
               }
             }
           }
           
-          // Process cafeteria heaters
+          // Sum all cafeteria heaters
           final cafeteriaHeaters = heaterEntries['cafeteria_heaters'] as List<dynamic>?;
           if (cafeteriaHeaters != null) {
             for (final heater in cafeteriaHeaters) {
@@ -548,23 +1042,35 @@ class ExcelExportService {
                 final id = heater['id']?.toString() ?? '';
                 if (id.isNotEmpty) {
                   final heaterKey = 'cafeteria_heaters_$id';
-                  // Get quantity from itemCounts
-                  heaterData[heaterKey] = count.itemCounts[heaterKey] ?? 0;
+                  // Try to get quantity from itemCounts first, then from heater entry itself
+                  int heaterCount = count.itemCounts[heaterKey] ?? 0;
+                  
+                  // If no count in itemCounts, try to get from heater entry or default to 1
+                  if (heaterCount == 0) {
+                    heaterCount = int.tryParse(heater['quantity']?.toString() ?? '1') ?? 1;
+                  }
+                  
+                  totalHeaterCount += heaterCount;
                 }
               }
             }
           }
+        } else {
+          // Fallback: Use old structure
+          totalHeaterCount = (count.itemCounts['bathroom_heaters'] ?? 0) + (count.itemCounts['cafeteria_heaters'] ?? 0);
         }
         
-        // Build row data with dynamic heater columns
+        // Build row data with single heater total
         final rowData = [
           schoolNames[count.schoolId] ?? 'مدرسة ${count.schoolId}',
           _formatDate(count.createdAt),
-          ...sortedHeaterIds.map((heaterId) => heaterData[heaterId] ?? 0),
-          int.tryParse(count.itemCounts['sinks']?.toString() ?? '0') ?? 0,
+          totalHeaterCount,
+          int.tryParse(count.itemCounts['hand_sink']?.toString() ?? '0') ?? 0,
+          int.tryParse(count.itemCounts['basin_sink']?.toString() ?? '0') ?? 0,
           int.tryParse(count.itemCounts['western_toilet']?.toString() ?? '0') ?? 0,
           int.tryParse(count.itemCounts['arabic_toilet']?.toString() ?? '0') ?? 0,
-          int.tryParse(count.itemCounts['siphons']?.toString() ?? '0') ?? 0,
+          int.tryParse(count.itemCounts['arabic_siphon']?.toString() ?? '0') ?? 0,
+          int.tryParse(count.itemCounts['english_siphon']?.toString() ?? '0') ?? 0,
           int.tryParse(count.itemCounts['bidets']?.toString() ?? '0') ?? 0,
           int.tryParse(count.itemCounts['wall_exhaust_fans']?.toString() ?? '0') ?? 0,
           int.tryParse(count.itemCounts['central_exhaust_fans']?.toString() ?? '0') ?? 0,
@@ -578,31 +1084,13 @@ class ExcelExportService {
           count.textAnswers['elevators_main_parts'] ?? '',
         ];
         
-        // Set cell values
-        mechanicalSheet.getRangeByIndex(row + 4, 1).setText(rowData[0].toString());
-        mechanicalSheet.getRangeByIndex(row + 4, 2).setText(rowData[1].toString());
-        
-        // Set heater columns (dynamic)
-        for (int i = 0; i < sortedHeaterIds.length; i++) {
-          mechanicalSheet.getRangeByIndex(row + 4, i + 3).setNumber(double.tryParse(rowData[i + 2].toString()) ?? 0);
-        }
-        
-        // Set remaining columns
-        final baseColumns = 2; // School name and date
-        final heaterColumns = sortedHeaterIds.length;
-        final remainingColumns = rowData.length - baseColumns - heaterColumns;
-        
-        for (int i = 0; i < remainingColumns; i++) {
-          final colIndex = baseColumns + heaterColumns + i + 1;
-          final dataIndex = baseColumns + heaterColumns + i;
-          
-          if (dataIndex < rowData.length) {
-            final value = rowData[dataIndex];
-            if (value is String) {
-              mechanicalSheet.getRangeByIndex(row + 4, colIndex).setText(value);
-            } else {
-              mechanicalSheet.getRangeByIndex(row + 4, colIndex).setNumber((double.tryParse(value.toString()) ?? 0).toDouble());
-            }
+        // Set cell values for all columns
+        for (int col = 0; col < rowData.length; col++) {
+          final value = rowData[col];
+          if (value is String) {
+            mechanicalSheet.getRangeByIndex(row + 4, col + 1).setText(value);
+          } else {
+            mechanicalSheet.getRangeByIndex(row + 4, col + 1).setNumber((double.tryParse(value.toString()) ?? 0).toDouble());
           }
         }
       }
@@ -672,15 +1160,61 @@ class ExcelExportService {
         civilSheet.getRangeByIndex(row + 4, 12).setText(rowData[11].toString());
       }
 
-      // Summary Sheet
-      final summarySheet = workbook.worksheets.addWithName('ملخص');
+      // Air Conditioning Sheet
+      final acSheet = workbook.worksheets.addWithName('التكييف');
       
       // Title
-      final summaryTitleRange = summarySheet.getRangeByIndex(1, 1, 1, 4);
-      summaryTitleRange.setText('ملخص حصر الصيانة');
-      summaryTitleRange.cellStyle.fontSize = 18;
-      summaryTitleRange.cellStyle.bold = true;
-      summarySheet.getRangeByIndex(1, 1, 1, 4).merge();
+      final acTitleRange = acSheet.getRangeByIndex(1, 1, 1, 6);
+      acTitleRange.setText('حصر التكييف');
+      acTitleRange.cellStyle.fontSize = 16;
+      acTitleRange.cellStyle.bold = true;
+      acSheet.getRangeByIndex(1, 1, 1, 6).merge();
+      
+      final acHeaders = [
+        'اسم المدرسة',
+        'تاريخ الحصر',
+        'دولابي',
+        'سبليت',
+        'شباك',
+        'باكدج',
+      ];
+      
+      // Apply header styling
+      final acHeaderRange = acSheet.getRangeByIndex(3, 1, 3, acHeaders.length);
+      acHeaderRange.cellStyle.fontSize = 12;
+      acHeaderRange.cellStyle.bold = true;
+      
+      for (int i = 0; i < acHeaders.length; i++) {
+        acSheet.getRangeByIndex(3, i + 1).setText(acHeaders[i]);
+      }
+      
+      for (int row = 0; row < allCounts.length; row++) {
+        final count = allCounts[row];
+        final rowData = [
+          schoolNames[count.schoolId] ?? 'مدرسة ${count.schoolId}',
+          _formatDate(count.createdAt),
+          count.itemCounts['cabinet_ac'] ?? 0,
+          count.itemCounts['split_concealed_ac'] ?? 0,
+          count.itemCounts['window_ac'] ?? 0,
+          count.itemCounts['package_ac'] ?? 0,
+        ];
+        
+        acSheet.getRangeByIndex(row + 4, 1).setText(rowData[0].toString());
+        acSheet.getRangeByIndex(row + 4, 2).setText(rowData[1].toString());
+        for (int col = 2; col < rowData.length; col++) {
+          acSheet.getRangeByIndex(row + 4, col + 1).setNumber(double.tryParse(rowData[col].toString()) ?? 0);
+        }
+      }
+
+      // School Summary Sheet
+      final schoolSummarySheet = workbook.worksheets.addWithName('ملخص المدارس');
+      
+      // Title
+      final schoolSummaryTitleRange = schoolSummarySheet.getRangeByIndex(1, 1, 1, 4);
+      schoolSummaryTitleRange.setText('ملخص حصر الصيانة');
+      schoolSummaryTitleRange.cellStyle.fontSize = 18;
+      schoolSummaryTitleRange.cellStyle.bold = true;
+      schoolSummarySheet.getRangeByIndex(1, 1, 1, 4).merge();
       
       final schoolCounts = <String, int>{};
       for (final count in allCounts) {
@@ -688,18 +1222,18 @@ class ExcelExportService {
         schoolCounts[schoolName] = (schoolCounts[schoolName] ?? 0) + 1;
       }
       
-      final summaryHeaders = ['اسم المدرسة', 'عدد الحصور', 'آخر تحديث', 'الحالة'];
+      final schoolSummaryHeaders = ['اسم المدرسة', 'عدد الحصور', 'آخر تحديث', 'الحالة'];
       
       // Apply header styling
-      final summaryHeaderRange = summarySheet.getRangeByIndex(3, 1, 3, summaryHeaders.length);
-      summaryHeaderRange.cellStyle.fontSize = 12;
-      summaryHeaderRange.cellStyle.bold = true;
+      final schoolSummaryHeaderRange = schoolSummarySheet.getRangeByIndex(3, 1, 3, schoolSummaryHeaders.length);
+      schoolSummaryHeaderRange.cellStyle.fontSize = 12;
+      schoolSummaryHeaderRange.cellStyle.bold = true;
       
-      for (int i = 0; i < summaryHeaders.length; i++) {
-        summarySheet.getRangeByIndex(3, i + 1).setText(summaryHeaders[i]);
+      for (int i = 0; i < schoolSummaryHeaders.length; i++) {
+        schoolSummarySheet.getRangeByIndex(3, i + 1).setText(schoolSummaryHeaders[i]);
       }
       
-      int rowIndex = 4;
+      int schoolRowIndex = 4;
       for (final entry in schoolCounts.entries) {
         final schoolName = entry.key;
         final countNum = entry.value;
@@ -713,20 +1247,20 @@ class ExcelExportService {
           latestCount.status == 'submitted' ? 'مرسل' : 'مسودة',
         ];
         
-        summarySheet.getRangeByIndex(rowIndex, 1).setText(rowData[0].toString());
-        summarySheet.getRangeByIndex(rowIndex, 2).setNumber(double.tryParse(rowData[1].toString()) ?? 0);
-        summarySheet.getRangeByIndex(rowIndex, 3).setText(rowData[2].toString());
-        summarySheet.getRangeByIndex(rowIndex, 4).setText(rowData[3].toString());
-        rowIndex++;
+        schoolSummarySheet.getRangeByIndex(schoolRowIndex, 1).setText(rowData[0].toString());
+        schoolSummarySheet.getRangeByIndex(schoolRowIndex, 2).setNumber(double.tryParse(rowData[1].toString()) ?? 0);
+        schoolSummarySheet.getRangeByIndex(schoolRowIndex, 3).setText(rowData[2].toString());
+        schoolSummarySheet.getRangeByIndex(schoolRowIndex, 4).setText(rowData[3].toString());
+        schoolRowIndex++;
       }
       
       // Summary footer
-      final footerRange1 = summarySheet.getRangeByIndex(rowIndex + 1, 1);
+      final footerRange1 = schoolSummarySheet.getRangeByIndex(schoolRowIndex + 1, 1);
       footerRange1.setText('إجمالي المدارس: ${schoolCounts.length}');
       footerRange1.cellStyle.fontSize = 12;
       footerRange1.cellStyle.bold = true;
       
-      final footerRange2 = summarySheet.getRangeByIndex(rowIndex + 2, 1);
+      final footerRange2 = schoolSummarySheet.getRangeByIndex(schoolRowIndex + 2, 1);
       footerRange2.setText('إجمالي الحصور: ${allCounts.length}');
       footerRange2.cellStyle.fontSize = 12;
       footerRange2.cellStyle.bold = true;
@@ -745,7 +1279,7 @@ class ExcelExportService {
         try {
           final blob = html.Blob([Uint8List.fromList(bytes)]);
           final url = html.Url.createObjectUrlFromBlob(blob);
-          final anchor = html.AnchorElement(href: url)
+          html.AnchorElement(href: url)
             ..setAttribute('download', 'حصر الاعداد والحالة.xlsx')
             ..click();
           html.Url.revokeObjectUrl(url);
@@ -774,9 +1308,130 @@ class ExcelExportService {
     }
   }
 
+  Future<void> _exportMaintenanceCountsSimplified(List<MaintenanceCount> allCounts, Map<String, String> schoolNames) async {
+    try {
+      print('🔄 Using simplified export for large dataset...');
+      
+      // Use excel package for simplified export
+      final excel = Excel.createExcel();
+      excel.delete('Sheet1');
+      
+      // Create a simplified summary sheet
+      final sheet = excel['ملخص مبسط'];
+      print('✅ Simplified sheet created');
+      
+      // Headers for simplified export
+      final headers = [
+        'اسم المدرسة',
+        'تاريخ الحصر',
+        'الحالة',
+        'إجمالي العناصر',
+        'طفايات الحريق',
+        'مغاسل',
+        'لمبات',
+        'لوحات كهربائية',
+        'سخانات',
+      ];
+      
+      for (int i = 0; i < headers.length; i++) {
+        final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+        cell.value = headers[i];
+      }
+      
+      // Add data rows with key metrics only
+      print('📝 Adding simplified data rows...');
+      
+      for (int row = 0; row < allCounts.length; row++) {
+        final count = allCounts[row];
+        
+        // Progress logging every 50 rows
+        if (row % 50 == 0) {
+          print('   📊 Processing simplified row ${row + 1}/${allCounts.length}');
+        }
+        
+        final totalItems = count.itemCounts.values.fold(0, (sum, count) => sum + count);
+        final fireExtinguishers = count.itemCounts['fire_extinguishers'] ?? 0;
+        final sinks = (count.itemCounts['hand_sink'] ?? 0) + (count.itemCounts['basin_sink'] ?? 0);
+        final lamps = count.itemCounts['lamps'] ?? 0;
+        final panels = (count.itemCounts['lighting_panel'] ?? 0) + 
+                      (count.itemCounts['power_panel'] ?? 0) + 
+                      (count.itemCounts['ac_panel'] ?? 0);
+        final heaters = count.heaterEntries.isNotEmpty ? 
+                       ((count.heaterEntries['bathroom_heaters'] as List<dynamic>?)?.length ?? 0) +
+                       ((count.heaterEntries['cafeteria_heaters'] as List<dynamic>?)?.length ?? 0) : 0;
+        
+        final rowData = [
+          schoolNames[count.schoolId] ?? 'مدرسة ${count.schoolId}',
+          _formatDate(count.createdAt),
+          count.status == 'submitted' ? 'مرسل' : 'مسودة',
+          totalItems,
+          fireExtinguishers,
+          sinks,
+          lamps,
+          panels,
+          heaters,
+        ];
+        
+        for (int col = 0; col < rowData.length; col++) {
+          final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: col, rowIndex: row + 1));
+          cell.value = rowData[col];
+        }
+      }
+      
+      // Save and download
+      print('💾 Saving simplified workbook...');
+      final bytes = excel.encode();
+      if (bytes == null || bytes.isEmpty) {
+        throw Exception('Failed to generate simplified Excel file');
+      }
+      print('✅ Simplified workbook saved, size: ${bytes.length} bytes');
+      
+      if (kIsWeb) {
+        print('🌐 Creating web download for simplified export...');
+        try {
+          final blob = html.Blob([Uint8List.fromList(bytes)]);
+          final url = html.Url.createObjectUrlFromBlob(blob);
+          html.AnchorElement(href: url)
+            ..setAttribute('download', 'حصر مبسط.xlsx')
+            ..click();
+          html.Url.revokeObjectUrl(url);
+          print('✅ Simplified web download initiated');
+        } catch (webError) {
+          print('❌ Simplified web download failed: $webError');
+          rethrow;
+        }
+      } else {
+        print('📱 Creating mobile download for simplified export...');
+        try {
+          final directory = await getApplicationDocumentsDirectory();
+          final path = '${directory.path}/حصر مبسط.xlsx';
+          final file = File(path);
+          await file.writeAsBytes(bytes, flush: true);
+          await Share.shareXFiles([XFile(path)], text: 'حصر مبسط');
+          print('✅ Simplified mobile download completed');
+        } catch (mobileError) {
+          print('❌ Simplified mobile download failed: $mobileError');
+          rethrow;
+        }
+      }
+    } catch (e) {
+      print('Simplified export error: $e');
+      rethrow;
+    }
+  }
+
   Future<void> _exportMaintenanceCountsExcelPackage(List<MaintenanceCount> allCounts, Map<String, String> schoolNames) async {
     try {
       print('🔄 Using Excel package fallback...');
+      
+      // Validate input data
+      if (allCounts.isEmpty) {
+        throw Exception('No maintenance counts to export');
+      }
+      
+      if (schoolNames.isEmpty) {
+        print('⚠️ Warning: No school names available, using school IDs instead');
+      }
       
       // Fallback to excel package
       final excel = Excel.createExcel();
@@ -800,43 +1455,83 @@ class ExcelExportService {
       }
       
       // Data rows
+      print('📝 Adding ${allCounts.length} data rows...');
       for (int row = 0; row < allCounts.length; row++) {
-        final count = allCounts[row];
-        final rowData = [
-          schoolNames[count.schoolId] ?? 'مدرسة ${count.schoolId}',
-          _formatDate(count.createdAt),
-          count.status == 'submitted' ? 'مرسل' : 'مسودة',
-          count.itemCounts.length,
-        ];
-        
-        for (int i = 0; i < rowData.length; i++) {
-          _setCellValue(sheet, i, row + 1, rowData[i]);
+        try {
+          final count = allCounts[row];
+          
+          // Validate count data
+          if (count.schoolId.isEmpty) {
+            print('⚠️ Warning: Skipping record with empty school ID at row $row');
+            continue;
+          }
+          
+          final rowData = [
+            schoolNames[count.schoolId] ?? 'مدرسة ${count.schoolId}',
+            _formatDate(count.createdAt),
+            count.status == 'submitted' ? 'مرسل' : 'مسودة',
+            count.itemCounts.length.toString(),
+          ];
+          
+          for (int i = 0; i < rowData.length; i++) {
+            try {
+              _setCellValue(sheet, i, row + 1, rowData[i]);
+            } catch (cellError) {
+              print('⚠️ Warning: Failed to set cell value at row $row, column $i: $cellError');
+              // Set empty value as fallback
+              final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: row + 1));
+              cell.value = '';
+            }
+          }
+        } catch (rowError) {
+          print('⚠️ Warning: Failed to process row $row: $rowError');
+          // Continue with next row
+          continue;
         }
       }
       
+      print('💾 Encoding Excel file...');
       // Save and download
       final bytes = excel.encode();
-      if (bytes == null) {
-        throw Exception('Failed to generate Excel file');
+      if (bytes == null || bytes.isEmpty) {
+        throw Exception('Failed to generate Excel file - encoded bytes are null or empty');
       }
       
+      print('✅ Excel file encoded successfully, size: ${bytes.length} bytes');
+      
       if (kIsWeb) {
-        final blob = html.Blob([Uint8List.fromList(bytes)]);
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        final anchor = html.AnchorElement(href: url)
-          ..setAttribute('download', 'حصر الاعداد والحالة_مبسط.xlsx')
-          ..click();
-        html.Url.revokeObjectUrl(url);
+        print('🌐 Creating web download...');
+        try {
+          final blob = html.Blob([Uint8List.fromList(bytes)]);
+          final url = html.Url.createObjectUrlFromBlob(blob);
+          html.AnchorElement(href: url)
+            ..setAttribute('download', 'حصر الاعداد والحالة_مبسط.xlsx')
+            ..click();
+          html.Url.revokeObjectUrl(url);
+          print('✅ Web download initiated successfully');
+        } catch (webError) {
+          print('❌ Web download failed: $webError');
+          throw Exception('Failed to create web download: $webError');
+        }
       } else {
-        // For mobile platforms, save to file and share
-        final directory = await getApplicationDocumentsDirectory();
-        final path = '${directory.path}/حصر الاعداد والحالة_مبسط.xlsx';
-        final file = File(path);
-        await file.writeAsBytes(bytes, flush: true);
-        await Share.shareXFiles([XFile(path)], text: 'حصر الاعداد والحالة');
+        print('📱 Creating mobile download...');
+        try {
+          // For mobile platforms, save to file and share
+          final directory = await getApplicationDocumentsDirectory();
+          final path = '${directory.path}/حصر الاعداد والحالة_مبسط.xlsx';
+          final file = File(path);
+          await file.writeAsBytes(bytes, flush: true);
+          await Share.shareXFiles([XFile(path)], text: 'حصر الاعداد والحالة');
+          print('✅ Mobile download completed successfully');
+        } catch (mobileError) {
+          print('❌ Mobile download failed: $mobileError');
+          throw Exception('Failed to create mobile download: $mobileError');
+        }
       }
     } catch (e) {
-      print('Excel package fallback error: $e');
+      print('❌ Excel package fallback error: $e');
+      print('❌ Error type: ${e.runtimeType}');
+      print('❌ Error stack trace: ${StackTrace.current}');
       rethrow;
     }
   }
@@ -934,30 +1629,82 @@ class ExcelExportService {
         print('🔍 DEBUG: Super admin - no supervisor filtering applied');
       }
 
-      // Use merged records with supervisor filtering
+      // Use optimized merged records with better timeout handling
+      print('🔍 DEBUG: Using optimized merge for Excel export');
       final mergedCounts = await _repository.getMergedMaintenanceCountRecords(
         supervisorIds: supervisorIds.isNotEmpty ? supervisorIds : null,
-        limit: 1000, // Get all records for export
-      );
+        limit: 2000, // Increased limit for large exports
+      ).timeout(const Duration(seconds: 90), onTimeout: () {
+        throw Exception('Database query timeout - taking too long to fetch data. Please try with fewer schools or contact support.');
+      });
 
       print('🔍 DEBUG: Retrieved ${mergedCounts.length} merged maintenance counts for Excel export');
+      
+      // If dataset is very large, warn user
+      if (mergedCounts.length > 500) {
+        print('⚠️ WARNING: Large dataset detected (${mergedCounts.length} records). Export may take longer.');
+      }
       
       return mergedCounts;
     } catch (e) {
       print('❌ ERROR: Failed to get merged maintenance counts for Excel export: $e');
-      // Fallback to old method if merged method fails
-      final allCounts = <MaintenanceCount>[];
-
-      // Get all schools with maintenance counts
-      final schools = await _repository.getSchoolsWithMaintenanceCounts();
-
-      for (final school in schools) {
-        final schoolId = school['school_id'] as String;
-        final counts = await _repository.getMaintenanceCounts(schoolId: schoolId);
-        allCounts.addAll(counts);
+      
+      // Fallback to chunked approach for large datasets
+      try {
+        print('🔄 Using fallback method with progressive loading...');
+        final allCounts = <MaintenanceCount>[];
+        final schools = await _repository.getSchoolsWithMaintenanceCounts()
+            .timeout(const Duration(seconds: 30), onTimeout: () {
+          throw Exception('Failed to fetch schools list');
+        });
+        
+        print('🔄 Processing ${schools.length} schools in chunks...');
+        
+        // Process schools in smaller chunks to avoid timeout
+        const chunkSize = 15; // Reduced chunk size
+        for (int i = 0; i < schools.length; i += chunkSize) {
+          final chunk = schools.skip(i).take(chunkSize);
+          
+          // Process chunk in parallel with individual timeouts
+          final futures = chunk.map((school) async {
+            final schoolId = school['school_id'] as String;
+            try {
+              return await _repository.getMaintenanceCounts(schoolId: schoolId)
+                  .timeout(const Duration(seconds: 8), onTimeout: () {
+                print('⚠️ WARNING: Timeout for school: $schoolId');
+                return <MaintenanceCount>[];
+              });
+            } catch (e) {
+              print('⚠️ WARNING: Error for school $schoolId: $e');
+              return <MaintenanceCount>[];
+            }
+          });
+          
+          // Wait for chunk with timeout
+          final chunkResults = await Future.wait(futures)
+              .timeout(const Duration(seconds: 25), onTimeout: () {
+            print('⚠️ WARNING: Chunk timeout, continuing with next chunk');
+            return List<List<MaintenanceCount>>.filled(chunk.length, []);
+          });
+          
+          for (final counts in chunkResults) {
+            allCounts.addAll(counts);
+          }
+          
+          print('🔍 DEBUG: Processed chunk ${(i ~/ chunkSize) + 1}/${(schools.length / chunkSize).ceil()}, total records: ${allCounts.length}');
+          
+          // Add small delay between chunks to prevent overwhelming the database
+          if (i + chunkSize < schools.length) {
+            await Future.delayed(const Duration(milliseconds: 150));
+          }
+        }
+        
+        print('✅ Fallback method completed with ${allCounts.length} records');
+        return allCounts;
+      } catch (fallbackError) {
+        print('❌ ERROR: Fallback method also failed: $fallbackError');
+        throw Exception('Failed to fetch maintenance data. Please try again or contact support.');
       }
-
-      return allCounts;
     }
   }
 
@@ -994,7 +1741,7 @@ class ExcelExportService {
       for (final school in schools) {
         final schoolId = school['school_id'] as String;
         // For damage counts, we need to get all counts for the school and filter by supervisor
-        final counts = await _damageRepository!.getDamageCounts(
+        final counts = await _damageRepository.getDamageCounts(
           schoolId: schoolId,
         );
         
@@ -1022,14 +1769,21 @@ class ExcelExportService {
       final schools = await _repository.getSchoolsWithMaintenanceCounts();
       final schoolMap = <String, String>{};
 
-      for (final school in schools) {
+      // Process schools in parallel for better performance
+      final futures = schools.map((school) async {
         final schoolId = school['school_id'] as String;
-        final schoolName = school['school_name'] as String;
-        schoolMap[schoolId] = schoolName;
-      }
-
+        final schoolName = school['school_name'] as String? ?? 'مدرسة $schoolId';
+        return MapEntry(schoolId, schoolName);
+      });
+      
+      final results = await Future.wait(futures);
+      schoolMap.addAll(Map.fromEntries(results));
+      
+      print('✅ Retrieved ${schoolMap.length} school names');
       return schoolMap;
     } catch (e) {
+      print('❌ ERROR: Failed to get school names: $e');
+      // Return empty map instead of throwing to allow export to continue
       return {};
     }
   }
@@ -1069,60 +1823,9 @@ class ExcelExportService {
     return '';
   }
 
-  // Helper method to get heater entries data
-  Map<String, dynamic> _getHeaterEntriesData(MaintenanceCount count) {
-    final heaterEntries = count.heaterEntries;
-    if (heaterEntries == null || heaterEntries.isEmpty) {
-      return {};
-    }
-    return heaterEntries;
-  }
 
-  // Helper method to get bathroom heaters count and capacities
-  (int, String) _getBathroomHeatersData(MaintenanceCount count) {
-    final heaterEntries = _getHeaterEntriesData(count);
-    final bathroomHeaters = heaterEntries['bathroom_heaters'] as List<dynamic>?;
-    
-    if (bathroomHeaters != null && bathroomHeaters.isNotEmpty) {
-      final count = bathroomHeaters.length;
-      final capacities = bathroomHeaters.map((entry) {
-        if (entry is Map<String, dynamic>) {
-          return entry['capacity']?.toString() ?? '';
-        }
-        return '';
-      }).where((capacity) => capacity.isNotEmpty).join(', ');
-      
-      return (count, capacities);
-    }
-    
-    // Fallback to old structure
-    final oldCount = int.tryParse(count.itemCounts['bathroom_heaters']?.toString() ?? '0') ?? 0;
-    final oldCapacity = count.textAnswers['bathroom_heaters_capacity'] ?? '';
-    return (oldCount, oldCapacity);
-  }
 
-  // Helper method to get cafeteria heaters count and capacities
-  (int, String) _getCafeteriaHeatersData(MaintenanceCount count) {
-    final heaterEntries = _getHeaterEntriesData(count);
-    final cafeteriaHeaters = heaterEntries['cafeteria_heaters'] as List<dynamic>?;
-    
-    if (cafeteriaHeaters != null && cafeteriaHeaters.isNotEmpty) {
-      final count = cafeteriaHeaters.length;
-      final capacities = cafeteriaHeaters.map((entry) {
-        if (entry is Map<String, dynamic>) {
-          return entry['capacity']?.toString() ?? '';
-        }
-        return '';
-      }).where((capacity) => capacity.isNotEmpty).join(', ');
-      
-      return (count, capacities);
-    }
-    
-    // Fallback to old structure
-    final oldCount = int.tryParse(count.itemCounts['cafeteria_heaters']?.toString() ?? '0') ?? 0;
-    final oldCapacity = count.textAnswers['cafeteria_heaters_capacity'] ?? '';
-    return (oldCount, oldCapacity);
-  }
+
 
   void _createMechanicalDamageSheet(Excel excel, List<DamageCount> allCounts,
       Map<String, String> schoolNames, Map<String, String> supervisorNames) {
@@ -1895,7 +2598,7 @@ class ExcelExportService {
 
     final blob = html.Blob([Uint8List.fromList(bytes)]);
     final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor = html.AnchorElement(href: url)
+    html.AnchorElement(href: url)
       ..setAttribute('download', 'حصر التوالف.xlsx')
       ..click();
     html.Url.revokeObjectUrl(url);
@@ -1903,79 +2606,46 @@ class ExcelExportService {
 
   void _setCellValue(
       Sheet sheet, int columnIndex, int rowIndex, dynamic value) {
-    final cell = sheet.cell(CellIndex.indexByColumnRow(
-        columnIndex: columnIndex, rowIndex: rowIndex));
-
-    if (value is int) {
-      cell.value = value;
-    } else if (value is double) {
-      cell.value = value;
-    } else if (value is String && value.isNotEmpty) {
-      cell.value = value;
-    } else {
-      cell.value = '';
-    }
-  }
-
-  /// 🚀 NEW: Helper method to format supervisor information for Excel export
-  String _formatSupervisorForExcel(String supervisorId) {
-    // Check if this is a merged record (contains multiple supervisor IDs)
-    if (supervisorId.contains(', ')) {
-      final supervisorIdList = supervisorId.split(', ');
-      if (supervisorIdList.length == 1) {
-        return 'مشرف واحد';
-      } else {
-        return '${supervisorIdList.length} مشرفين';
-      }
-    } else {
-      // Single supervisor
-      return 'مشرف واحد';
-    }
-  }
-
-  /// 🚀 NEW: Helper method to get real supervisor names for Excel export
-  Future<String> _getSupervisorNamesForExcel(String supervisorId) async {
     try {
-      // Check if this is a merged record (contains multiple supervisor IDs)
-      if (supervisorId.contains(', ')) {
-        final supervisorIdList = supervisorId.split(', ');
-        final supervisorNames = <String>[];
-        
-        for (final id in supervisorIdList) {
-          try {
-            final supervisor = await _supervisorRepository.getSupervisorById(id.trim());
-            if (supervisor != null && supervisor.username.isNotEmpty) {
-              supervisorNames.add(supervisor.username);
-            }
-          } catch (e) {
-            print('⚠️ WARNING: Failed to fetch supervisor name for ID $id: $e');
-          }
-        }
-        
-        if (supervisorNames.isNotEmpty) {
-          if (supervisorNames.length == 1) {
-            return supervisorNames.first;
-          } else {
-            return supervisorNames.join('، ');
-          }
+      final cell = sheet.cell(CellIndex.indexByColumnRow(
+          columnIndex: columnIndex, rowIndex: rowIndex));
+
+      if (value == null) {
+        cell.value = '';
+        return;
+      }
+
+      if (value is int) {
+        cell.value = value;
+      } else if (value is double) {
+        cell.value = value;
+      } else if (value is String) {
+        // Handle empty strings and null strings
+        if (value.isEmpty) {
+          cell.value = '';
         } else {
-          return 'غير محدد';
+          cell.value = value;
         }
+      } else if (value is bool) {
+        cell.value = value;
       } else {
-        // Single supervisor
-        try {
-          final supervisor = await _supervisorRepository.getSupervisorById(supervisorId);
-          return supervisor?.username ?? 'غير محدد';
-        } catch (e) {
-          print('⚠️ WARNING: Failed to fetch supervisor name for ID $supervisorId: $e');
-          return 'غير محدد';
-        }
+        // Convert to string for other types
+        cell.value = value.toString();
       }
     } catch (e) {
-      print('❌ ERROR: Failed to get supervisor names for Excel: $e');
-      return 'غير محدد';
+      print('⚠️ Warning: Failed to set cell value at column $columnIndex, row $rowIndex: $e');
+      // Set empty value as fallback
+      try {
+        final cell = sheet.cell(CellIndex.indexByColumnRow(
+            columnIndex: columnIndex, rowIndex: rowIndex));
+        cell.value = '';
+      } catch (fallbackError) {
+        print('❌ Critical: Failed to set fallback cell value: $fallbackError');
+      }
     }
   }
+
+
 
   Future<void> exportAllMaintenanceCountsSimplified() async {
     // Prevent multiple simultaneous downloads
@@ -1990,12 +2660,12 @@ class ExcelExportService {
       
       // Get all maintenance counts and school names with timeout
       final allCounts = await _getAllMaintenanceCounts()
-          .timeout(const Duration(seconds: 30), onTimeout: () {
+          .timeout(const Duration(seconds: 60), onTimeout: () {
         throw Exception('Database query timeout - taking too long to fetch data');
       });
       
       final schoolNames = await _getSchoolNamesMap()
-          .timeout(const Duration(seconds: 10), onTimeout: () {
+          .timeout(const Duration(seconds: 15), onTimeout: () {
         throw Exception('School names query timeout');
       });
 
@@ -2037,118 +2707,256 @@ class ExcelExportService {
       print('📝 Adding data rows...');
       
       // Fetch supervisor names in batch for better performance
-      final Map<String, String> supervisorNames = {};
-      final Set<String> uniqueSupervisorIds = {};
+      final supervisorIds = allCounts.map((c) => c.supervisorId).toSet().toList();
+      final supervisorNames = <String, String>{};
       
-      // Collect all unique supervisor IDs
+      try {
+                 final supervisors = await _supervisorRepository.getSupervisorsByIds(supervisorIds);
+         for (final supervisor in supervisors) {
+           supervisorNames[supervisor.id] = supervisor.username;
+         }
+      } catch (e) {
+        print('⚠️ WARNING: Failed to fetch supervisor names: $e');
+      }
+      
+      int rowIndex = 1;
       for (final count in allCounts) {
-        if (count.supervisorId.contains(', ')) {
-          // Split merged supervisor IDs
-          final supervisorIdList = count.supervisorId.split(', ');
-          uniqueSupervisorIds.addAll(supervisorIdList.map((id) => id.trim()));
-        } else {
-          uniqueSupervisorIds.add(count.supervisorId);
-        }
-      }
-      
-      // Fetch supervisor names in batch
-      if (uniqueSupervisorIds.isNotEmpty) {
         try {
-          final supervisors = await _supervisorRepository.getSupervisorsByIds(uniqueSupervisorIds.toList());
-          for (final supervisor in supervisors) {
-            supervisorNames[supervisor.id] = supervisor.username;
-          }
-          print('🔍 DEBUG: Fetched ${supervisorNames.length} supervisor names for Excel export');
-        } catch (e) {
-          print('⚠️ WARNING: Failed to fetch supervisor names: $e');
-        }
-      }
-      
-      for (int row = 0; row < allCounts.length; row++) {
-        final count = allCounts[row];
-        
-        // Progress logging every 20 rows
-        if (row % 20 == 0) {
-          print('   📊 Processing row ${row + 1}/${allCounts.length}');
-        }
-        
-        // Get supervisor names for this record
-        String supervisorDisplay = 'غير محدد';
-        if (count.supervisorId.contains(', ')) {
-          // Multiple supervisors
-          final supervisorIdList = count.supervisorId.split(', ');
-          final supervisorNameList = <String>[];
+          final schoolName = schoolNames[count.schoolId] ?? count.schoolName;
+          final supervisorName = supervisorNames[count.supervisorId] ?? count.supervisorId;
           
-          for (final id in supervisorIdList) {
-            final name = supervisorNames[id.trim()];
-            if (name != null && name.isNotEmpty) {
-              supervisorNameList.add(name);
+          // Calculate totals
+          final totalItems = count.itemCounts.values.fold<int>(0, (sum, count) => sum + count);
+          final totalTextAnswers = count.textAnswers.length;
+          final totalYesNoAnswers = count.yesNoAnswers.length;
+          
+          // Get maintenance notes summary
+          final maintenanceNotesSummary = count.maintenanceNotes.values
+              .where((note) => note.isNotEmpty)
+              .take(3) // Limit to first 3 notes
+              .join(' | ');
+          
+          // Get fire safety data summary
+          final fireSafetySummary = count.fireSafetyAlarmPanelData.values
+              .where((data) => data.isNotEmpty)
+              .take(2) // Limit to first 2 entries
+              .join(' | ');
+          
+          // Get AC data summary
+          final acDataSummary = count.itemCounts.entries
+              .where((entry) => entry.key.contains('ac') || entry.key.contains('air'))
+              .map((entry) => '${entry.key}: ${entry.value}')
+              .join(', ');
+          
+          // Get heater data summary
+          String heaterDataSummary = '';
+          if (count.heaterEntries.isNotEmpty) {
+            final heaterCounts = <String, int>{};
+            for (final entry in count.heaterEntries.values) {
+              if (entry is Map<String, dynamic>) {
+                final type = entry['type']?.toString() ?? '';
+                if (type.isNotEmpty) {
+                  heaterCounts[type] = (heaterCounts[type] ?? 0) + 1;
+                }
+              }
             }
+            heaterDataSummary = heaterCounts.entries
+                .map((entry) => '${entry.key}: ${entry.value}')
+                .join(', ');
           }
           
-          if (supervisorNameList.isNotEmpty) {
-            supervisorDisplay = supervisorNameList.join('، ');
+          // Add row data
+          final rowData = [
+            schoolName,
+            count.createdAt.toString().substring(0, 10),
+            count.status,
+            supervisorName,
+            totalItems.toString(),
+            totalTextAnswers.toString(),
+            totalYesNoAnswers.toString(),
+            maintenanceNotesSummary,
+            fireSafetySummary,
+            acDataSummary,
+            heaterDataSummary,
+          ];
+          
+          for (int i = 0; i < rowData.length; i++) {
+            final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: rowIndex));
+            cell.value = rowData[i];
           }
-        } else {
-          // Single supervisor
-          final supervisorName = supervisorNames[count.supervisorId];
-          supervisorDisplay = supervisorName ?? 'غير محدد';
-        }
-        
-        final rowData = [
-          schoolNames[count.schoolId] ?? 'مدرسة ${count.schoolId}',
-          _formatDate(count.createdAt),
-          count.status == 'submitted' ? 'مرسل' : 'مسودة',
-          supervisorDisplay,
-          count.itemCounts.length,
-          count.textAnswers.length,
-          count.yesNoAnswers.length,
-          count.maintenanceNotes.isNotEmpty ? 'نعم' : 'لا',
-          count.fireSafetyAlarmPanelData.isNotEmpty ? 'نعم' : 'لا',
-          count.fireSafetyConditionOnlyData.isNotEmpty ? 'نعم' : 'لا',
-          count.heaterEntries.isNotEmpty ? 'نعم' : 'لا',
-        ];
-        
-        for (int i = 0; i < rowData.length; i++) {
-          _setCellValue(sheet, i, row + 1, rowData[i]);
+          
+          rowIndex++;
+        } catch (e) {
+          print('⚠️ WARNING: Error processing row for school ${count.schoolId}: $e');
+          // Continue with next record
         }
       }
       
-      // Save and download
-      print('💾 Saving simplified export...');
-      final bytes = excel.encode();
-      if (bytes == null) {
-        throw Exception('Failed to generate simplified Excel file');
-      }
+      print('✅ Simplified export completed with ${rowIndex - 1} rows');
       
-      print('✅ Simplified export saved, size: ${bytes.length} bytes');
-      
-      if (kIsWeb) {
-        print('🌐 Creating web download for simplified export...');
-        final blob = html.Blob([Uint8List.fromList(bytes)]);
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        final anchor = html.AnchorElement(href: url)
-          ..setAttribute('download', 'حصر الصيانة المبسط.xlsx')
-          ..click();
-        html.Url.revokeObjectUrl(url);
-        print('✅ Simplified web download completed');
-      } else {
-        print('📱 Creating mobile download for simplified export...');
-        final directory = await getApplicationDocumentsDirectory();
-        final path = '${directory.path}/حصر الصيانة المبسط.xlsx';
-        final file = File(path);
-        await file.writeAsBytes(bytes, flush: true);
-        await Share.shareXFiles([XFile(path)], text: 'حصر الصيانة المبسط');
-        print('✅ Simplified mobile download completed');
-      }
+             // Save and download
+       print('💾 Saving simplified export...');
+       final bytes = excel.encode();
+       if (bytes == null || bytes.isEmpty) {
+         throw Exception('Failed to generate simplified Excel file');
+       }
+       
+       print('✅ Simplified export saved, size: ${bytes.length} bytes');
+       
+       if (kIsWeb) {
+         print('🌐 Creating web download for simplified export...');
+         final blob = html.Blob([Uint8List.fromList(bytes)]);
+         final url = html.Url.createObjectUrlFromBlob(blob);
+         html.AnchorElement(href: url)
+           ..setAttribute('download', 'حصر الصيانة المبسط.xlsx')
+           ..click();
+         html.Url.revokeObjectUrl(url);
+         print('✅ Simplified web download completed');
+       } else {
+         print('📱 Creating mobile download for simplified export...');
+         final directory = await getApplicationDocumentsDirectory();
+         final path = '${directory.path}/حصر الصيانة المبسط.xlsx';
+         final file = File(path);
+         await file.writeAsBytes(bytes, flush: true);
+         await Share.shareXFiles([XFile(path)], text: 'حصر الصيانة المبسط');
+         print('✅ Simplified mobile download completed');
+       }
       
     } catch (e) {
-      print('❌ Simplified export error: $e');
-      throw Exception('Failed to export simplified Excel: ${e.toString()}');
+      print('❌ ERROR: Simplified export failed: $e');
+      throw Exception('Failed to export simplified Excel: $e');
     } finally {
-      // Always reset the downloading state, even on error
       _isDownloading = false;
     }
   }
 
+
+
+  // Diagnostic method to identify export issues
+  Future<void> diagnoseExportIssue() async {
+    try {
+      print('🔍 Starting export diagnosis...');
+      
+      // Test 1: Check if we can access the repository
+      print('📊 Test 1: Repository access...');
+      final admin = await _adminService.getCurrentAdmin();
+      if (admin == null) {
+        throw Exception('Admin profile not found');
+      }
+      print('✅ Repository access successful');
+      
+      // Test 2: Check if we can fetch maintenance counts
+      print('📊 Test 2: Maintenance counts fetch...');
+      final allCounts = await _getAllMaintenanceCounts();
+      print('✅ Fetched ${allCounts.length} maintenance counts');
+      
+      // Test 3: Check if we can fetch school names
+      print('📊 Test 3: School names fetch...');
+      final schoolNames = await _getSchoolNamesMap();
+      print('✅ Fetched ${schoolNames.length} school names');
+      
+      // Test 4: Check if we can create Excel file
+      print('📊 Test 4: Excel file creation...');
+      final excel = Excel.createExcel();
+      excel.delete('Sheet1');
+      final sheet = excel['Test'];
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 0, rowIndex: 0)).value = 'Test';
+      final bytes = excel.encode();
+      if (bytes == null || bytes.isEmpty) {
+        throw Exception('Excel encoding failed');
+      }
+      print('✅ Excel file creation successful');
+      
+      // Test 5: Check data validation
+      print('📊 Test 5: Data validation...');
+      if (allCounts.isNotEmpty) {
+        final sampleCount = allCounts.first;
+        print('✅ Sample count data:');
+        print('   - School ID: ${sampleCount.schoolId}');
+        print('   - School Name: ${sampleCount.schoolName}');
+        print('   - Supervisor ID: ${sampleCount.supervisorId}');
+        print('   - Status: ${sampleCount.status}');
+        print('   - Item counts: ${sampleCount.itemCounts.length}');
+        print('   - Created at: ${sampleCount.createdAt}');
+      }
+      
+      print('✅ All diagnostic tests passed');
+      print('💡 The export should work now. Try downloading again.');
+      
+    } catch (e) {
+      print('❌ Diagnostic test failed: $e');
+      print('❌ Error type: ${e.runtimeType}');
+      print('❌ Error stack trace: ${StackTrace.current}');
+      rethrow;
+    }
+  }
+
+  // Simple fallback method for basic Excel export
+  Future<void> _exportMaintenanceCountsBasic(List<MaintenanceCount> allCounts, Map<String, String> schoolNames) async {
+    try {
+      print('🔄 Using basic Excel export fallback...');
+      
+      // Create a very simple Excel file
+      final excel = Excel.createExcel();
+      excel.delete('Sheet1');
+      
+      final sheet = excel['حصر الصيانة'];
+      
+      // Simple headers
+      final headers = ['اسم المدرسة', 'تاريخ الحصر', 'الحالة', 'عدد العناصر'];
+      
+      for (int i = 0; i < headers.length; i++) {
+        final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: 0));
+        cell.value = headers[i];
+      }
+      
+      // Simple data rows
+      for (int row = 0; row < allCounts.length; row++) {
+        try {
+          final count = allCounts[row];
+          
+          final rowData = [
+            schoolNames[count.schoolId] ?? 'مدرسة ${count.schoolId}',
+            _formatDate(count.createdAt),
+            count.status == 'submitted' ? 'مرسل' : 'مسودة',
+            count.itemCounts.length.toString(),
+          ];
+          
+          for (int i = 0; i < rowData.length; i++) {
+            final cell = sheet.cell(CellIndex.indexByColumnRow(columnIndex: i, rowIndex: row + 1));
+            cell.value = rowData[i];
+          }
+        } catch (e) {
+          print('⚠️ Warning: Failed to add row $row: $e');
+          continue;
+        }
+      }
+      
+      // Save and download
+      final bytes = excel.encode();
+      if (bytes == null || bytes.isEmpty) {
+        throw Exception('Failed to generate basic Excel file');
+      }
+      
+      if (kIsWeb) {
+        final blob = html.Blob([Uint8List.fromList(bytes)]);
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        html.AnchorElement(href: url)
+          ..setAttribute('download', 'حصر_صيانة_مبسط.xlsx')
+          ..click();
+        html.Url.revokeObjectUrl(url);
+      } else {
+        final directory = await getApplicationDocumentsDirectory();
+        final path = '${directory.path}/حصر_صيانة_مبسط.xlsx';
+        final file = File(path);
+        await file.writeAsBytes(bytes, flush: true);
+        await Share.shareXFiles([XFile(path)], text: 'حصر صيانة مبسط');
+      }
+      
+      print('✅ Basic Excel export completed successfully');
+    } catch (e) {
+      print('❌ Basic Excel export failed: $e');
+      rethrow;
+    }
+  }
 }

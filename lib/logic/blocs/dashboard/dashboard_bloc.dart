@@ -461,7 +461,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           .where((r) => r.status?.toLowerCase() == 'overdue')
           .length;
       final routineReports = allReports
-          .where((r) => r.type?.toLowerCase() == 'routine')
+          .where((r) => r.priority?.toLowerCase() == 'routine')
           .length;
       final pendingReports = allReports
           .where((r) => r.status?.toLowerCase() == 'pending')
@@ -596,7 +596,7 @@ class DashboardBloc extends Bloc<DashboardEvent, DashboardState> {
           .where((r) => r.status?.toLowerCase() == 'pending')
           .length;
       final routineReports = basicReports
-          .where((r) => r.type?.toLowerCase() == 'routine')
+          .where((r) => r.priority?.toLowerCase() == 'routine')
           .length;
       final overdueReports = basicReports
           .where((r) => r.status?.toLowerCase() == 'overdue')

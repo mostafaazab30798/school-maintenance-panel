@@ -452,9 +452,9 @@ class _AllReportsScreenState extends State<AllReportsScreen>
 
   String _translatePriority(String? value) {
     switch (value) {
-      case 'Routine':
+      case 'routine':
         return 'روتيني';
-      case 'Emergency':
+      case 'emergency':
         return 'طارئ';
       default:
         return value ?? '';
@@ -975,7 +975,7 @@ class _AllReportsScreenState extends State<AllReportsScreen>
                       _buildCompactInfoChip(
                         _translatePriority(report['priority']),
                         Icons.priority_high_outlined,
-                        report['priority'] == 'Emergency'
+                        report['priority'] == 'emergency'
                             ? const Color(0xFFEF4444)
                             : const Color(0xFF3B82F6),
                       ),

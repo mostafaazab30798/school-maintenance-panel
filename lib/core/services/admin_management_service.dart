@@ -710,14 +710,23 @@ class AdminManagementService {
       final completedWork = completedReports + completedMaintenance;
       final completionRate = totalWork > 0 ? (completedWork / totalWork) : 0.0;
 
-      // Get school count for this supervisor using direct count query
+      // Get unique school count for this supervisor to avoid duplicates
       int schoolsCount;
       try {
         final directCountResponse = await _client
             .from('supervisor_schools')
             .select('school_id')
             .eq('supervisor_id', supervisorId);
-        schoolsCount = directCountResponse.length;
+        
+        // Count unique schools to avoid duplicates
+        final uniqueSchools = <String>{};
+        for (final item in directCountResponse) {
+          final schoolId = item['school_id']?.toString();
+          if (schoolId != null && schoolId.isNotEmpty) {
+            uniqueSchools.add(schoolId);
+          }
+        }
+        schoolsCount = uniqueSchools.length;
       } catch (e) {
         // Fallback to filtered data if direct query fails
         final schoolsResponse =

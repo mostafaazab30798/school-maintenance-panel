@@ -363,7 +363,7 @@ class _DamageInventoryViewState extends State<DamageInventoryView> {
               ),
               _buildSummaryItem(
                 context,
-                'الأضرار الكلية',
+                'التوالف الكلية',
                 '$totalDamagedItems تلف',
                 summaryColor,
               ),

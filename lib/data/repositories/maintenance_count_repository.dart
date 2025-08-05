@@ -147,23 +147,30 @@ class MaintenanceCountRepository {
     List<String>? supervisorIds,
   }) async {
     try {
-      // Use merged records for more accurate statistics
-      final mergedRecords = await getMergedMaintenanceCountRecords(
-        supervisorIds: supervisorIds,
-        limit: 1000, // Get all records for statistics
-      );
+      // Direct database query to avoid infinite recursion
+      var query = _client.from('maintenance_counts').select('''
+        school_id,
+        school_name
+      ''');
+
+      // Apply supervisor filter if provided
+      if (supervisorIds != null && supervisorIds.isNotEmpty) {
+        query = query.inFilter('supervisor_id', supervisorIds);
+      }
+
+      final response = await query.order('school_name');
 
       // Handle empty response
-      if (mergedRecords.isEmpty) {
+      if (response == null || response.isEmpty) {
         return [];
       }
 
       // Group by school and count maintenance records
       final Map<String, Map<String, dynamic>> schoolCounts = {};
 
-      for (final record in mergedRecords) {
-        final schoolId = record.schoolId;
-        final schoolName = record.schoolName;
+      for (final item in response) {
+        final schoolId = item['school_id']?.toString() ?? '';
+        final schoolName = item['school_name']?.toString() ?? '';
 
         if (schoolId.isNotEmpty) {
           if (!schoolCounts.containsKey(schoolId)) {
@@ -319,12 +326,23 @@ class MaintenanceCountRepository {
       print('🔍 DEBUG: schoolId: $schoolId');
       print('🔍 DEBUG: status: $status');
 
-      // First, get all maintenance count records
+      // For Excel export, use a more efficient approach with smaller chunks
+      if (limit > 200) {
+        print('🔍 DEBUG: Large limit detected ($limit), using optimized approach');
+        return await _getMergedMaintenanceCountsOptimized(
+          supervisorIds: supervisorIds,
+          schoolId: schoolId,
+          status: status,
+          limit: limit,
+        );
+      }
+
+      // For regular queries, use the original approach but with reduced initial load
       final allRecords = await getAllMaintenanceCountRecords(
         supervisorIds: supervisorIds,
         schoolId: schoolId,
         status: status,
-        limit: 1000, // Get more records for merging
+        limit: 500, // Reduced from 1000 to prevent timeouts
       );
 
       print('🔍 DEBUG: Retrieved ${allRecords.length} records for merging');
@@ -369,6 +387,125 @@ class MaintenanceCountRepository {
     } catch (e, stackTrace) {
       print('❌ ERROR: Failed to get merged maintenance count records: $e');
       print('❌ ERROR: Stack trace: $stackTrace');
+      return [];
+    }
+  }
+
+  /// 🚀 OPTIMIZED: Get merged maintenance counts for large exports
+  Future<List<MaintenanceCount>> _getMergedMaintenanceCountsOptimized({
+    List<String>? supervisorIds,
+    String? schoolId,
+    String? status,
+    int limit = 2000,
+  }) async {
+    try {
+      print('🔍 DEBUG: Starting optimized merge for large export (limit: $limit)');
+      
+      // Use direct database query to get schools to avoid infinite recursion
+      var query = _client.from('maintenance_counts').select('''
+        school_id,
+        school_name
+      ''');
+
+      // Apply supervisor filter if provided
+      if (supervisorIds != null && supervisorIds.isNotEmpty) {
+        query = query.inFilter('supervisor_id', supervisorIds);
+      }
+
+      final schoolsResponse = await query.order('school_name');
+      
+      if (schoolsResponse == null || schoolsResponse.isEmpty) {
+        print('🔍 DEBUG: No schools found with maintenance counts');
+        return [];
+      }
+
+      // Get unique schools
+      final Set<String> uniqueSchools = {};
+      final Map<String, String> schoolNames = {};
+      
+      for (final item in schoolsResponse) {
+        final schoolId = item['school_id']?.toString() ?? '';
+        final schoolName = item['school_name']?.toString() ?? '';
+        if (schoolId.isNotEmpty) {
+          uniqueSchools.add(schoolId);
+          schoolNames[schoolId] = schoolName;
+        }
+      }
+      
+      final schools = uniqueSchools.toList();
+      print('🔍 DEBUG: Found ${schools.length} unique schools with maintenance counts');
+      
+      final List<MaintenanceCount> mergedRecords = [];
+      int processedSchools = 0;
+      
+      // Process schools in smaller chunks to prevent timeout
+      const chunkSize = 15; // Reduced chunk size
+      
+      for (int i = 0; i < schools.length; i += chunkSize) {
+        final chunk = schools.skip(i).take(chunkSize);
+        
+        // Process chunk in parallel with timeout
+        final futures = chunk.map((schoolId) async {
+          try {
+            final schoolCounts = await getMaintenanceCounts(schoolId: schoolId)
+                .timeout(const Duration(seconds: 8), onTimeout: () {
+              print('⚠️ WARNING: Timeout getting counts for school: $schoolId');
+              return <MaintenanceCount>[];
+            });
+            
+            if (schoolCounts.isNotEmpty) {
+              // Merge counts for this school
+              if (schoolCounts.length == 1) {
+                return schoolCounts.first;
+              } else {
+                return _mergeMaintenanceCounts(schoolCounts);
+              }
+            }
+            return null;
+          } catch (e) {
+            print('⚠️ WARNING: Error processing school $schoolId: $e');
+            return null;
+          }
+        });
+        
+        // Wait for chunk to complete with timeout
+        final chunkResults = await Future.wait(futures)
+            .timeout(const Duration(seconds: 25), onTimeout: () {
+          print('⚠️ WARNING: Timeout processing chunk ${i ~/ chunkSize + 1}');
+          return List<MaintenanceCount?>.filled(chunk.length, null);
+        });
+        
+        // Add valid results
+        for (final result in chunkResults) {
+          if (result != null) {
+            mergedRecords.add(result);
+          }
+        }
+        
+        processedSchools += chunk.length;
+        print('🔍 DEBUG: Processed $processedSchools/${schools.length} schools');
+        
+        // Add small delay between chunks to prevent overwhelming the database
+        if (i + chunkSize < schools.length) {
+          await Future.delayed(const Duration(milliseconds: 150));
+        }
+        
+        // Check if we have enough records
+        if (mergedRecords.length >= limit) {
+          print('🔍 DEBUG: Reached limit of $limit records');
+          break;
+        }
+      }
+      
+      // Sort by creation date and apply limit
+      mergedRecords.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      final limitedRecords = mergedRecords.take(limit).toList();
+      
+      print('🔍 DEBUG: Optimized merge completed with ${limitedRecords.length} records');
+      return limitedRecords;
+    } catch (e) {
+      print('❌ ERROR: Optimized merge failed: $e');
+      // Fallback to empty list
       return [];
     }
   }

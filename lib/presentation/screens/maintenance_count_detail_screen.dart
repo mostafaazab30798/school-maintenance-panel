@@ -462,18 +462,11 @@ class _MaintenanceCountDetailViewState
   Widget _buildCategoryGrid(MaintenanceCount count) {
     final categories = [
       {
-        'title': 'أمن وسلامة',
-        'icon': Icons.security_rounded,
-        'color': const Color(0xFFEF4444),
-        'category': 'safety',
-        'itemCount': _getSafetyItemsCount(count),
-      },
-      {
-        'title': 'ميكانيكا',
-        'icon': Icons.precision_manufacturing_rounded,
-        'color': const Color(0xFF10B981),
-        'category': 'mechanical',
-        'itemCount': _getMechanicalItemsCount(count),
+        'title': 'مدني',
+        'icon': Icons.business_rounded,
+        'color': const Color(0xFF8B5CF6),
+        'category': 'civil',
+        'itemCount': _getCivilItemsCount(count),
       },
       {
         'title': 'كهرباء',
@@ -483,13 +476,29 @@ class _MaintenanceCountDetailViewState
         'itemCount': _getElectricalItemsCount(count),
       },
       {
-        'title': 'مدني',
-        'icon': Icons.business_rounded,
-        'color': const Color(0xFF8B5CF6),
-        'category': 'civil',
-        'itemCount': _getCivilItemsCount(count),
+        'title': 'ميكانيكا',
+        'icon': Icons.precision_manufacturing_rounded,
+        'color': const Color(0xFF10B981),
+        'category': 'mechanical',
+        'itemCount': _getMechanicalItemsCount(count),
+      },
+      {
+        'title': 'امن وسلامة',
+        'icon': Icons.security_rounded,
+        'color': const Color(0xFFEF4444),
+        'category': 'safety',
+        'itemCount': _getSafetyItemsCount(count),
+      },
+      {
+        'title': 'التكييف',
+        'icon': Icons.ac_unit_rounded,
+        'color': const Color(0xFF17A2B8),
+        'category': 'air_conditioning',
+        'itemCount': _getAirConditioningItemsCount(count),
       },
     ];
+
+
 
     return SizedBox(
       height: 70,
@@ -501,7 +510,7 @@ class _MaintenanceCountDetailViewState
           return Expanded(
             flex: 1,
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4),
+              padding: EdgeInsets.symmetric(horizontal: 1),
               child: _buildCategoryCard(category, count, index),
             ),
           );
@@ -514,6 +523,8 @@ class _MaintenanceCountDetailViewState
       Map<String, dynamic> category, MaintenanceCount count, int index) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final color = category['color'] as Color;
+    
+
 
     return AnimatedContainer(
       duration: Duration(milliseconds: 400 + (index * 100)),
@@ -553,9 +564,9 @@ class _MaintenanceCountDetailViewState
             );
           },
           borderRadius: BorderRadius.circular(10),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(8),
+                      child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
@@ -584,7 +595,7 @@ class _MaintenanceCountDetailViewState
                   child: Icon(
                     category['icon'],
                     color: color,
-                    size: 14,
+                    size: 12,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -592,7 +603,7 @@ class _MaintenanceCountDetailViewState
                   child: Text(
                     category['title'],
                     style: TextStyle(
-                      fontSize: 9,
+                      fontSize: 8,
                       fontWeight: FontWeight.w600,
                       color: isDark ? Colors.white : const Color(0xFF1E293B),
                       height: 1.1,
@@ -613,7 +624,7 @@ class _MaintenanceCountDetailViewState
                   child: Text(
                     '${category['itemCount']}',
                     style: const TextStyle(
-                      fontSize: 8,
+                      fontSize: 7,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
                     ),
@@ -700,7 +711,14 @@ class _MaintenanceCountDetailViewState
       'electric_pump',
       'auxiliary_pump',
       'emergency_exits',
-      'emergency_lights'
+      'emergency_lights',
+      'breakers',
+      'bells',
+      'break_glasses_bells',
+      'smoke_detectors',
+      'heat_detectors',
+      'emergency_signs',
+      'camera'
     ];
 
     int itemCount = 0;
@@ -817,23 +835,11 @@ class _MaintenanceCountDetailViewState
       'speakers',
       'microphone_system',
       'ac_panel',
-      'split_concealed_ac',
-      'hidden_ducts_ac',
-      'window_ac',
-      'cabinet_ac',
-      'package_ac',
       'power_panel',
       'lighting_panel',
       'main_distribution_panel',
       'main_breaker',
-      'concealed_ac_breaker',
-      'package_ac_breaker',
       'electrical_panels',
-      'breakers',
-      'bells',
-      'smoke_detectors',
-      'heat_detectors',
-      'camera'
     ];
 
     int itemCount = 0;
@@ -847,10 +853,10 @@ class _MaintenanceCountDetailViewState
     itemCount += count.textAnswers.entries
         .where((e) => e.value.isNotEmpty && (
           e.key == 'electricity_meter_number' ||
-          e.key == 'ac_panel_amperage' ||
           e.key == 'power_panel_amperage' ||
           e.key == 'main_breaker_amperage' ||
           e.key == 'lighting_panel_amperage' ||
+          e.key == 'ac_panel_amperage' ||
           e.key == 'package_ac_breaker_amperage' ||
           e.key == 'concealed_ac_breaker_amperage' ||
           e.key == 'main_distribution_panel_amperage' ||
@@ -894,6 +900,37 @@ class _MaintenanceCountDetailViewState
       if (civilSurveyKeys.contains(key)) itemCount++;
     });
 
+    return itemCount;
+  }
+
+  int _getAirConditioningItemsCount(MaintenanceCount count) {
+    final airConditioningKeys = [
+      'cabinet_ac',
+      'split_concealed_ac',
+      'hidden_ducts_ac',
+      'window_ac',
+      'package_ac',
+      'concealed_ac_breaker',
+      'package_ac_breaker',
+      'split_ac', // Legacy key
+    ];
+
+    int itemCount = 0;
+
+    // Add air conditioning item counts
+    count.itemCounts.forEach((key, value) {
+      if (airConditioningKeys.contains(key)) {
+        itemCount++;
+      }
+    });
+
+    // Add air conditioning text answers count
+    final acTextAnswers = count.textAnswers.entries
+        .where((e) => e.value.isNotEmpty && (
+          e.key == 'concealed_ac_breaker_amperage' ||
+          e.key == 'package_ac_breaker_amperage'
+        ));
+    itemCount += acTextAnswers.length;
     return itemCount;
   }
 
@@ -1007,7 +1044,7 @@ class _MaintenanceCountDetailViewState
       'smoke_detectors_note': 'ملاحظة أجهزة استشعار الدخان',
       'emergency_lights_note': 'ملاحظة أضواء الطوارئ',
       'fire_alarm_system_note': 'ملاحظة نظام إنذار الحريق',
-      'break_glasses_bells_note': 'ملاحظة أجراس كسر الزجاج',
+      'break_glasses_bells_note': 'ملاحظة كواسر',
       'fire_suppression_system_note': 'ملاحظة نظام إطفاء الحريق',
     };
 
@@ -1043,7 +1080,12 @@ class _MaintenanceCountDetailViewState
       'electric_pump',
       'auxiliary_pump',
       'emergency_exits',
-      'emergency_lights'
+      'emergency_lights',
+      'breakers',
+      'bells',
+      'break_glasses_bells',
+      'smoke_detectors',
+      'heat_detectors'
     ];
 
     Map<String, dynamic> items = {};

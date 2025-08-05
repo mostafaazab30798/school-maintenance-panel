@@ -24,7 +24,10 @@ import '../widgets/dashboard/supervisor_card.dart';
 import '../widgets/common/esc_dismissible_dialog.dart';
 import '../widgets/common/user_info_widget.dart';
 import '../widgets/common/weekly_report_dialog.dart';
+
+import '../../core/services/excel_data_service.dart';
 import '../../core/services/navigation/dashboard_state_service.dart';
+import '../../data/models/excel_report_data.dart';
 
 
 class DashboardScreen extends StatefulWidget {
@@ -35,6 +38,11 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
+  // Excel upload state
+  Map<String, List<ExcelReportData>> _excelReportsBySchool = {};
+  String? _excelErrorMessage;
+  bool _isExcelProcessing = false;
+
   @override
   void initState() {
     super.initState();
@@ -46,6 +54,70 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void dispose() {
     DashboardStateService.dispose();
     super.dispose();
+  }
+
+  // Excel upload callback
+  void _onExcelProcessed(Map<String, List<ExcelReportData>> reportsBySchool) {
+    setState(() {
+      _excelReportsBySchool = reportsBySchool;
+      _excelErrorMessage = null;
+    });
+    
+    // Store Excel data in global service
+    ExcelDataService().setExcelData(reportsBySchool);
+    
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Icons.check_circle_rounded, color: Colors.white, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              'تم رفع ملف الإكسل بنجاح. يمكنك الآن الذهاب إلى صفحة إضافة البلاغات لاستخدام البيانات.',
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+        backgroundColor: const Color(0xFF10B981),
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  // Navigate to reports screen with Excel data
+  void _navigateToReportsWithExcel() async {
+    // Get the current admin's supervisor IDs to use as default
+    try {
+      final adminService = AdminService(Supabase.instance.client);
+      final supervisorIds = await adminService.getCurrentAdminSupervisorIds();
+      final defaultSupervisorId = supervisorIds.isNotEmpty ? supervisorIds.first : '';
+      
+      // Check if we have Excel data
+      if (!ExcelDataService().hasExcelData()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('يرجى رفع ملف الإكسل أولاً'),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+        return;
+      }
+      
+      // Store Excel data in a global service or pass it through navigation
+      // For now, we'll use a simple approach with query parameters
+      context.push('/add-multiple-reports?excel_mode=true&supervisorId=$defaultSupervisorId');
+    } catch (e) {
+      print('Error getting supervisor IDs: $e');
+      // Fallback to empty supervisor ID
+      context.push('/add-multiple-reports?excel_mode=true&supervisorId=');
+    }
   }
 
   @override
@@ -834,53 +906,165 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       );
                     }).toList();
 
-                    return DashboardGrid(
-                      totalReports: state.totalReports,
-                      routineReports: state.routineReports,
-                      emergencyReports: state.emergencyReports,
-                      completedReports: state.completedReports,
-                      overdueReports: state.overdueReports,
-                      lateCompletedReports: state.lateCompletedReports,
-                      totalSupervisors: state.totalSupervisors,
-                      completionRate: state.completionRate,
-                      supervisorCards: supervisorCards,
-                      // Maintenance reports data
-                      totalMaintenanceReports: state.totalMaintenanceReports,
-                      completedMaintenanceReports:
-                          state.completedMaintenanceReports,
-                      pendingMaintenanceReports:
-                          state.pendingMaintenanceReports,
-                      // Inventory count data
-                      schoolsWithCounts: state.schoolsWithCounts,
-                      schoolsWithDamage: state.schoolsWithDamage,
-                      // Schools data
-                      totalSchools: state.totalSchools,
-                      schoolsWithAchievements: state.schoolsWithAchievements,
-                      // FCI Assessment data
-                      totalFciAssessments: state.totalFciAssessments,
-                      submittedFciAssessments: state.submittedFciAssessments,
-                      draftFciAssessments: state.draftFciAssessments,
-                      schoolsWithFciAssessments: state.schoolsWithFciAssessments,
-                      onTapTotalReports: () => context.push('/reports'),
-                      onTapEmergencyReports: () => context.push(
-                          '/reports?title=البلاغات الطارئة&priority=Emergency'),
-                      onTapCompletedReports: () => context.push(
-                          '/reports?title=البلاغات المكتملة&status=completed'),
-                      onTapOverdueReports: () => context
-                          .push('/reports?title=البلاغات المتأخرة&status=late'),
-                      onTapLateCompletedReports: () => context.push(
-                          '/reports?title=البلاغات المتأخرة المنجزة&status=late_completed'),
-                      onTapTotalSupervisors: () => context.push('/supervisors'),
-                      onTapRoutineReports: () => context.push(
-                          '/reports?title=البلاغات الروتينية&priority=Routine'),
-                      // Maintenance callbacks
-                      onTapTotalMaintenanceReports: () =>
-                          context.push('/maintenance-reports'),
-                      onTapCompletedMaintenanceReports: () => context.push(
-                          '/maintenance-reports?title=بلاغات الصيانة المكتملة&status=completed'),
-                      onTapPendingMaintenanceReports: () => context.push(
-                          '/maintenance-reports?title=بلاغات الصيانة الجارية&status=pending'),
-                      // Schools callback
+                    return Column(
+                      children: [
+                        // Excel Upload Section - Modern Integrated Design
+                        if (_excelReportsBySchool.isNotEmpty)
+                          Container(
+                            margin: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors: [
+                                  const Color(0xFF8B5CF6).withOpacity(0.1),
+                                  const Color(0xFF8B5CF6).withOpacity(0.05),
+                                ],
+                              ),
+                              border: Border.all(
+                                color: const Color(0xFF8B5CF6).withOpacity(0.2),
+                                width: 1,
+                              ),
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => _navigateToReportsWithExcel(),
+                                borderRadius: BorderRadius.circular(16),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(12),
+                                          gradient: LinearGradient(
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                            colors: [
+                                              const Color(0xFF8B5CF6).withOpacity(0.2),
+                                              const Color(0xFF8B5CF6).withOpacity(0.1),
+                                            ],
+                                          ),
+                                        ),
+                                        child: const Icon(
+                                          Icons.table_chart_rounded,
+                                          color: Color(0xFF8B5CF6),
+                                          size: 24,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'بيانات الإكسل جاهزة',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w700,
+                                                color: Theme.of(context).brightness == Brightness.dark
+                                                    ? const Color(0xFFF1F5F9)
+                                                    : const Color(0xFF1E293B),
+                                                letterSpacing: -0.2,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              'تم رفع ${_excelReportsBySchool.values.expand((reports) => reports).length} بلاغ من ${_excelReportsBySchool.length} مدرسة',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Theme.of(context).brightness == Brightness.dark
+                                                    ? const Color(0xFF94A3B8)
+                                                    : const Color(0xFF64748B),
+                                                fontWeight: FontWeight.w500,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.arrow_forward_rounded,
+                                            color: const Color(0xFF8B5CF6),
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'إضافة البلاغات',
+                                            style: TextStyle(
+                                              color: const Color(0xFF8B5CF6),
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        
+                        // Dashboard Grid
+                        Expanded(
+                          child: DashboardGrid(
+                            totalReports: state.totalReports,
+                            routineReports: state.routineReports,
+                            emergencyReports: state.emergencyReports,
+                            completedReports: state.completedReports,
+                            overdueReports: state.overdueReports,
+                            lateCompletedReports: state.lateCompletedReports,
+                            totalSupervisors: state.totalSupervisors,
+                            completionRate: state.completionRate,
+                            supervisorCards: supervisorCards,
+                            // Maintenance reports data
+                            totalMaintenanceReports: state.totalMaintenanceReports,
+                            completedMaintenanceReports:
+                                state.completedMaintenanceReports,
+                            pendingMaintenanceReports:
+                                state.pendingMaintenanceReports,
+                            // Inventory count data
+                            schoolsWithCounts: state.schoolsWithCounts,
+                            schoolsWithDamage: state.schoolsWithDamage,
+                            // Schools data
+                            totalSchools: state.totalSchools,
+                            schoolsWithAchievements: state.schoolsWithAchievements,
+                            // FCI Assessment data
+                            totalFciAssessments: state.totalFciAssessments,
+                            submittedFciAssessments: state.submittedFciAssessments,
+                            draftFciAssessments: state.draftFciAssessments,
+                            schoolsWithFciAssessments: state.schoolsWithFciAssessments,
+                            onTapTotalReports: () => context.push('/reports'),
+                            onTapEmergencyReports: () => context.push(
+                                '/reports?title=البلاغات الطارئة&priority=emergency'),
+                            onTapCompletedReports: () => context.push(
+                                '/reports?title=البلاغات المكتملة&status=completed'),
+                            onTapOverdueReports: () => context
+                                .push('/reports?title=البلاغات المتأخرة&status=late'),
+                            onTapLateCompletedReports: () => context.push(
+                                '/reports?title=البلاغات المتأخرة المنجزة&status=late_completed'),
+                            onTapTotalSupervisors: () => context.push('/supervisors'),
+                            onTapRoutineReports: () => context.push(
+                                '/reports?title=البلاغات الروتينية&priority=routine'),
+                            // Maintenance callbacks
+                            onTapTotalMaintenanceReports: () =>
+                                context.push('/maintenance-reports'),
+                            onTapCompletedMaintenanceReports: () => context.push(
+                                '/maintenance-reports?title=بلاغات الصيانة المكتملة&status=completed'),
+                            onTapPendingMaintenanceReports: () => context.push(
+                                '/maintenance-reports?title=بلاغات الصيانة الجارية&status=pending'),
+                            // Excel upload callback
+                            onExcelProcessed: _onExcelProcessed,
+                          ),
+                        ),
+                      ],
                     );
                   }
 

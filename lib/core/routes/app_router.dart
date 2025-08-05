@@ -8,6 +8,7 @@ import 'package:admin_panel/presentation/screens/damage_count_detail_screen.dart
 import 'package:admin_panel/presentation/screens/fci_assessments_screen.dart';
 import 'package:admin_panel/presentation/screens/fci_assessment_details_screen.dart';
 import 'package:admin_panel/data/models/fci_assessment.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -206,6 +207,68 @@ final GoRouter appRouter = GoRouter(
               create: (_) => AddMultipleReportsCubit(
                 supervisorId,
                 storageService: SupabaseStorageService(Supabase.instance.client),
+              ),
+            ),
+          ],
+          child: AddMultipleReportsScreen(supervisorId: supervisorId),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/add-multiple-reports',
+      name: 'add-multiple-reports',
+      builder: (context, state) {
+        final supervisorId = state.uri.queryParameters['supervisorId'] ?? '';
+        final excelMode = state.uri.queryParameters['excel_mode'] == 'true';
+        final reportRepo = ReportRepository(Supabase.instance.client);
+
+        // Validate supervisorId
+        if (supervisorId.isEmpty) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('خطأ'),
+              backgroundColor: Colors.red,
+            ),
+            body: const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    color: Colors.red,
+                    size: 64,
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'معرف المشرف مطلوب',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'يرجى التأكد من الرابط المستخدم',
+                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return MultiBlocProvider(
+          providers: [
+            BlocProvider<MultipleReportBloc>(
+              create: (context) => MultipleReportBloc(
+                MultiReportRepository(
+                  client: Supabase.instance.client,
+                  reportRepository: reportRepo,
+                ),
+              ),
+            ),
+            BlocProvider<AddMultipleReportsCubit>(
+              create: (_) => AddMultipleReportsCubit(
+                supervisorId,
+                storageService: SupabaseStorageService(Supabase.instance.client),
+                initialExcelMode: excelMode,
               ),
             ),
           ],

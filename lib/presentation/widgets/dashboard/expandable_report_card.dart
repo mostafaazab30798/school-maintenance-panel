@@ -261,7 +261,7 @@ class _ExpandableReportCardState extends State<ExpandableReportCard>
                             ),
                           ),
                           child: Text(
-                            report['priority'] == 'Routine' ? 'روتيني' : 'طارئ',
+                            report['priority'] == 'routine' ? 'روتيني' : 'طارئ',
                             style: TextStyle(
                               color: _priorityColor(report['priority']),
                               fontWeight: FontWeight.w600,
@@ -830,9 +830,9 @@ class _ExpandableReportCardState extends State<ExpandableReportCard>
 
   Color _priorityColor(String? priority) {
     switch (priority) {
-      case 'Emergency':
+      case 'emergency':
         return const Color(0xFFE53E3E);
-      case 'Routine':
+      case 'routine':
         return const Color(0xFF3182CE);
       default:
         return const Color(0xFF718096);
@@ -841,9 +841,9 @@ class _ExpandableReportCardState extends State<ExpandableReportCard>
 
   IconData _priorityIcon(String? priority) {
     switch (priority) {
-      case 'Emergency':
+      case 'emergency':
         return Icons.priority_high_rounded;
-      case 'Routine':
+      case 'routine':
         return Icons.schedule_rounded;
       default:
         return Icons.info_rounded;

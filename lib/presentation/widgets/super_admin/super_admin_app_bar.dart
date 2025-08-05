@@ -543,25 +543,27 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
   Future<void> _downloadMaintenanceCounts(BuildContext context) async {
     try {
       // Show loading dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          content: Row(
-            children: [
-              const CircularProgressIndicator(color: Color(0xFFF59E0B)),
-              const SizedBox(width: 20),
-              Text(
-                'جاري تحضير ملف حصر الصيانة...',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Theme.of(context).textTheme.bodyLarge?.color,
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            content: Row(
+              children: [
+                const CircularProgressIndicator(color: Color(0xFFF59E0B)),
+                const SizedBox(width: 20),
+                Text(
+                  'جاري تحضير ملف حصر الصيانة...',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      );
+        );
+      }
 
       // Add a small delay to ensure UI updates
       await Future.delayed(const Duration(milliseconds: 100));
@@ -591,7 +593,7 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
             break; // Exit retry loop
           }
           
-          // Update loading dialog with retry information
+          // Update loading dialog with retry information only if context is still mounted
           if (context.mounted) {
             Navigator.of(context).pop();
             showDialog(
@@ -621,7 +623,7 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
         }
       }
       
-      // Close loading dialog
+      // Close loading dialog only if context is still mounted
       if (context.mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
@@ -631,6 +633,7 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
         throw lastError;
       }
       
+      // Show success message only if context is still mounted
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -648,7 +651,7 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
         );
       }
     } catch (e) {
-      // Close loading dialog if still open
+      // Close loading dialog if still open and context is mounted
       if (context.mounted && Navigator.of(context).canPop()) {
         Navigator.of(context).pop();
       }
@@ -663,12 +666,31 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
         errorMessage = 'تحميل قيد التنفيذ بالفعل. يرجى الانتظار';
       } else if (e.toString().contains('Export timeout')) {
         errorMessage = 'استغرق التصدير وقتاً طويلاً. يرجى المحاولة مرة أخرى';
+      } else if (e.toString().contains('Database query timeout')) {
+        errorMessage = 'استغرق استعلام قاعدة البيانات وقتاً طويلاً. يرجى المحاولة مرة أخرى';
+        
+        // Show dialog with simplified export option for timeout errors
+        if (context.mounted) {
+          _showSimplifiedExportDialog(context);
+          return; // Don't show error snackbar, dialog handles it
+        }
+      } else if (e.toString().contains('School names query timeout')) {
+        errorMessage = 'استغرق جلب أسماء المدارس وقتاً طويلاً. يرجى المحاولة مرة أخرى';
+      } else if (e.toString().contains('Admin profile not found')) {
+        errorMessage = 'لم يتم العثور على ملف المشرف. يرجى إعادة تسجيل الدخول';
       } else if (e.toString().contains('Failed to export Excel')) {
         errorMessage = 'فشل في إنشاء ملف Excel. يرجى المحاولة مرة أخرى';
+      } else if (e.toString().contains('Failed to generate Excel file')) {
+        errorMessage = 'فشل في إنشاء ملف Excel. يرجى المحاولة مرة أخرى';
+      } else if (e.toString().contains('Failed to create web download')) {
+        errorMessage = 'فشل في إنشاء التحميل. يرجى المحاولة مرة أخرى';
+      } else if (e.toString().contains('Failed to create mobile download')) {
+        errorMessage = 'فشل في إنشاء التحميل. يرجى المحاولة مرة أخرى';
       } else {
         errorMessage = 'حدث خطأ أثناء التحميل: ${e.toString().split(':').last.trim()}';
       }
       
+      // Show error message only if context is still mounted
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -688,6 +710,117 @@ class SuperAdminAppBar extends StatelessWidget implements PreferredSizeWidget {
               textColor: Colors.white,
               onPressed: () => _downloadMaintenanceCounts(context),
             ),
+          ),
+        );
+      }
+    }
+  }
+
+  void _showSimplifiedExportDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('خيارات التصدير'),
+        content: const Text(
+          'استغرق التصدير وقتاً طويلاً. يمكنك تجربة التصدير المبسط الذي يحتوي على بيانات أقل تفصيلاً ولكن أسرع في التحميل.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('إلغاء'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _downloadMaintenanceCountsSimplified(context);
+            },
+            child: const Text('تجربة التصدير المبسط'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _downloadMaintenanceCountsSimplified(BuildContext context) async {
+    try {
+      // Show loading dialog
+      if (context.mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            content: Row(
+              children: [
+                const CircularProgressIndicator(color: Color(0xFFF59E0B)),
+                const SizedBox(width: 20),
+                Text(
+                  'جاري تحضير ملف حصر الصيانة المبسط...',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
+      // Add a small delay to ensure UI updates
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      final repository = MaintenanceCountRepository(Supabase.instance.client);
+      final supervisorRepository = SupervisorRepository(Supabase.instance.client);
+      final excelService = ExcelExportService(
+        repository,
+        supervisorRepository: supervisorRepository,
+      );
+      
+      // Use simplified export
+      await excelService.exportAllMaintenanceCountsSimplified();
+      
+      // Close loading dialog only if context is still mounted
+      if (context.mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      
+      // Show success message only if context is still mounted
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                const Text('تم تحميل حصر الصيانة المبسط بنجاح!'),
+              ],
+            ),
+            backgroundColor: const Color(0xFF10B981),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog if still open and context is mounted
+      if (context.mounted && Navigator.of(context).canPop()) {
+        Navigator.of(context).pop();
+      }
+      
+      // Show error message only if context is still mounted
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('فشل في تحميل التصدير المبسط: ${e.toString()}')),
+              ],
+            ),
+            backgroundColor: const Color(0xFFEF4444),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       }

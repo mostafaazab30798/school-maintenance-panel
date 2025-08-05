@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/models/admin.dart';
+import '../../data/models/supervisor.dart';
 import 'package:flutter/foundation.dart';
 
 class AdminService {
@@ -237,5 +238,75 @@ class AdminService {
       }
     }
     return await getCurrentAdminSupervisorIds();
+  }
+
+  /// Get current admin supervisors with full details
+  Future<List<Supervisor>> getCurrentAdminSupervisors() async {
+    try {
+      final user = _client.auth.currentUser;
+      if (user == null) {
+        if (kDebugMode) {
+          debugPrint('$_logPrefix: ❌ No authenticated user');
+        }
+        return [];
+      }
+
+      final authUserId = user.id;
+
+      // First, get the admin's database ID from the admins table
+      final adminResponse = await _client
+          .from('admins')
+          .select('id, role')
+          .eq('auth_user_id', authUserId)
+          .single();
+
+      final adminId = adminResponse['id'] as String;
+      final adminRole = adminResponse['role'] as String?;
+
+      if (kDebugMode) {
+        debugPrint('$_logPrefix: 👤 Admin database ID: $adminId, Role: $adminRole');
+      }
+
+      // If super admin, return all supervisors
+      if (adminRole == 'super_admin') {
+        if (kDebugMode) {
+          debugPrint('$_logPrefix: 🎯 Super admin detected - returning all supervisors');
+        }
+        final response = await _client
+            .from('supervisors')
+            .select();
+        
+        return (response as List)
+            .map((item) => Supervisor.fromMap(item))
+            .toList();
+      }
+
+      // Query supervisors table for supervisors assigned to this admin
+      final response = await _client
+          .from('supervisors')
+          .select()
+          .eq('admin_id', adminId);
+
+      if (kDebugMode) {
+        debugPrint('$_logPrefix: 📊 Database response: $response');
+      }
+
+      final supervisors = (response as List)
+          .map((item) => Supervisor.fromMap(item))
+          .toList();
+
+      if (kDebugMode) {
+        debugPrint(
+            '$_logPrefix: ✅ Found ${supervisors.length} supervisors for admin $adminId');
+      }
+
+      return supervisors;
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('$_logPrefix: ❌ Error fetching admin supervisors: $e');
+        debugPrint('$_logPrefix: 📍 Stack trace: $stackTrace');
+      }
+      return [];
+    }
   }
 }

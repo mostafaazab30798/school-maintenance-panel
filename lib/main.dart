@@ -22,12 +22,20 @@ import 'core/routes/app_router.dart';
 import 'core/services/admin_service.dart';
 import 'core/services/admin_management_service.dart';
 import 'core/services/supabase_storage_service.dart';
+import 'core/services/debug_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-
-
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize debug service
+  DebugService.initialize();
+  
+  // Add error handling for platform channel messages
+  FlutterError.onError = (FlutterErrorDetails details) {
+    // Log the error but don't crash the app
+    DebugService.logError('Flutter Error: ${details.exception}', details.stack);
+  };
   
   // Initialize Arabic locale data for DateFormat
   await initializeDateFormatting('ar', null);
@@ -35,23 +43,29 @@ void main() async {
   try {
     await dotenv.load(fileName: ".env"); // Load environment variables
   } catch (e) {
-    throw Exception('Error loading .env file: $e'); // Print error if any
+    print('Warning: Error loading .env file: $e'); // Print warning instead of throwing
   }
-final String baseUrl = dotenv.env['SUPBASE_URL'] ?? 'default_url';
-  final String apiKey = dotenv.env['SUPBASE_ANONKEY'] ?? 'default_key';
- // ✅ Load env vars injected during build
-  // const String baseUrl = String.fromEnvironment('SUPBASE_URL');
-  // const String apiKey = String.fromEnvironment('SUPBASE_ANONKEY');
-
-  // ✅ Optional: debug log to verify values
-  // print("Supabase URL: $baseUrl");
-  // print("Anon Key (partial): ${apiKey.substring(0, 5)}...");
-
   
-  await Supabase.initialize(
-    url: baseUrl,
-    anonKey: apiKey,
-  );
+  // final String baseUrl = dotenv.env['SUPBASE_URL'] ?? 'default_url';
+  // final String apiKey = dotenv.env['SUPBASE_ANONKEY'] ?? 'default_key';
+
+   // ✅ Load env vars injected during build
+  const String baseUrl = String.fromEnvironment('SUPBASE_URL');
+  const String apiKey = String.fromEnvironment('SUPBASE_ANONKEY');
+  
+  // Initialize Supabase with proper error handling
+  try {
+    await Supabase.initialize(
+      url: baseUrl,
+      anonKey: apiKey,
+    );
+  } catch (e) {
+    print('Warning: Error initializing Supabase: $e');
+  }
+  
+  // Add a small delay to ensure all plugins are properly initialized
+  await Future.delayed(const Duration(milliseconds: 100));
+  
   runApp(const MyApp());
 }
 
